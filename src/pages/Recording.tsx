@@ -3,7 +3,7 @@ import { cloudUse, useServerInfo } from '../components/CloudNotice';
 import { isDeletedMember } from '../api/types';
 import { confirmDialog } from '../components/confirm';
 import { brandMarkShapes } from '../components/Wordmark';
-import { p } from '../api/connections';
+import { currentConnection, p } from '../api/connections';
 import { Avatar } from '../components/Avatar';
 import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
@@ -18,6 +18,7 @@ import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { useAsync } from '../components/useAsync';
 import { BackgroundRecorder, hasNativeRecorder, nativeUploadFiles, type NativeStatus } from '../recorder/native';
 import { createRecorder, fileExtension, type Recorder } from '../recorder/recorder';
+import { leftoverRecordings, loadRecording, removeRecording, type StoredRecording } from '../recorder/webStore';
 
 const native = hasNativeRecorder();
 
@@ -61,6 +62,8 @@ export function Recording() {
   const [error, setError] = useState<unknown>(null);
   const [discordFiles, setDiscordFiles] = useState<{ file: File; memberId: string }[]>([]);
   const [leftover, setLeftover] = useState<NativeStatus | null>(null);
+  // Browser: Aufnahme aus dem Zwischenspeicher des Geräts, die noch nicht hochgeladen ist
+  const [webLeftover, setWebLeftover] = useState<StoredRecording | null>(null);
   const [batteryOk, setBatteryOk] = useState(true);
 
   const recorder = useRef<Recorder | null>(null);
@@ -117,6 +120,28 @@ export function Recording() {
     };
   }, []);
 
+  // Browser: nach Absturz, geschlossenem Fenster oder gescheitertem Hochladen liegengebliebene Aufnahme finden
+  useEffect(() => {
+    if (native) return;
+    leftoverRecordings(currentConnection().id).then((list) => setWebLeftover(list[0] ?? null)).catch(() => undefined);
+  }, []);
+
+  // Browser: Verlässt jemand die Seite während der Aufnahme (z. B. Zurück), Aufnahme sauber beenden – sie bleibt im
+  // Gerät und wird beim nächsten Öffnen zum Hochladen angeboten
+  useEffect(() => () => {
+    const r = recorder.current;
+    recorder.current = null;
+    if (r && r.state !== 'idle') r.stop().catch(() => undefined);
+  }, []);
+
+  // Browser: Schließen des Fensters während der Aufnahme nachfragen (der Ton bis hierher bleibt trotzdem im Gerät)
+  useEffect(() => {
+    if (native || phase !== 'recording') return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [phase]);
+
   if (loadError) return <Screen narrow title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
   if (!campaign) return <Screen narrow title={t('Aufnahme')}><div className="empty">{t('Lade …')}</div></Screen>;
 
@@ -159,7 +184,8 @@ export function Recording() {
     return s.id;
   };
 
-  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string) => {
+  /** storedId: Aufnahme im Zwischenspeicher des Browsers – nach erfolgreichem Hochladen löschen, sonst wieder anbieten */
+  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null) => {
     setPhase('uploading');
     setProgress(0);
     setError(null);
@@ -167,16 +193,20 @@ export function Recording() {
       const id = existingSessionId ?? (await ensureSession());
       await uploadSessionAudio(id, source, files, setProgress);
       if (native && existingSessionId) await BackgroundRecorder.discard({ sessionId: id }).catch(() => undefined);
+      if (storedId) await removeRecording(storedId).catch(() => undefined);
       navigate(p(`/s/${id}`), { replace: true });
     } catch (e) {
+      const kept = storedId ? (await leftoverRecordings(currentConnection().id).catch(() => [])).find((r) => r.id === storedId) : undefined;
       setError(new Error(
         (e instanceof Error ? e.message + ' ' : '') +
-        (existingSessionId ? t('Die Aufnahme bleibt auf dem Handy gespeichert, du kannst es später erneut versuchen.') : '')
+        (native && existingSessionId ? t('Die Aufnahme bleibt auf dem Handy gespeichert, du kannst es später erneut versuchen.')
+          : kept ? t('Die Aufnahme bleibt in diesem Browser gespeichert, du kannst es später erneut versuchen.') : '')
       ));
-      if (existingSessionId) {
+      if (native && existingSessionId) {
         const st = await BackgroundRecorder.getStatus();
         if (st.state === 'stopped') setLeftover(st);
       }
+      if (kept) setWebLeftover(kept);
       setPhase('prepare');
     }
   };
@@ -192,6 +222,27 @@ export function Recording() {
     setLeftover(null);
   };
 
+  const uploadWebLeftover = async (r: StoredRecording) => {
+    setWebLeftover(null);
+    const blob = await loadRecording(r);
+    upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], r.sessionId, r.id);
+  };
+
+  const discardWebLeftover = async (r: StoredRecording) => {
+    if (!(await confirmDialog(t('Diese Aufnahme endgültig aus diesem Browser löschen?'), { confirmLabel: t('Löschen'), danger: true }))) return;
+    await removeRecording(r.id);
+    setWebLeftover((await leftoverRecordings(currentConnection().id).catch(() => []))[0] ?? null);
+  };
+
+  // Eine liegengebliebene Aufnahme – vom Handy (Android-App) oder aus dem Browser
+  const pending = leftover
+    ? { title: leftover.title, elapsedMs: leftover.elapsedMs, bytes: leftover.files.reduce((n, f) => n + f.sizeBytes, 0), error: leftover.error,
+        upload: () => uploadLeftover(leftover), discard: () => discardLeftover(leftover) }
+    : webLeftover
+      ? { title: webLeftover.title, elapsedMs: webLeftover.elapsedMs, bytes: webLeftover.bytes, error: undefined,
+          upload: () => uploadWebLeftover(webLeftover), discard: () => discardWebLeftover(webLeftover) }
+      : null;
+
   const start = async () => {
     setError(null);
     try {
@@ -203,7 +254,7 @@ export function Recording() {
           labels: [t('Aufnahme läuft'), t('Aufnahme pausiert'), t('Pausieren'), t('Fortsetzen')]
         });
       } else {
-        recorder.current = createRecorder();
+        recorder.current = createRecorder({ connId: currentConnection().id, sessionId: id, campaignId, title: campaign.title });
         await recorder.current.start();
       }
       setElapsed(0);
@@ -241,9 +292,10 @@ export function Recording() {
       return;
     }
     if (!recorder.current) return;
+    const storedId = recorder.current.storedId;
     const blob = await recorder.current.stop();
     recorder.current = null;
-    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)]);
+    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId);
   };
 
   const pickFile = (file: File | undefined) => {
@@ -267,20 +319,20 @@ export function Recording() {
     <Screen narrow overline={campaign.title} title={titleForPhase} nav={phase === 'prepare'} hero={{ campaign }}>
       <ErrorBox error={error} />
 
-      {phase === 'prepare' && leftover && (
+      {phase === 'prepare' && pending && (
         <div className="card warn">
           <h2>{t('Aufnahme noch nicht hochgeladen')}</h2>
           <div className="muted small">
             {t('{title}: {time} aufgenommen, {mb} MB.', {
-              title: leftover.title ?? 'Session',
-              time: formatTime(Math.floor(leftover.elapsedMs / 1000)),
-              mb: (leftover.files.reduce((n, f) => n + f.sizeBytes, 0) / 1e6).toFixed(0)
+              title: pending.title ?? t('Runde'),
+              time: formatTime(Math.floor(pending.elapsedMs / 1000)),
+              mb: Math.max(1, Math.round(pending.bytes / 1e6))
             })}
-            {leftover.error ? ' ' + t('Grund für den Abbruch: {reason}', { reason: leftover.error }) : ''}
+            {pending.error ? ' ' + t('Grund für den Abbruch: {reason}', { reason: pending.error }) : ''}
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button type="button" className="btn small" style={{ flex: 1 }} onClick={() => uploadLeftover(leftover)}>{t('Jetzt hochladen')}</button>
-            <button type="button" className="btn small outline" style={{ flex: 1 }} onClick={() => discardLeftover(leftover)}>{t('Verwerfen')}</button>
+            <button type="button" className="btn small" style={{ flex: 1 }} onClick={pending.upload}>{t('Jetzt hochladen')}</button>
+            <button type="button" className="btn small outline" style={{ flex: 1 }} onClick={pending.discard}>{t('Verwerfen')}</button>
           </div>
         </div>
       )}
