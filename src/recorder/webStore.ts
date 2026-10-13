@@ -5,7 +5,8 @@
  * bietet „Jetzt hochladen“ an – wie die Android-App mit ihren Abschnitten auf dem Handy.
  *
  * Die Stücke einer Aufnahme ergeben aneinandergehängt wieder eine gültige Datei (das erste enthält den Kopf).
- * Gelöscht wird nur nach erfolgreichem Hochladen oder wenn die SL „Verwerfen“ bestätigt – nie von selbst.
+ * Gelöscht wird nach erfolgreichem Hochladen, wenn die SL „Verwerfen“ bestätigt, beim Abmelden nach Rückfrage und beim
+ * Start, wenn die Verbindung dazu nicht mehr existiert.
  */
 
 export interface StoredRecording {
@@ -144,4 +145,32 @@ export async function leftoverRecordings(connId: string, now = Date.now()): Prom
   // Abgebrochen, bevor das erste Stück da war: enthält keinen Ton, nur aufräumen
   for (const m of ended) if (m.parts === 0) await b.remove(m.id).catch(() => undefined);
   return ended.filter((m) => m.parts > 0).sort((a, c) => c.startedAt.localeCompare(a.startedAt));
+}
+
+/** Alle Aufnahmen dieser Verbindung, die noch Ton enthalten (auch eine, die gerade in einem anderen Fenster läuft) */
+export async function recordingsOf(connId: string): Promise<StoredRecording[]> {
+  const b = store();
+  if (!b) return [];
+  const all = await b.allMeta().catch(() => [] as StoredRecording[]);
+  return all.filter((m) => m.connId === connId && m.parts > 0);
+}
+
+/** Beim Abmelden bzw. Entfernen einer Verbindung, nach Rückfrage: ihre Aufnahmen aus dem Gerät löschen */
+export async function removeRecordingsOf(connId: string): Promise<void> {
+  const b = store();
+  if (!b) return;
+  for (const m of await b.allMeta().catch(() => [] as StoredRecording[])) if (m.connId === connId) await b.remove(m.id);
+}
+
+/**
+ * Beim Start: Aufnahmen zu Verbindungen, die es nicht mehr gibt, kann niemand mehr hochladen – sie werden gelöscht,
+ * damit kein Ton unbemerkt im Browser liegen bleibt (gemeinsam genutzter PC). Eine laufende bleibt unberührt.
+ */
+export async function removeOrphanRecordings(knownConnIds: readonly string[], now = Date.now()): Promise<number> {
+  const b = store();
+  if (!b) return 0;
+  const all = await b.allMeta().catch(() => [] as StoredRecording[]);
+  const orphans = all.filter((m) => !knownConnIds.includes(m.connId) && (m.state === 'stopped' || now - m.aliveAt > STALE_MS));
+  for (const m of orphans) await b.remove(m.id).catch(() => undefined);
+  return orphans.length;
 }

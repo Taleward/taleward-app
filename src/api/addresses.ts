@@ -102,3 +102,29 @@ export function ownServerBase(loc: { origin: string; hostname: string; pathname:
   if (!/^https?:\/\//.test(loc.origin)) return null;
   return `${loc.origin}/api/v1`;
 }
+
+/**
+ * Kann eine gespeicherte Verbindung derselbe Server unter neuer Adresse sein (Schnittstelle 0.4.16, `serverId`)?
+ * Die `serverId` ist öffentlich, also kein Nachweis. Darum nur, wenn beide Adressen im Heimnetz liegen (PC hat im WLAN
+ * eine neue Adresse bekommen) oder der Hostname gleich bleibt (anderer Port, http → https). Sonst gilt der Server als neu.
+ */
+export function isPlausibleMove(oldBaseUrl: string, newBaseUrl: string): boolean {
+  let a: URL;
+  let b: URL;
+  try {
+    a = new URL(oldBaseUrl);
+    b = new URL(newBaseUrl);
+  } catch {
+    return false;
+  }
+  if (a.hostname.toLowerCase() === b.hostname.toLowerCase()) return true;
+  return isHomeNetworkHost(a.hostname) && isHomeNetworkHost(b.hostname);
+}
+
+/**
+ * Nach der Anmeldung unter der neuen Adresse: Die gespeicherte Verbindung wird nur übernommen, wenn der Server dasselbe
+ * Konto meldet. Sonst entsteht eine eigene Verbindung, die alte bleibt unverändert (Adresse und Anmeldung).
+ */
+export function adoptsMovedConnection(savedUserId: string | null | undefined, loggedInUserId: string | null | undefined): boolean {
+  return !!savedUserId && savedUserId === loggedInUserId;
+}

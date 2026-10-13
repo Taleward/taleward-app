@@ -68,3 +68,30 @@ test('ohne Speicher im Gerät: keine Liste, kein Fehler', async () => {
   assert.deepEqual(await leftoverRecordings('k1'), []);
   await assert.rejects(saveMeta(rec({})));
 });
+
+test('Abmelden: Aufnahmen der Verbindung finden und löschen, andere bleiben', async () => {
+  const { recordingsOf, removeRecordingsOf } = await import('../../src/recorder/webStore.ts');
+  setStoreBackend(memoryBackend());
+  await saveMeta(rec({ id: 'a', connId: 'k1', parts: 2, state: 'stopped' }));
+  await saveMeta(rec({ id: 'b', connId: 'k2', parts: 1, state: 'stopped' }));
+  await saveMeta(rec({ id: 'c', connId: 'k1', parts: 0 }));
+  await savePart('a', 0, new Blob(['A']));
+  assert.deepEqual((await recordingsOf('k1')).map((m) => m.id), ['a']);
+  await removeRecordingsOf('k1');
+  assert.deepEqual(await recordingsOf('k1'), []);
+  assert.equal((await loadRecording(rec({ id: 'a' }))).size, 0);
+  assert.deepEqual((await recordingsOf('k2')).map((m) => m.id), ['b']);
+});
+
+test('Start: Aufnahmen ohne Verbindung werden gelöscht, laufende und bekannte bleiben', async () => {
+  const { recordingsOf, removeOrphanRecordings } = await import('../../src/recorder/webStore.ts');
+  setStoreBackend(memoryBackend());
+  const now = 1_000_000;
+  await saveMeta(rec({ id: 'weg', connId: 'alt', parts: 3, state: 'stopped' }));
+  await saveMeta(rec({ id: 'abgebrochen', connId: 'alt', parts: 3, state: 'recording', aliveAt: now - STALE_MS - 1 }));
+  await saveMeta(rec({ id: 'laeuft', connId: 'alt', parts: 3, state: 'recording', aliveAt: now - 1000 }));
+  await saveMeta(rec({ id: 'bleibt', connId: 'k1', parts: 3, state: 'stopped' }));
+  assert.equal(await removeOrphanRecordings(['k1'], now), 2);
+  assert.deepEqual((await recordingsOf('alt')).map((m) => m.id), ['laeuft']);
+  assert.deepEqual((await recordingsOf('k1')).map((m) => m.id), ['bleibt']);
+});

@@ -10,7 +10,7 @@ import {
   APP_VERSION, getConnection, isOutdated, listConnections, normalizeBaseUrl, versionLess, parseInvite, REQUIRED_API_VERSION,
   saveConnection, updateConnection, type Connection
 } from '../api/connections';
-import { ownServerBase } from '../api/addresses';
+import { adoptsMovedConnection, isPlausibleMove, ownServerBase } from '../api/addresses';
 import type { InvitePreview, ServerInfo } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { IconInfo } from '../components/Icons';
@@ -88,7 +88,10 @@ export function ConnectPage() {
         // Ungültiger Code: gleich hier sagen, nicht erst nach dem Anlegen des Kontos
         setPreview(await fetchInvitePreview(url, invite.code));
       }
-      const same = i.serverId ? listConnections().find((c) => c.serverId === i.serverId && c.baseUrl !== url) : undefined;
+      // Nur im Heimnetz oder unter demselben Hostnamen – die serverId allein beweist nichts
+      const same = i.serverId
+        ? listConnections().find((c) => c.serverId === i.serverId && c.baseUrl !== url && isPlausibleMove(c.baseUrl, url))
+        : undefined;
       setMoved(same ?? null);
       if (same) {
         setMode('login');
@@ -129,13 +132,21 @@ export function ConnectPage() {
     setError(null);
     try {
       const fields = { baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, serverId: info.serverId ?? null };
-      // Neue Adresse eines bekannten Servers: dieselbe Verbindung behalten (Kampagnen, Charaktere), nur neu anmelden
-      if (moved) updateConnection(moved.id, fields);
-      const probe = (moved && getConnection(moved.id)) || saveConnection({ ...fields, user: null });
+      // Neue Adresse eines bekannten Servers: erst anmelden, ohne die gespeicherte Verbindung anzufassen
+      const probe: Connection = moved ? { ...fields, id: '_probe', user: null } : saveConnection({ ...fields, user: null });
       const res = mode === 'login'
         ? await apiFor(probe).login(username.trim(), password)
         : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true });
-      const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
+      const login = { token: res.accessToken, expiresAt: res.expiresAt, user: res.user };
+      let conn: Connection;
+      if (moved && adoptsMovedConnection(moved.user?.id, res.user.id)) {
+        // Dasselbe Konto: Verbindung behalten (Kampagnen, Charaktere), nur die Adresse gilt neu
+        updateConnection(moved.id, { ...fields, ...login });
+        conn = getConnection(moved.id)!;
+      } else {
+        // Anderes Konto oder kein bekannter Server: eigene Verbindung, die alte bleibt, wie sie war
+        conn = saveConnection({ ...fields, ...login });
+      }
       await finish(conn);
     } catch (err) {
       setError(err);

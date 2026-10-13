@@ -12,6 +12,8 @@ import './theme.css';
 import { App } from './App';
 import { applyThemeMode } from './themeMode';
 import { getLang } from './i18n';
+import { listConnections } from './api/connections';
+import { removeOrphanRecordings } from './recorder/webStore';
 
 async function start() {
   applyThemeMode();
@@ -30,6 +32,8 @@ async function start() {
     const { restoreMuster } = await import('./api/musterRuntime');
     await restoreMuster().catch(() => undefined);
   }
+  // Aufnahmen im Browser, deren Verbindung es nicht mehr gibt, kann niemand mehr hochladen: nicht liegen lassen
+  removeOrphanRecordings(listConnections().map((c) => c.id)).catch(() => undefined);
   // Web-Fassung: installierbar auf dem Startbildschirm (Service Worker nur für die eigenen Dateien)
   if (import.meta.env.VITE_DIST === 'web' && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined);

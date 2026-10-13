@@ -13,7 +13,8 @@ import { useAuth } from '../auth/AuthContext';
 import { IconInfo } from '../components/Icons';
 import { ErrorBox, Screen } from '../components/Screen';
 import { formatDateFull } from '../components/format';
-import { LanguageSwitch, t } from '../i18n';
+import { LanguageSwitch, t, tn } from '../i18n';
+import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
 
 /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
 /** Quellcode dieser App – Pflicht nach AGPL §13 für Nutzer über das Netzwerk */
@@ -78,12 +79,26 @@ function ConnectionCard({ conn }: { conn: Connection }) {
     }
   };
 
+  // Noch nicht hochgeladene Aufnahmen dieses Servers im Browser nicht still liegen lassen: vorher fragen, dann löschen
+  const recordingsCleared = async (confirmLabel: string): Promise<boolean> => {
+    const left = await recordingsOf(conn.id).catch(() => []);
+    if (!left.length) return true;
+    const ok = await confirmDialog(tn(left.length,
+      'Auf diesem Gerät liegt noch eine Aufnahme von „{name}“, die nicht hochgeladen ist. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst wird sie jetzt gelöscht.',
+      'Auf diesem Gerät liegen noch {n} Aufnahmen von „{name}“, die nicht hochgeladen sind. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst werden sie jetzt gelöscht.',
+      { name: conn.name }), { confirmLabel, danger: true });
+    if (ok) await removeRecordingsOf(conn.id).catch(() => undefined);
+    return ok;
+  };
+
   const signOut = async () => {
     if (!(await confirmDialog(t('Von „{name}“ abmelden? Deine Daten auf dem Server bleiben erhalten.', { name: conn.name }), { confirmLabel: t('Abmelden') }))) return;
+    if (!(await recordingsCleared(t('Löschen und abmelden')))) return;
     removeConnection(conn.id);
   };
 
   const deleteAccount = async () => {
+    if (!(await recordingsCleared(t('Aufnahmen löschen')))) return;
     setBusy(true);
     setError(null);
     try {
