@@ -189,6 +189,7 @@ export const en: Record<string, string> = {
   "Diese Aufnahme endgültig aus diesem Browser löschen?": "Permanently delete this recording from this browser?",
   "Die Aufnahme bleibt in diesem Browser gespeichert, du kannst es später erneut versuchen.": "The recording stays in this browser, so you can try again later.",
   "Runde": "Session",
+  "Diesen Server kennt die App schon unter {old}. Melde dich hier an, dann gilt die neue Adresse. Deine Kampagnen bleiben, wie sie sind.": "The app already knows this server at {old}. Log in here and the new address applies. Your campaigns stay as they are.",
   "Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.": "No microphone access. Allow it in the app settings.",
   "Aufnahme beenden und hochladen?": "Stop recording and upload?",
   "Die Aufnahme enthält keine Daten.": "The recording contains no data.",

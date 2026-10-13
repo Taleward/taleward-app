@@ -86,7 +86,7 @@ export function Campaigns() {
           appDownloadSha256: info.appDownloadSha256 ?? null, appDownloadSizeBytes: info.appDownloadSizeBytes ?? null
         };
         const tooOld = !!appInfo.minAppVersion && versionLess(APP_VERSION, appInfo.minAppVersion);
-        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld });
+        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null });
         if (tooOld || versionLess(info.apiVersion, MIN_API_VERSION)) return { conn, list: [] as CampaignSummary[], ok: true };
       } catch {
         /* Info nicht erreichbar – dann merkt es gleich die Kampagnenliste */

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api/client';
+import { useServerInfo } from './CloudNotice';
 import { currentConnection } from '../api/connections';
 import { t } from '../i18n';
 import { copyText, inviteLink, shareInvite } from '../invite';
@@ -14,12 +15,13 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const info = useServerInfo();
 
   const create = async () => {
     setError(null);
     try {
       const r = await api.createInvite(campaignId);
-      setInvite({ ...r, link: inviteLink(currentConnection(), r.code) });
+      setInvite({ ...r, link: inviteLink(currentConnection(), r.code, (info ?? (await api.info().catch(() => null)))?.publicUrl) });
     } catch (e) {
       setError(e);
     }

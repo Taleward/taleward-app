@@ -65,3 +65,40 @@ export function parseInvite(input: string): { baseUrl: string | null; code: stri
   if (/^[A-Za-z]+-\d+$/.test(s)) return { baseUrl: null, code: s.toUpperCase() };
   return null;
 }
+
+/** Nur dieses Gerät selbst (localhost, 127.x, ::1) – von anderen Geräten aus nicht erreichbar */
+export function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
+
+/**
+ * Herkunft für Einladungslinks (Schnittstelle 0.4.16): Ist die App selbst über localhost verbunden (Programmfenster auf
+ * dem PC), nimmt sie die Adresse, die der Server für andere Geräte meldet (`publicUrl`); sonst die eigene.
+ * http nur zu Adressen im Heimnetz, alles andere bleibt bei der eigenen Herkunft.
+ */
+export function inviteOrigin(ownOrigin: string, publicUrl?: string | null): string {
+  try {
+    if (!publicUrl || !isLoopbackHost(new URL(ownOrigin).hostname)) return ownOrigin;
+    const u = new URL(publicUrl);
+    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isHomeNetworkHost(u.hostname))) return ownOrigin;
+    if (isLoopbackHost(u.hostname)) return ownOrigin;
+    return u.origin;
+  } catch {
+    return ownOrigin;
+  }
+}
+
+/** Die zentrale Web-Fassung – dort gibt es keinen „eigenen“ Server */
+const CENTRAL_HOSTS = ['taleward.org', 'www.taleward.org', 'app.taleward.org'];
+
+/**
+ * Läuft die Web-App unter /app/ eines Taleward-Servers, ist dieser Server vorgegeben: `<Herkunft>/api/v1`.
+ * Sonst (zentrale Web-Fassung, Android-App, Entwicklung) null.
+ */
+export function ownServerBase(loc: { origin: string; hostname: string; pathname: string }): string | null {
+  if (!/^\/app(\/|$)/.test(loc.pathname)) return null;
+  if (CENTRAL_HOSTS.includes(loc.hostname.toLowerCase())) return null;
+  if (!/^https?:\/\//.test(loc.origin)) return null;
+  return `${loc.origin}/api/v1`;
+}

@@ -8,6 +8,7 @@ import { confirmDialog } from './confirm';
 import { Dialog } from './Dialog';
 import { formatDate, formatDateFull } from './format';
 import { ErrorBox } from './Screen';
+import { useServerInfo } from './CloudNotice';
 
 /*
  * Plätze und Figuren (Schnittstelle 0.4.8/0.4.9):
@@ -217,13 +218,14 @@ export function OpenSeatDialog({ campaign, seat, onDone, onClose }: { campaign: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const name = seat.characterName ?? (seat.role === 'gm' ? t('Spielleitung') : t('Offener Platz'));
+  const info = useServerInfo();
 
   const createInvite = async () => {
     setBusy(true);
     setError(null);
     try {
       const r = await api.seatInvite(campaign.id, seat.id);
-      setInvite({ code: r.code, expiresAt: r.expiresAt, link: inviteLink(currentConnection(), r.code) });
+      setInvite({ code: r.code, expiresAt: r.expiresAt, link: inviteLink(currentConnection(), r.code, (info ?? (await api.info().catch(() => null)))?.publicUrl) });
     } catch (e) {
       setError(e);
     } finally {

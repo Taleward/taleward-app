@@ -601,6 +601,10 @@ export interface ServerInfo {
   /** SHA-256 (hex) der APK unter appDownloadUrl, wenn der Server sie selbst anbietet (ab 0.4.1) */
   appDownloadSha256?: string | null;
   appDownloadSizeBytes?: number | null;
+  /** Adresse für andere Geräte, z. B. http://192.168.178.24:8000 – für Einladungen aus dem Programmfenster (ab 0.4.16) */
+  publicUrl?: string | null;
+  /** Feste Kennung des Servers, auch wenn sich seine Adresse ändert (ab 0.4.16) */
+  serverId?: string | null;
 }
 
 /** Verein, Laden oder Gruppe – oberste Ebene über den Kampagnen (ab 0.3.2) */

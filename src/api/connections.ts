@@ -28,6 +28,8 @@ export interface Connection {
   } | null;
   /** Server hat 426 app_outdated gemeldet */
   appOutdated?: boolean;
+  /** Feste Kennung des Servers aus /info (ab 0.4.16) – erkennt ihn unter neuer Adresse wieder */
+  serverId?: string | null;
 }
 
 /** Ist diese App für den Server zu alt? */

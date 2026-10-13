@@ -7,8 +7,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { apiFor, fetchInvitePreview, fetchServerInfo, isApiError } from '../api/client';
 import {
-  APP_VERSION, isOutdated, normalizeBaseUrl, versionLess, parseInvite, REQUIRED_API_VERSION, saveConnection, type Connection
+  APP_VERSION, getConnection, isOutdated, listConnections, normalizeBaseUrl, versionLess, parseInvite, REQUIRED_API_VERSION,
+  saveConnection, updateConnection, type Connection
 } from '../api/connections';
+import { ownServerBase } from '../api/addresses';
 import type { InvitePreview, ServerInfo } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { IconInfo } from '../components/Icons';
@@ -19,6 +21,8 @@ import { LanguageSwitch, t } from '../i18n';
 
 const DEFAULT_SERVER: string = import.meta.env.VITE_API_BASE ?? '';
 const MOCK = import.meta.env.VITE_API_MODE === 'mock';
+// Web-App unter /app/ eines Servers (z. B. im Programmfenster auf dem PC): dieser Server ist vorgegeben
+const OWN_SERVER = MOCK ? null : ownServerBase(window.location);
 
 /**
  * Mit einem Server verbinden: Adresse oder Einladungslink eingeben, Server prüfen,
@@ -28,7 +32,7 @@ export function ConnectPage() {
   const navigate = useNavigate();
   const { active } = useAuth();
   const params = new URLSearchParams(useLocation().search);
-  const [address, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : DEFAULT_SERVER));
+  const [address, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : OWN_SERVER ?? DEFAULT_SERVER));
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [info, setInfo] = useState<ServerInfo | null>(null);
   // Wohin die Einladung führt (ab Schnittstelle 0.4.10)
@@ -46,10 +50,12 @@ export function ConnectPage() {
   const [pendingReg] = useState(() => (oidc === 'register' ? readPendingRegister() : null));
   const [error, setError] = useState<unknown>(null);
   const [tried, setTried] = useState(false);
+  // Derselbe Server (gleiche serverId, ab 0.4.16) ist schon unter einer anderen Adresse gespeichert
+  const [moved, setMoved] = useState<Connection | null>(null);
 
   // Kommt die Seite über einen Einladungslink (App-Link oder „Einladung annehmen“), gleich weiter prüfen
   useEffect(() => {
-    if (params.get('invite') || params.get('oidc')) checkServer();
+    if (params.get('invite') || params.get('oidc') || (OWN_SERVER && !active.length && !params.get('server'))) checkServer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -82,6 +88,12 @@ export function ConnectPage() {
         // Ungültiger Code: gleich hier sagen, nicht erst nach dem Anlegen des Kontos
         setPreview(await fetchInvitePreview(url, invite.code));
       }
+      const same = i.serverId ? listConnections().find((c) => c.serverId === i.serverId && c.baseUrl !== url) : undefined;
+      setMoved(same ?? null);
+      if (same) {
+        setMode('login');
+        setUsername(same.user?.username ?? '');
+      }
       setInfo(i);
       setBaseUrl(url);
     } catch (err) {
@@ -100,8 +112,9 @@ export function ConnectPage() {
 
   const finish = async (conn: Connection) => {
     if (code.trim()) {
-      const c = await apiFor(conn).joinCampaign(code.trim());
-      navigate(`/v/${conn.id}/k/${c.id}/willkommen`, { replace: true });
+      // Nach einem Adresswechsel ist man meist schon dabei – dann einfach zur Kampagnenliste
+      const c = await apiFor(conn).joinCampaign(code.trim()).catch((e) => { if (moved) return null; throw e; });
+      navigate(c ? `/v/${conn.id}/k/${c.id}/willkommen` : '/', { replace: true });
     } else {
       navigate('/', { replace: true });
     }
@@ -115,7 +128,10 @@ export function ConnectPage() {
     setBusy(true);
     setError(null);
     try {
-      const probe = saveConnection({ baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, user: null });
+      const fields = { baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, serverId: info.serverId ?? null };
+      // Neue Adresse eines bekannten Servers: dieselbe Verbindung behalten (Kampagnen, Charaktere), nur neu anmelden
+      if (moved) updateConnection(moved.id, fields);
+      const probe = (moved && getConnection(moved.id)) || saveConnection({ ...fields, user: null });
       const res = mode === 'login'
         ? await apiFor(probe).login(username.trim(), password)
         : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true });
@@ -210,7 +226,14 @@ export function ConnectPage() {
                   <span>{t('Dieser Server ist älter (Version {v}) als die App erwartet ({r}). Manche Funktionen fehlen dort noch.', { v: info.apiVersion, r: REQUIRED_API_VERSION })}</span>
                 </div>
               )}
-              <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => { setInfo(null); setBaseUrl(null); setPreview(null); }}>{t('Anderer Server')}</button>
+              {moved && (
+                <div className="notice">
+                  {t('Diesen Server kennt die App schon unter {old}. Melde dich hier an, dann gilt die neue Adresse. Deine Kampagnen bleiben, wie sie sind.', {
+                    old: moved.baseUrl.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '')
+                  })}
+                </div>
+              )}
+              <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => { setInfo(null); setBaseUrl(null); setPreview(null); setMoved(null); }}>{t('Anderer Server')}</button>
             </section>
 
             {oidc === 'email_in_use' && (

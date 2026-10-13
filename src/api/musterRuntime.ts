@@ -48,7 +48,7 @@ export async function startMuster(role: MusterRole): Promise<Connection> {
   const lang = musterLang();
   try { localStorage.setItem(KEY, JSON.stringify({ lang })); } catch { /* egal */ }
   await install(lang);
-  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.15', token: null, expiresAt: null, user: null });
+  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.16', token: null, expiresAt: null, user: null });
   const res = await apiFor(probe).login(role, 'muster');
   const conn = saveConnection({ ...probe, name: t('Musterkampagne'), token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
   if (role === 'lea') {

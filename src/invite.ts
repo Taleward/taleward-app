@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import type { Connection } from './api/connections';
+import { inviteOrigin } from './api/addresses';
 
 /*
  * Einladungen: Der Server zeigt unter https://<server>/einladung/<CODE> eine Seite mit
@@ -7,10 +8,13 @@ import type { Connection } from './api/connections';
  * und öffnet sich über taleward://einladung?url=<Link>, wenn jemand darauf tippt.
  */
 
-/** https://<server>/einladung/<CODE> – aus der API-Adresse der Verbindung */
-export function inviteLink(conn: Connection, code: string): string {
-  const origin = conn.baseUrl.startsWith('/') ? window.location.origin : new URL(conn.baseUrl).origin;
-  return `${origin}/einladung/${encodeURIComponent(code)}`;
+/**
+ * https://<server>/einladung/<CODE> – aus der API-Adresse der Verbindung. Ist die App über localhost verbunden
+ * (Programmfenster auf dem PC), nimmt sie die Adresse, die der Server für andere Geräte meldet (publicUrl, ab 0.4.16).
+ */
+export function inviteLink(conn: Connection, code: string, publicUrl?: string | null): string {
+  const own = conn.baseUrl.startsWith('/') ? window.location.origin : new URL(conn.baseUrl).origin;
+  return `${inviteOrigin(own, publicUrl)}/einladung/${encodeURIComponent(code)}`;
 }
 
 /** App-Adresse, die die installierte App direkt im Beitritt öffnet */
