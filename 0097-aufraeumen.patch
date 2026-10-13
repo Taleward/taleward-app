@@ -1,0 +1,252 @@
+From 4fb73b7767fedc5a791ff9422e04d9d90e436bde Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 00:08:27 +0200
+Subject: [PATCH 97/98] =?UTF-8?q?Verbindungen=20und=20Aufnahmen=20im=20Bro?=
+ =?UTF-8?q?wser=20aufger=C3=A4umt,=20Tests=20erg=C3=A4nzt?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/recording-store.test.mjs | 27 ++++++++++++++++++++++
+ scripts/tests/server-move.test.mjs     | 24 ++++++++++++++++++++
+ src/api/addresses.ts                   | 26 +++++++++++++++++++++
+ src/i18n/en.ts                         |  4 ++++
+ src/main.tsx                           |  4 ++++
+ src/pages/AccountPage.tsx              | 17 +++++++++++++-
+ src/pages/ConnectPage.tsx              | 23 ++++++++++++++-----
+ src/recorder/webStore.ts               | 31 +++++++++++++++++++++++++-
+ 8 files changed, 148 insertions(+), 8 deletions(-)
+ create mode 100644 scripts/tests/server-move.test.mjs
+
+diff --git a/scripts/tests/recording-store.test.mjs b/scripts/tests/recording-store.test.mjs
+index 85a8477..e7d4508 100644
+--- a/scripts/tests/recording-store.test.mjs
++++ b/scripts/tests/recording-store.test.mjs
+@@ -70 +70,28 @@ test('ohne Speicher im Gerät: keine Liste, kein Fehler', async () => {
+ });
++
++test('Abmelden: Aufnahmen der Verbindung finden und löschen, andere bleiben', async () => {
++  const { recordingsOf, removeRecordingsOf } = await import('../../src/recorder/webStore.ts');
++  setStoreBackend(memoryBackend());
++  await saveMeta(rec({ id: 'a', connId: 'k1', parts: 2, state: 'stopped' }));
++  await saveMeta(rec({ id: 'b', connId: 'k2', parts: 1, state: 'stopped' }));
++  await saveMeta(rec({ id: 'c', connId: 'k1', parts: 0 }));
++  await savePart('a', 0, new Blob(['A']));
++  assert.deepEqual((await recordingsOf('k1')).map((m) => m.id), ['a']);
++  await removeRecordingsOf('k1');
++  assert.deepEqual(await recordingsOf('k1'), []);
++  assert.equal((await loadRecording(rec({ id: 'a' }))).size, 0);
++  assert.deepEqual((await recordingsOf('k2')).map((m) => m.id), ['b']);
++});
++
++test('Start: Aufnahmen ohne Verbindung werden gelöscht, laufende und bekannte bleiben', async () => {
++  const { recordingsOf, removeOrphanRecordings } = await import('../../src/recorder/webStore.ts');
++  setStoreBackend(memoryBackend());
++  const now = 1_000_000;
++  await saveMeta(rec({ id: 'weg', connId: 'alt', parts: 3, state: 'stopped' }));
++  await saveMeta(rec({ id: 'abgebrochen', connId: 'alt', parts: 3, state: 'recording', aliveAt: now - STALE_MS - 1 }));
++  await saveMeta(rec({ id: 'laeuft', connId: 'alt', parts: 3, state: 'recording', aliveAt: now - 1000 }));
++  await saveMeta(rec({ id: 'bleibt', connId: 'k1', parts: 3, state: 'stopped' }));
++  assert.equal(await removeOrphanRecordings(['k1'], now), 2);
++  assert.deepEqual((await recordingsOf('alt')).map((m) => m.id), ['laeuft']);
++  assert.deepEqual((await recordingsOf('k1')).map((m) => m.id), ['bleibt']);
++});
+diff --git a/scripts/tests/server-move.test.mjs b/scripts/tests/server-move.test.mjs
+new file mode 100644
+index 0000000..72c3499
+--- /dev/null
++++ b/scripts/tests/server-move.test.mjs
+@@ -0,0 +1,24 @@
++// Gleiche Kennung unter neuer Adresse: nur im Heimnetz oder unter demselben Hostnamen, übernommen nur bei gleichem Konto
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { adoptsMovedConnection, isPlausibleMove } from '../../src/api/addresses.ts';
++
++test('neue Adresse im Heimnetz oder gleicher Hostname gilt als derselbe Server', () => {
++  assert.equal(isPlausibleMove('http://192.168.178.24:8000/api/v1', 'http://192.168.178.31:8000/api/v1'), true);
++  assert.equal(isPlausibleMove('http://pc-wohnzimmer.local:8000/api/v1', 'http://10.0.0.5:8000/api/v1'), true);
++  assert.equal(isPlausibleMove('http://verein.example:8000/api/v1', 'https://verein.example/api/v1'), true);
++});
++
++test('fremder Server mit nachgemachter Kennung und öffentlicher Adresse gilt als neu', () => {
++  assert.equal(isPlausibleMove('https://taleward.verein.example/api/v1', 'https://boese.example/api/v1'), false);
++  assert.equal(isPlausibleMove('http://192.168.178.24:8000/api/v1', 'https://boese.example/api/v1'), false);
++  assert.equal(isPlausibleMove('https://taleward.verein.example/api/v1', 'http://192.168.178.24:8000/api/v1'), false);
++  assert.equal(isPlausibleMove('kaputt', 'http://192.168.178.24/api/v1'), false);
++});
++
++test('Verbindung wird nur bei gleichem Konto übernommen', () => {
++  assert.equal(adoptsMovedConnection('u-1', 'u-1'), true);
++  assert.equal(adoptsMovedConnection('u-1', 'u-2'), false);
++  assert.equal(adoptsMovedConnection(null, 'u-1'), false);
++  assert.equal(adoptsMovedConnection(undefined, undefined), false);
++});
+diff --git a/src/api/addresses.ts b/src/api/addresses.ts
+index 4953d37..e218f6e 100644
+--- a/src/api/addresses.ts
++++ b/src/api/addresses.ts
+@@ -104 +104,27 @@ export function ownServerBase(loc: { origin: string; hostname: string; pathname:
+ }
++
++/**
++ * Kann eine gespeicherte Verbindung derselbe Server unter neuer Adresse sein (Schnittstelle 0.4.16, `serverId`)?
++ * Die `serverId` ist öffentlich, also kein Nachweis. Darum nur, wenn beide Adressen im Heimnetz liegen (PC hat im WLAN
++ * eine neue Adresse bekommen) oder der Hostname gleich bleibt (anderer Port, http → https). Sonst gilt der Server als neu.
++ */
++export function isPlausibleMove(oldBaseUrl: string, newBaseUrl: string): boolean {
++  let a: URL;
++  let b: URL;
++  try {
++    a = new URL(oldBaseUrl);
++    b = new URL(newBaseUrl);
++  } catch {
++    return false;
++  }
++  if (a.hostname.toLowerCase() === b.hostname.toLowerCase()) return true;
++  return isHomeNetworkHost(a.hostname) && isHomeNetworkHost(b.hostname);
++}
++
++/**
++ * Nach der Anmeldung unter der neuen Adresse: Die gespeicherte Verbindung wird nur übernommen, wenn der Server dasselbe
++ * Konto meldet. Sonst entsteht eine eigene Verbindung, die alte bleibt unverändert (Adresse und Anmeldung).
++ */
++export function adoptsMovedConnection(savedUserId: string | null | undefined, loggedInUserId: string | null | undefined): boolean {
++  return !!savedUserId && savedUserId === loggedInUserId;
++}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 5a6cc55..6d6a517 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -394,2 +394,6 @@ export const en: Record<string, string> = {
+   "Meine Daten": "My data",
++  "Auf diesem Gerät liegt noch eine Aufnahme von „{name}“, die nicht hochgeladen ist. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst wird sie jetzt gelöscht.": "There is still a recording from \"{name}\" on this device that has not been uploaded. To upload it, cancel here and open the campaign's recording page. Otherwise it is deleted now.",
++  "Auf diesem Gerät liegen noch {n} Aufnahmen von „{name}“, die nicht hochgeladen sind. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst werden sie jetzt gelöscht.": "There are still {n} recordings from \"{name}\" on this device that have not been uploaded. To upload them, cancel here and open the campaign's recording page. Otherwise they are deleted now.",
++  "Löschen und abmelden": "Delete and sign out",
++  "Aufnahmen löschen": "Delete recordings",
+   "Von „{name}“ abmelden? Deine Daten auf dem Server bleiben erhalten.": "Sign out of \"{name}\"? Your data on the server is kept.",
+diff --git a/src/main.tsx b/src/main.tsx
+index f659e81..14ced02 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -14,2 +14,4 @@ import { applyThemeMode } from './themeMode';
+ import { getLang } from './i18n';
++import { listConnections } from './api/connections';
++import { removeOrphanRecordings } from './recorder/webStore';
+ 
+@@ -32,2 +34,4 @@ async function start() {
+   }
++  // Aufnahmen im Browser, deren Verbindung es nicht mehr gibt, kann niemand mehr hochladen: nicht liegen lassen
++  removeOrphanRecordings(listConnections().map((c) => c.id)).catch(() => undefined);
+   // Web-Fassung: installierbar auf dem Startbildschirm (Service Worker nur für die eigenen Dateien)
+diff --git a/src/pages/AccountPage.tsx b/src/pages/AccountPage.tsx
+index 7644555..50912ef 100644
+--- a/src/pages/AccountPage.tsx
++++ b/src/pages/AccountPage.tsx
+@@ -15,3 +15,4 @@ import { ErrorBox, Screen } from '../components/Screen';
+ import { formatDateFull } from '../components/format';
+-import { LanguageSwitch, t } from '../i18n';
++import { LanguageSwitch, t, tn } from '../i18n';
++import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
+ 
+@@ -80,4 +81,17 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+ 
++  // Noch nicht hochgeladene Aufnahmen dieses Servers im Browser nicht still liegen lassen: vorher fragen, dann löschen
++  const recordingsCleared = async (confirmLabel: string): Promise<boolean> => {
++    const left = await recordingsOf(conn.id).catch(() => []);
++    if (!left.length) return true;
++    const ok = await confirmDialog(tn(left.length,
++      'Auf diesem Gerät liegt noch eine Aufnahme von „{name}“, die nicht hochgeladen ist. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst wird sie jetzt gelöscht.',
++      'Auf diesem Gerät liegen noch {n} Aufnahmen von „{name}“, die nicht hochgeladen sind. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst werden sie jetzt gelöscht.',
++      { name: conn.name }), { confirmLabel, danger: true });
++    if (ok) await removeRecordingsOf(conn.id).catch(() => undefined);
++    return ok;
++  };
++
+   const signOut = async () => {
+     if (!(await confirmDialog(t('Von „{name}“ abmelden? Deine Daten auf dem Server bleiben erhalten.', { name: conn.name }), { confirmLabel: t('Abmelden') }))) return;
++    if (!(await recordingsCleared(t('Löschen und abmelden')))) return;
+     removeConnection(conn.id);
+@@ -86,2 +100,3 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+   const deleteAccount = async () => {
++    if (!(await recordingsCleared(t('Aufnahmen löschen')))) return;
+     setBusy(true);
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index 5f1d8c1..27db237 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -12,3 +12,3 @@ import {
+ } from '../api/connections';
+-import { ownServerBase } from '../api/addresses';
++import { adoptsMovedConnection, isPlausibleMove, ownServerBase } from '../api/addresses';
+ import type { InvitePreview, ServerInfo } from '../api/types';
+@@ -90,3 +90,6 @@ export function ConnectPage() {
+       }
+-      const same = i.serverId ? listConnections().find((c) => c.serverId === i.serverId && c.baseUrl !== url) : undefined;
++      // Nur im Heimnetz oder unter demselben Hostnamen – die serverId allein beweist nichts
++      const same = i.serverId
++        ? listConnections().find((c) => c.serverId === i.serverId && c.baseUrl !== url && isPlausibleMove(c.baseUrl, url))
++        : undefined;
+       setMoved(same ?? null);
+@@ -131,5 +134,4 @@ export function ConnectPage() {
+       const fields = { baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, serverId: info.serverId ?? null };
+-      // Neue Adresse eines bekannten Servers: dieselbe Verbindung behalten (Kampagnen, Charaktere), nur neu anmelden
+-      if (moved) updateConnection(moved.id, fields);
+-      const probe = (moved && getConnection(moved.id)) || saveConnection({ ...fields, user: null });
++      // Neue Adresse eines bekannten Servers: erst anmelden, ohne die gespeicherte Verbindung anzufassen
++      const probe: Connection = moved ? { ...fields, id: '_probe', user: null } : saveConnection({ ...fields, user: null });
+       const res = mode === 'login'
+@@ -137,3 +139,12 @@ export function ConnectPage() {
+         : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true });
+-      const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
++      const login = { token: res.accessToken, expiresAt: res.expiresAt, user: res.user };
++      let conn: Connection;
++      if (moved && adoptsMovedConnection(moved.user?.id, res.user.id)) {
++        // Dasselbe Konto: Verbindung behalten (Kampagnen, Charaktere), nur die Adresse gilt neu
++        updateConnection(moved.id, { ...fields, ...login });
++        conn = getConnection(moved.id)!;
++      } else {
++        // Anderes Konto oder kein bekannter Server: eigene Verbindung, die alte bleibt, wie sie war
++        conn = saveConnection({ ...fields, ...login });
++      }
+       await finish(conn);
+diff --git a/src/recorder/webStore.ts b/src/recorder/webStore.ts
+index 492e86e..4bd313c 100644
+--- a/src/recorder/webStore.ts
++++ b/src/recorder/webStore.ts
+@@ -7,3 +7,4 @@
+  * Die Stücke einer Aufnahme ergeben aneinandergehängt wieder eine gültige Datei (das erste enthält den Kopf).
+- * Gelöscht wird nur nach erfolgreichem Hochladen oder wenn die SL „Verwerfen“ bestätigt – nie von selbst.
++ * Gelöscht wird nach erfolgreichem Hochladen, wenn die SL „Verwerfen“ bestätigt, beim Abmelden nach Rückfrage und beim
++ * Start, wenn die Verbindung dazu nicht mehr existiert.
+  */
+@@ -147 +148,29 @@ export async function leftoverRecordings(connId: string, now = Date.now()): Prom
+ }
++
++/** Alle Aufnahmen dieser Verbindung, die noch Ton enthalten (auch eine, die gerade in einem anderen Fenster läuft) */
++export async function recordingsOf(connId: string): Promise<StoredRecording[]> {
++  const b = store();
++  if (!b) return [];
++  const all = await b.allMeta().catch(() => [] as StoredRecording[]);
++  return all.filter((m) => m.connId === connId && m.parts > 0);
++}
++
++/** Beim Abmelden bzw. Entfernen einer Verbindung, nach Rückfrage: ihre Aufnahmen aus dem Gerät löschen */
++export async function removeRecordingsOf(connId: string): Promise<void> {
++  const b = store();
++  if (!b) return;
++  for (const m of await b.allMeta().catch(() => [] as StoredRecording[])) if (m.connId === connId) await b.remove(m.id);
++}
++
++/**
++ * Beim Start: Aufnahmen zu Verbindungen, die es nicht mehr gibt, kann niemand mehr hochladen – sie werden gelöscht,
++ * damit kein Ton unbemerkt im Browser liegen bleibt (gemeinsam genutzter PC). Eine laufende bleibt unberührt.
++ */
++export async function removeOrphanRecordings(knownConnIds: readonly string[], now = Date.now()): Promise<number> {
++  const b = store();
++  if (!b) return 0;
++  const all = await b.allMeta().catch(() => [] as StoredRecording[]);
++  const orphans = all.filter((m) => !knownConnIds.includes(m.connId) && (m.state === 'stopped' || now - m.aliveAt > STALE_MS));
++  for (const m of orphans) await b.remove(m.id).catch(() => undefined);
++  return orphans.length;
++}
