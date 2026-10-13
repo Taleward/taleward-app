@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Taleward API
-  version: 0.4.15
+  version: 0.4.16
   description: |
     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
 
@@ -182,6 +182,10 @@ info:
     Änderungen in 0.4.15 (Kapitel per Hinweis korrigieren): POST /sessions/{id}/recap/revision – die SL schreibt in
     eigenen Worten, was nicht stimmt oder fehlt; der Server schreibt nur die betroffenen Absätze neu und legt einen
     Entwurf vor (`Recap.revision`, nur SL). POST …/recap/revision/decision übernimmt oder verwirft ihn als Ganzes.
+    Änderungen in 0.4.16 (Server auf einem PC im Heimnetz): ServerInfo.publicUrl – unter welcher Adresse andere Geräte
+    diesen Server erreichen; die App baut Einladungslink und QR-Code daraus, wenn sie selbst über localhost verbunden
+    ist. ServerInfo.serverId – feste Kennung des Servers; die App erkennt daran denselben Server unter neuer Adresse.
+    Beides optional, ältere Apps ignorieren es.
 
 servers:
   - url: https://taleward.example.org/api/v1
@@ -2989,6 +2993,25 @@ components:
           oneOf:
             - $ref: "#/components/schemas/CloudProviderInfo"
             - type: "null"
+        publicUrl:
+          type: [string, "null"]
+          example: "http://192.168.178.24:8000"
+          description: |
+            Ab 0.4.16. Herkunft (Schema, Host, Port; ohne Pfad, ohne `/` am Ende), unter der andere Geräte diesen Server
+            erreichen. Auf einem PC im Heimnetz die aktuelle Heimnetz-Adresse (ändert sie sich, meldet der Server die neue);
+            sonst die öffentliche Adresse oder null. http nur für private Adressen (wie die App sie auch sonst nur dort
+            zulässt). Die App nimmt sie für Einladungslink (`<publicUrl>/einladung/<CODE>`) und QR-Code, wenn sie selbst
+            über localhost / 127.0.0.1 / ::1 verbunden ist; sonst wie bisher die eigene Adresse. Fehlt das Feld oder ist es
+            null, gilt das bisherige Verhalten.
+        serverId:
+          type: [string, "null"]
+          pattern: "^[A-Za-z0-9_-]{1,64}$"
+          description: |
+            Ab 0.4.16. Feste Kennung dieses Servers (dieselbe wie `serverId` bei der Anmeldung mit Diensten und `aud` im
+            Token); ändert sich nie, auch nicht mit der Adresse. Liest die App eine Einladung unter neuer Adresse und
+            meldet der Server dort dieselbe serverId wie eine gespeicherte Verbindung, bietet sie „Adresse aktualisieren“
+            an statt einer zweiten Verbindung. Das Token geht dabei nicht an die neue Adresse; die Person meldet sich dort
+            neu an (Name ist vorausgefüllt). Kein Geheimnis – nur zum Wiedererkennen.
 
     CloudProviderInfo:
       type: object
