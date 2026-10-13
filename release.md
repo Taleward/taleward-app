@@ -1,5 +1,0 @@
-- Aufnahmen im Browser werden laufend im Gerät gesichert. Schließt sich das Fenster oder bricht etwas ab, bietet die Aufnahme-Seite „Jetzt hochladen“ an.
-- Lange Runden: Die Android-App hält das Handy auch nach acht Stunden noch wach.
-- Läuft Taleward unter /app/ eines eigenen Servers, geht es direkt zur Anmeldung.
-- Einladungen aus dem Programmfenster am PC nennen die Adresse im Heimnetz statt „localhost“.
-- Hat sich die Adresse eines Servers geändert, übernimmt die App sie nach dem Anmelden.
