@@ -9,6 +9,7 @@ import type { Member, Proposal, Recap, Session } from '../api/types';
 import { ProposalCard } from '../components/ProposalCard';
 import { IconLock } from '../components/Icons';
 import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
+import { fromEditText, toEditText } from '../review/parts';
 import { RecapReviewView, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
 import { namesSkipped, serverHasNameCheck } from './NamesPage';
 import { ParagraphHint, RevisionBox, RevisionDraft, paragraphRef, revisionOpen } from '../review/Revision';
@@ -229,7 +230,9 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(recap.title);
-  const [text, setText] = useState(recap.text);
+  // Ab 0.4.17 stehen Zwischenüberschriften beim Bearbeiten als eigene Zeile „# Titel“ im Text
+  const withParts = apiAtLeast('0.4.17');
+  const [text, setText] = useState(() => (withParts ? toEditText(recap.text, recap.parts) : recap.text));
   const [threads, setThreads] = useState(recap.openThreads.join('\n'));
   const [busy, setBusy] = useState(false);
   const canRevise = apiAtLeast('0.4.15') && !recap.publishedAt;
@@ -249,9 +252,10 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
   const save = async () => {
     setBusy(true);
     try {
-      onSaved(await api.updateRecap(sessionId, {
-        title: title.trim(), text: text.trim(), openThreads: threads.split('\n').map((x) => x.trim()).filter(Boolean)
-      }));
+      const threadList = threads.split('\n').map((x) => x.trim()).filter(Boolean);
+      onSaved(await api.updateRecap(sessionId, withParts
+        ? { title: title.trim(), ...fromEditText(text), openThreads: threadList }
+        : { title: title.trim(), text: text.trim(), openThreads: threadList }));
       setEditing(false);
     } catch (e) {
       onError(e);
@@ -260,7 +264,7 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
     }
   };
 
-  const selfEdit = () => { setTitle(recap.title); setText(recap.text); setThreads(recap.openThreads.join('\n')); setEditing(true); };
+  const selfEdit = () => { setTitle(recap.title); setText(withParts ? toEditText(recap.text, recap.parts) : recap.text); setThreads(recap.openThreads.join('\n')); setEditing(true); };
 
   if (editing) {
     return (
@@ -274,6 +278,9 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
           <label htmlFor="rc-text">{t('Text')}</label>
           <textarea id="rc-text" rows={12} value={text} onChange={(e) => setText(e.target.value)} />
           <span className="muted small">{t('Absätze durch eine Leerzeile trennen.')}</span>
+          {withParts && (recap.parts?.length ?? 0) > 0 && (
+            <span className="muted small">{t('Zeilen mit # davor sind Zwischenüberschriften. Du kannst sie ändern, verschieben oder löschen.')}</span>
+          )}
         </div>
         <div className="field">
           <label htmlFor="rc-threads">{t('Offene Fäden (einer pro Zeile)')}</label>

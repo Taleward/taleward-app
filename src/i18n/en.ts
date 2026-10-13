@@ -521,6 +521,7 @@ export const en: Record<string, string> = {
   "Recap bearbeiten": "Edit recap",
   "Text": "Text",
   "Absätze durch eine Leerzeile trennen.": "Separate paragraphs with a blank line.",
+  "Zeilen mit # davor sind Zwischenüberschriften. Du kannst sie ändern, verschieben oder löschen.": "Lines starting with # are part headings. You can change, move or delete them.",
   "Offene Fäden (einer pro Zeile)": "Open threads (one per line)",
   "Aus der Vorstellungsrunde": "From the introductions",
   "Unsicher – bitte prüfen.": "Uncertain – please check.",

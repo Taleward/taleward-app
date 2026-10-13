@@ -34,7 +34,7 @@ import type { InvitePreview,
   ProcessingStatus,
   Proposal,
   ProposalDecision,
-  Recap,
+  Recap, RecapPart,
   Correction,
   TranscriptSegment,
   UncertainTerms,
@@ -378,7 +378,7 @@ function makeApi(conn: () => Connection) {
   deleteDocument: (documentId: string) => request<void>('DELETE', `/documents/${documentId}`),
 
   recap: (sessionId: string) => request<Recap>('GET', `/sessions/${sessionId}/recap`),
-  updateRecap: (sessionId: string, change: { title?: string; text?: string; openThreads?: string[] }) =>
+  updateRecap: (sessionId: string, change: { title?: string; text?: string; openThreads?: string[]; parts?: RecapPart[] }) =>
     request<Recap>('PUT', `/sessions/${sessionId}/recap`, { body: change }),
   /** Kapitel per Hinweis korrigieren lassen (ab 0.4.15, nur SL) – Ergebnis kommt als Entwurf in Recap.revision */
   requestRevision: (sessionId: string, note: string, baseText: string) =>

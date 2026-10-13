@@ -336,6 +336,14 @@ export interface Recap {
   review?: RecapReview;
   /** Offener Korrektur-Entwurf aus einem Hinweis der SL (ab 0.4.15, nur SL) */
   revision?: RecapRevision | null;
+  /** Teile eines langen Kapitels mit Zwischenüberschrift (ab 0.4.17); fehlt oder leer = ohne Teile */
+  parts?: RecapPart[];
+}
+
+/** Ein Teil beginnt bei Absatz firstParagraph (0-basiert) und reicht bis vor den nächsten (ab 0.4.17) */
+export interface RecapPart {
+  title: string;
+  firstParagraph: number;
 }
 
 /** Korrektur per Hinweis (ab 0.4.15): der Server schreibt nur betroffene Absätze neu, die SL übernimmt oder verwirft */

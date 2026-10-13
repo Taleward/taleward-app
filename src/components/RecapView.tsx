@@ -1,8 +1,10 @@
 import { locale, t } from '../i18n';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { Recap } from '../api/types';
 import { IconSpeaker } from './Icons';
 import { Divider } from './Screen';
+import { PartHeading } from './PartHeading';
+import { partTitles, speechText } from '../review/parts';
 
 function formatDate(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'long' }) : t('Entwurf');
@@ -13,6 +15,7 @@ const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 /** playedAt: Spieltag – wichtiger als der Tag der Veröffentlichung */
 export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; collapsible?: boolean; playedAt?: string | null }) {
   const paragraphs = recap.text.split(/\n\s*\n/);
+  const titles = partTitles(recap.parts, paragraphs.length, recap.title);
   const [open, setOpen] = useState(!collapsible);
   const [speaking, setSpeaking] = useState(false);
 
@@ -24,7 +27,7 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
       setSpeaking(false);
       return;
     }
-    const u = new SpeechSynthesisUtterance(`${recap.title}. ${recap.text}`);
+    const u = new SpeechSynthesisUtterance(speechText(recap.title, recap.text, recap.parts));
     u.lang = locale();
     u.rate = 0.95;
     u.onend = () => setSpeaking(false);
@@ -42,7 +45,12 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
       <h2 style={{ fontSize: 21 }}>{recap.title}</h2>
       <Divider />
       <div className="recap" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {shown.map((p, i) => <p key={i}>{p}</p>)}
+        {shown.map((p, i) => (
+          <Fragment key={i}>
+            {titles.has(i) && <PartHeading title={titles.get(i)!} />}
+            <p>{p}</p>
+          </Fragment>
+        ))}
       </div>
       <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
         {collapsible && paragraphs.length > 1 && (

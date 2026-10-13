@@ -4,7 +4,7 @@ import { textToPdf } from './minipdf';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
 const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
-import type { CampaignDocument, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
+import type { CampaignDocument, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
 import {
   ME, NACHBAR_HOST, account, gmNotices, world, type WorldRecord, campaigns, comments, coverImages, datePolls, documentTexts, documents, plans, portraits, proposalsForDocument, seen, entries, gmNotes, proposals, proposalsFor, recaps, sessions, speakersFor, uploads, speakerLists, transcripts, uncertainTerms,
   type MockCampaign, type MockSession
@@ -478,7 +478,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.16', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.17', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -488,7 +488,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.16',
+      apiVersion: nachbar ? '0.3.9' : '0.4.17',
       serverId: nachbar ? undefined : 'testserver',
       registration: 'invite_only',
       authMethods: ['password'],
@@ -1675,16 +1675,32 @@ export const handlers = [
     if (!s || !r) return err(404, 'not_found', 'Für diese Session gibt es noch keinen Recap.');
     if (!isGm(s.campaignId)) return err(403, 'forbidden', 'Nur die Spielleitung kann den Recap bearbeiten.');
     if (s.state === 'published') return err(409, 'session_published', 'Das Kapitel ist schon veröffentlicht.');
-    const body = (await request.json()) as { title?: string; text?: string; openThreads?: string[] };
+    const body = (await request.json()) as { title?: string; text?: string; openThreads?: string[]; parts?: RecapPart[] };
+    // Ab 0.4.17: Teile beziehen sich auf den Text aus derselben Anfrage
+    const newText = body.text ?? r.text;
+    const count = newText.split(/\n\s*\n/).length;
+    if (body.parts !== undefined) {
+      let last = -1;
+      for (const part of body.parts) {
+        if (!part || typeof part.title !== 'string' || !part.title.trim() || part.title.length > 120
+          || !Number.isInteger(part.firstParagraph) || part.firstParagraph <= last || part.firstParagraph >= count) {
+          return err(400, 'invalid_parts', 'Die Teile passen nicht zum Text.');
+        }
+        last = part.firstParagraph;
+      }
+    }
     if (body.title !== undefined) r.title = body.title;
     if (body.openThreads !== undefined) r.openThreads = body.openThreads;
     if (body.text !== undefined && body.text !== r.text) {
       if (withRevision(r).revision?.state === 'running') return err(409, 'revision_running', 'Die Korrektur läuft noch. Warte kurz, bevor du von Hand änderst.');
+      const before = r.text.split(/\n\s*\n/).length;
       r.text = body.text;
+      if (body.parts === undefined && before !== count) r.parts = [];
       if (r.review) r.review.stale = true; // Absätze können verrutscht sein
       r.revision = null; // ab 0.4.15: Bearbeiten von Hand verwirft einen offenen Korrektur-Entwurf
       delete revisionJobs[r.sessionId];
     }
+    if (body.parts !== undefined) r.parts = body.parts.map((x) => ({ title: x.title.trim(), firstParagraph: x.firstParagraph }));
     return HttpResponse.json(r);
   }),
 

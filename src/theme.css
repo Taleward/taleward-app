@@ -841,6 +841,15 @@ textarea {
   max-width: 68ch;
 }
 
+/* Zwischenüberschrift eines Teils im Kapitel (ab Schnittstelle 0.4.17) */
+.recap-part {
+  margin: 12px 0 0;
+  font: 700 17px/24px var(--font-serif);
+  max-width: 68ch;
+}
+.recap-part:first-child { margin-top: 0; }
+.review > .recap-part { padding-left: 15px; }
+
 /* Einklappbare Abschnitte (z. B. „Die Welt“): Überschrift als Schalter, Tippfläche ≥ 48 px */
 .fold-toggle {
   display: inline-flex;

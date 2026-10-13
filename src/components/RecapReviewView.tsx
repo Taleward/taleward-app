@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { api } from '../api/client';
 import type { Member, Recap, ReviewVerdict, TranscriptSegment } from '../api/types';
 import { t, tn } from '../i18n';
 import { Dialog } from './Dialog';
 import { ErrorBox } from './Screen';
+import { PartHeading } from './PartHeading';
+import { partTitles } from '../review/parts';
 
 /*
  * Gegenprüfung des Recap-Entwurfs (Schnittstelle 0.4.6, nur SL). Ruhige Ansicht: Der Text sieht aus wie Text.
@@ -70,6 +72,8 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
 }) {
   const review = recap.review;
   const paragraphs = recap.text.split(/\n\s*\n/);
+  const titles = partTitles(recap.parts, paragraphs.length, recap.title);
+  const heading = (i: number) => (titles.has(i) ? <PartHeading title={titles.get(i)!} /> : null);
   const [transcript, setTranscript] = useState<TranscriptSegment[] | null>(null);
   const [excerptAt, setExcerptAt] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -99,7 +103,7 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
   if (!review || review.state === 'skipped') {
     return (
       <div className="review">
-        {paragraphs.map((para, i) => <div key={i} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div>)}
+        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>)}
       </div>
     );
   }
@@ -116,11 +120,11 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
       {paragraphs.map((para, i) => {
         const info = review.state === 'done' ? review.paragraphs.find((x) => x.index === i) : undefined;
         if (!info || !isFlagged(info)) {
-          return <div key={i} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div>;
+          return <Fragment key={i}>{heading(i)}<div className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>;
         }
         const evidence = info.evidence.slice(0, MAX_EVIDENCE);
         return (
-          <div key={i} className={hl(para, `review-para flagged v-${info.verdict}`)}>
+          <Fragment key={i}>{heading(i)}<div className={hl(para, `review-para flagged v-${info.verdict}`)}>
             {text(para, i)}
             <p className="review-note small">
               {/* Die Begründung des Prüfers genügt; ohne sie ein kurzes Wort zur Art */}
@@ -139,7 +143,7 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
               </details>
             )}
             {after?.(i)}
-          </div>
+          </div></Fragment>
         );
       })}
 

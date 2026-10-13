@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { api, isApiError } from '../api/client';
 import type { Recap } from '../api/types';
 import { t, tn } from '../i18n';
 import { ErrorBox } from '../components/Screen';
 import { IconSend } from '../components/Icons';
 import { wordDiff } from './wordDiff';
+import { partTitles } from './parts';
+import { PartHeading } from '../components/PartHeading';
 
 /*
  * Kapitel per Hinweis korrigieren (Schnittstelle 0.4.15, nur SL). Bewusst schmal: eine ruhige Zeile am Ende des
@@ -116,19 +118,21 @@ export function RevisionDraft({ recap }: { recap: Recap }) {
   const v = recap.revision;
   if (!v || v.state !== 'ready') return null;
   const paragraphs = recap.text.split(/\n\s*\n/);
+  const titles = partTitles(recap.parts, paragraphs.length, recap.title);
   return (
     <div className="recap revision-draft" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {paragraphs.map((para, i) => {
         const change = v.changes.find((c) => c.index === i);
-        if (!change) return <p key={i}>{para}</p>;
+        const heading = titles.has(i) ? <PartHeading title={titles.get(i)!} /> : null;
+        if (!change) return <Fragment key={i}>{heading}<p>{para}</p></Fragment>;
         return (
-          <p key={i} className="revision-changed">
+          <Fragment key={i}>{heading}<p className="revision-changed">
             {wordDiff(change.before, change.after).map((part, k) =>
               part.kind === 'same' ? <span key={k}>{part.text}</span>
                 : part.kind === 'del' ? <del key={k}>{part.text}</del>
                   : <ins key={k}>{part.text}</ins>
             )}
-          </p>
+          </p></Fragment>
         );
       })}
     </div>

@@ -135,13 +135,16 @@ export const recaps: Record<string, Recap> = {
   },
   's-c-grau-12': {
     sessionId: 's-c-grau-12', number: 12, title: 'Nebel über dem Moor', publishedAt: '2026-09-05T17:00:00Z',
-    text: 'Im dichten Nebel fanden die Gefährten die verirrte Hebamme und brachten sie sicher nach Grauwacht zurück. Auf dem Rückweg hörte Nyra zum ersten Mal Rabenrufe, wo keine Raben waren.',
-    openThreads: ['Wer beobachtet die Gruppe?']
+    text: 'Im dichten Nebel fanden die Gefährten die verirrte Hebamme und brachten sie sicher nach Grauwacht zurück. Auf dem Rückweg hörte Nyra zum ersten Mal Rabenrufe, wo keine Raben waren.\n\nZwei Tage später lud der Bürgermeister zu einem Essen, das niemand genießen konnte. Zwischen Suppe und Braten bat er die Gruppe, den Nebel nicht mehr zu erwähnen – und zahlte im Voraus.',
+    openThreads: ['Wer beobachtet die Gruppe?'],
+    // Teile im Kapitel (ab 0.4.17)
+    parts: [{ title: 'Die verirrte Hebamme', firstParagraph: 0 }, { title: 'Beim Bürgermeister', firstParagraph: 1 }]
   },
   's-c-grau-13': {
     sessionId: 's-c-grau-13', number: 13, title: 'Das Siegel von Kaltenfurt', publishedAt: null,
     text: 'Im Morgengrauen erreichten die Gefährten die Tore von Kaltenfurt – und fanden sie verschlossen. Hauptfrau Veyra Dornfeld ließ sie erst passieren, nachdem Ilsabeth einen kranken Wachmann geheilt hatte, doch ihr Blick blieb misstrauisch.\n\nIn der Ertrunkenen Kapelle stießen Thorwald und Nyra bei Ebbe auf einen Runenschlüssel, der dasselbe Zeichen trägt wie das gestohlene Siegel. Als die Flut zurückkehrte, hörten alle das Läuten einer Glocke, die es dort längst nicht mehr gibt.\n\nAuf dem Rückweg schwor Thorwald, den Raben noch vor dem Winter zu stellen.',
     openThreads: ['Wer hat das Siegel aus dem Tempel entwendet?', 'Welche Tür öffnet der Runenschlüssel?', 'Woher kam das Glockenläuten?'],
+    parts: [{ title: 'Vor den Toren', firstParagraph: 0 }, { title: 'Die Ertrunkene Kapelle', firstParagraph: 1 }],
     // Gegenprüfung (ab 0.4.6): ein Absatz belegt, einer teilweise, einer ohne Beleg
     review: {
       state: 'done', stale: false, checkedAt: '2026-09-19T23:40:00Z', model: 'ollama/ministral-3:8b', revised: false,
