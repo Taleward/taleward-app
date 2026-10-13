@@ -1,0 +1,1021 @@
+From 4f43ce16af76c1ee55a15cd157ce3c6848ecf184 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 13 Oct 2026 08:19:31 +0200
+Subject: [PATCH] =?UTF-8?q?Aufnahme=20im=20Browser=20laufend=20im=20Ger?=
+ =?UTF-8?q?=C3=A4t=20sichern?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Die Web-Fassung legt jedes Stück der Aufnahme (alle 10 Sekunden) sofort im Gerät
+ab statt im Arbeitsspeicher. Nach geschlossenem Fenster, Absturz, Verlassen der
+Seite oder gescheitertem Hochladen bietet die Aufnahme-Seite wie in der
+Android-App „Jetzt hochladen“ oder „Verwerfen“ an. Gelöscht wird nur nach
+erfolgreichem Hochladen oder auf Bestätigung. Bildschirm-wach-halten wird nach
+dem Zurückkehren erneut angefordert; Schließen während der Aufnahme fragt nach.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018aiEzsk3JkKj9Ft8xrcuW2
+---
+ scripts/tests/recording-store.test.mjs |  70 ++++++++++++
+ src/i18n/en.ts                         |   3 +
+ src/pages/Recording.tsx                |  78 ++++++++++---
+ src/recorder/recorder.ts               | 142 +++++++++++++++++++++---
+ src/recorder/webStore.ts               | 147 +++++++++++++++++++++++++
+ 5 files changed, 413 insertions(+), 27 deletions(-)
+ create mode 100644 scripts/tests/recording-store.test.mjs
+ create mode 100644 src/recorder/webStore.ts
+
+diff --git a/scripts/tests/recording-store.test.mjs b/scripts/tests/recording-store.test.mjs
+new file mode 100644
+index 0000000..85a8477
+--- /dev/null
++++ b/scripts/tests/recording-store.test.mjs
+@@ -0,0 +1,70 @@
++// Zwischenspeicher für Browser-Aufnahmen: Stücke in Reihenfolge, liegengebliebene Aufnahmen finden, nichts von selbst löschen
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  STALE_MS, leftoverRecordings, loadRecording, removeRecording, saveMeta, savePart, setStoreBackend
++} from '../../src/recorder/webStore.ts';
++
++function memoryBackend() {
++  const meta = new Map();
++  const parts = new Map();
++  return {
++    async putMeta(m) { meta.set(m.id, { ...m }); },
++    async allMeta() { return [...meta.values()]; },
++    async putPart(id, seq, blob) { parts.set(`${id}|${seq}`, { id, seq, blob }); },
++    async parts(id) {
++      return [...parts.values()].filter((p) => p.id === id).sort((a, b) => a.seq - b.seq).map((p) => p.blob);
++    },
++    async remove(id) {
++      meta.delete(id);
++      for (const k of [...parts.keys()]) if (k.startsWith(`${id}|`)) parts.delete(k);
++    }
++  };
++}
++
++const rec = (over) => ({
++  id: 'r1', connId: 'k1', sessionId: 's1', campaignId: 'c1', title: 'Grauwacht', mimeType: 'audio/webm',
++  startedAt: '2026-10-13T18:00:00.000Z', elapsedMs: 0, parts: 0, bytes: 0, state: 'recording', aliveAt: 0, ...over
++});
++
++test('Stücke ergeben in Reihenfolge wieder eine Datei, auch wenn sie durcheinander ankommen', async () => {
++  setStoreBackend(memoryBackend());
++  const m = rec({ parts: 3 });
++  await saveMeta(m);
++  await savePart('r1', 2, new Blob(['C']));
++  await savePart('r1', 0, new Blob(['A']));
++  await savePart('r1', 1, new Blob(['B']));
++  const blob = await loadRecording(m);
++  assert.equal(await blob.text(), 'ABC');
++  assert.equal(blob.type, 'audio/webm');
++});
++
++test('liegengeblieben: beendet oder ohne Lebenszeichen; laufende Aufnahme in anderem Fenster nicht', async () => {
++  setStoreBackend(memoryBackend());
++  const now = Date.parse('2026-10-13T22:00:00Z');
++  await saveMeta(rec({ id: 'beendet', state: 'stopped', parts: 2, aliveAt: now }));
++  await saveMeta(rec({ id: 'abgestuerzt', parts: 5, aliveAt: now - STALE_MS - 1, startedAt: '2026-10-13T19:00:00.000Z' }));
++  await saveMeta(rec({ id: 'laeuft', parts: 9, aliveAt: now - 5000 }));
++  await saveMeta(rec({ id: 'fremd', connId: 'k2', state: 'stopped', parts: 1 }));
++  const list = await leftoverRecordings('k1', now);
++  assert.deepEqual(list.map((r) => r.id), ['abgestuerzt', 'beendet']);
++});
++
++test('ohne Ton abgebrochen: wird aufgeräumt, mit Ton bleibt bis zum Löschen', async () => {
++  const b = memoryBackend();
++  setStoreBackend(b);
++  await saveMeta(rec({ id: 'leer', state: 'stopped', parts: 0 }));
++  await saveMeta(rec({ id: 'voll', state: 'stopped', parts: 1 }));
++  await savePart('voll', 0, new Blob(['x']));
++  assert.deepEqual((await leftoverRecordings('k1')).map((r) => r.id), ['voll']);
++  assert.deepEqual((await b.allMeta()).map((r) => r.id), ['voll']);
++  await removeRecording('voll');
++  assert.deepEqual(await leftoverRecordings('k1'), []);
++  assert.deepEqual(await b.parts('voll'), []);
++});
++
++test('ohne Speicher im Gerät: keine Liste, kein Fehler', async () => {
++  setStoreBackend(null);
++  assert.deepEqual(await leftoverRecordings('k1'), []);
++  await assert.rejects(saveMeta(rec({})));
++});
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 713b23b..d1e0380 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -188,2 +188,5 @@ export const en: Record<string, string> = {
+   "Diese Aufnahme endgültig vom Handy löschen?": "Permanently delete this recording from the phone?",
++  "Diese Aufnahme endgültig aus diesem Browser löschen?": "Permanently delete this recording from this browser?",
++  "Die Aufnahme bleibt in diesem Browser gespeichert, du kannst es später erneut versuchen.": "The recording stays in this browser, so you can try again later.",
++  "Runde": "Session",
+   "Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.": "No microphone access. Allow it in the app settings.",
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index 71bea30..c0fd278 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -5,3 +5,3 @@ import { confirmDialog } from '../components/confirm';
+ import { brandMarkShapes } from '../components/Wordmark';
+-import { p } from '../api/connections';
++import { currentConnection, p } from '../api/connections';
+ import { Avatar } from '../components/Avatar';
+@@ -20,2 +20,3 @@ import { BackgroundRecorder, hasNativeRecorder, nativeUploadFiles, type NativeSt
+ import { createRecorder, fileExtension, type Recorder } from '../recorder/recorder';
++import { leftoverRecordings, loadRecording, removeRecording, type StoredRecording } from '../recorder/webStore';
+ 
+@@ -63,2 +64,4 @@ export function Recording() {
+   const [leftover, setLeftover] = useState<NativeStatus | null>(null);
++  // Browser: Aufnahme aus dem Zwischenspeicher des Geräts, die noch nicht hochgeladen ist
++  const [webLeftover, setWebLeftover] = useState<StoredRecording | null>(null);
+   const [batteryOk, setBatteryOk] = useState(true);
+@@ -119,2 +122,24 @@ export function Recording() {
+ 
++  // Browser: nach Absturz, geschlossenem Fenster oder gescheitertem Hochladen liegengebliebene Aufnahme finden
++  useEffect(() => {
++    if (native) return;
++    leftoverRecordings(currentConnection().id).then((list) => setWebLeftover(list[0] ?? null)).catch(() => undefined);
++  }, []);
++
++  // Browser: Verlässt jemand die Seite während der Aufnahme (z. B. Zurück), Aufnahme sauber beenden – sie bleibt im
++  // Gerät und wird beim nächsten Öffnen zum Hochladen angeboten
++  useEffect(() => () => {
++    const r = recorder.current;
++    recorder.current = null;
++    if (r && r.state !== 'idle') r.stop().catch(() => undefined);
++  }, []);
++
++  // Browser: Schließen des Fensters während der Aufnahme nachfragen (der Ton bis hierher bleibt trotzdem im Gerät)
++  useEffect(() => {
++    if (native || phase !== 'recording') return;
++    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
++    window.addEventListener('beforeunload', warn);
++    return () => window.removeEventListener('beforeunload', warn);
++  }, [phase]);
++
+   if (loadError) return <Screen narrow title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
+@@ -161,3 +186,4 @@ export function Recording() {
+ 
+-  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string) => {
++  /** storedId: Aufnahme im Zwischenspeicher des Browsers – nach erfolgreichem Hochladen löschen, sonst wieder anbieten */
++  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null) => {
+     setPhase('uploading');
+@@ -169,9 +195,12 @@ export function Recording() {
+       if (native && existingSessionId) await BackgroundRecorder.discard({ sessionId: id }).catch(() => undefined);
++      if (storedId) await removeRecording(storedId).catch(() => undefined);
+       navigate(p(`/s/${id}`), { replace: true });
+     } catch (e) {
++      const kept = storedId ? (await leftoverRecordings(currentConnection().id).catch(() => [])).find((r) => r.id === storedId) : undefined;
+       setError(new Error(
+         (e instanceof Error ? e.message + ' ' : '') +
+-        (existingSessionId ? t('Die Aufnahme bleibt auf dem Handy gespeichert, du kannst es später erneut versuchen.') : '')
++        (native && existingSessionId ? t('Die Aufnahme bleibt auf dem Handy gespeichert, du kannst es später erneut versuchen.')
++          : kept ? t('Die Aufnahme bleibt in diesem Browser gespeichert, du kannst es später erneut versuchen.') : '')
+       ));
+-      if (existingSessionId) {
++      if (native && existingSessionId) {
+         const st = await BackgroundRecorder.getStatus();
+@@ -179,2 +208,3 @@ export function Recording() {
+       }
++      if (kept) setWebLeftover(kept);
+       setPhase('prepare');
+@@ -194,2 +224,23 @@ export function Recording() {
+ 
++  const uploadWebLeftover = async (r: StoredRecording) => {
++    setWebLeftover(null);
++    const blob = await loadRecording(r);
++    upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], r.sessionId, r.id);
++  };
++
++  const discardWebLeftover = async (r: StoredRecording) => {
++    if (!(await confirmDialog(t('Diese Aufnahme endgültig aus diesem Browser löschen?'), { confirmLabel: t('Löschen'), danger: true }))) return;
++    await removeRecording(r.id);
++    setWebLeftover((await leftoverRecordings(currentConnection().id).catch(() => []))[0] ?? null);
++  };
++
++  // Eine liegengebliebene Aufnahme – vom Handy (Android-App) oder aus dem Browser
++  const pending = leftover
++    ? { title: leftover.title, elapsedMs: leftover.elapsedMs, bytes: leftover.files.reduce((n, f) => n + f.sizeBytes, 0), error: leftover.error,
++        upload: () => uploadLeftover(leftover), discard: () => discardLeftover(leftover) }
++    : webLeftover
++      ? { title: webLeftover.title, elapsedMs: webLeftover.elapsedMs, bytes: webLeftover.bytes, error: undefined,
++          upload: () => uploadWebLeftover(webLeftover), discard: () => discardWebLeftover(webLeftover) }
++      : null;
++
+   const start = async () => {
+@@ -205,3 +256,3 @@ export function Recording() {
+       } else {
+-        recorder.current = createRecorder();
++        recorder.current = createRecorder({ connId: currentConnection().id, sessionId: id, campaignId, title: campaign.title });
+         await recorder.current.start();
+@@ -243,5 +294,6 @@ export function Recording() {
+     if (!recorder.current) return;
++    const storedId = recorder.current.storedId;
+     const blob = await recorder.current.stop();
+     recorder.current = null;
+-    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)]);
++    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId);
+   };
+@@ -269,3 +321,3 @@ export function Recording() {
+ 
+-      {phase === 'prepare' && leftover && (
++      {phase === 'prepare' && pending && (
+         <div className="card warn">
+@@ -274,11 +326,11 @@ export function Recording() {
+             {t('{title}: {time} aufgenommen, {mb} MB.', {
+-              title: leftover.title ?? 'Session',
+-              time: formatTime(Math.floor(leftover.elapsedMs / 1000)),
+-              mb: (leftover.files.reduce((n, f) => n + f.sizeBytes, 0) / 1e6).toFixed(0)
++              title: pending.title ?? t('Runde'),
++              time: formatTime(Math.floor(pending.elapsedMs / 1000)),
++              mb: Math.max(1, Math.round(pending.bytes / 1e6))
+             })}
+-            {leftover.error ? ' ' + t('Grund für den Abbruch: {reason}', { reason: leftover.error }) : ''}
++            {pending.error ? ' ' + t('Grund für den Abbruch: {reason}', { reason: pending.error }) : ''}
+           </div>
+           <div className="row" style={{ gap: 8 }}>
+-            <button type="button" className="btn small" style={{ flex: 1 }} onClick={() => uploadLeftover(leftover)}>{t('Jetzt hochladen')}</button>
+-            <button type="button" className="btn small outline" style={{ flex: 1 }} onClick={() => discardLeftover(leftover)}>{t('Verwerfen')}</button>
++            <button type="button" className="btn small" style={{ flex: 1 }} onClick={pending.upload}>{t('Jetzt hochladen')}</button>
++            <button type="button" className="btn small outline" style={{ flex: 1 }} onClick={pending.discard}>{t('Verwerfen')}</button>
+           </div>
+diff --git a/src/recorder/recorder.ts b/src/recorder/recorder.ts
+index 2f9f895..13e96f6 100644
+--- a/src/recorder/recorder.ts
++++ b/src/recorder/recorder.ts
+@@ -1 +1,3 @@
++import { hasRecordingStore, saveMeta, savePart, loadRecording, type StoredRecording } from './webStore';
++
+ /**
+@@ -16,2 +18,12 @@ export interface Recorder {
+   level?(): number;
++  /** Kennung im Zwischenspeicher des Geräts (null: nur im Arbeitsspeicher) */
++  readonly storedId?: string | null;
++}
++
++/** Wohin die Aufnahme gehört – damit sie nach einem Absturz der richtigen Runde zugeordnet werden kann */
++export interface RecordingTarget {
++  connId: string;
++  sessionId: string;
++  campaignId: string;
++  title: string;
+ }
+@@ -29,3 +41,12 @@ export class WebRecorder implements Recorder {
+   private stream: MediaStream | null = null;
++  /** Nur, wenn das Gerät nicht speichern kann: Stücke im Arbeitsspeicher */
+   private chunks: Blob[] = [];
++  private meta: StoredRecording | null = null;
++  /** Bleibt auch nach einem Rückfall in den Arbeitsspeicher, damit der Rest im Gerät später gelöscht werden kann */
++  private id: string | null = null;
++  /** Schreibvorgänge nacheinander, damit beim Beenden alles abgelegt ist */
++  private writes: Promise<void> = Promise.resolve();
++  private heartbeat: number | null = null;
++  private accumulatedMs = 0;
++  private runningSince = 0;
+   private wakeLock: { release(): Promise<void> } | null = null;
+@@ -44,2 +65,50 @@ export class WebRecorder implements Recorder {
+ 
++  constructor(private target?: RecordingTarget) {}
++
++  get storedId(): string | null {
++    return this.id;
++  }
++
++  private elapsedMs(): number {
++    return this.accumulatedMs + (this.rec?.state === 'recording' ? Date.now() - this.runningSince : 0);
++  }
++
++  /** Stück ablegen; klappt das nicht (Speicher voll o. ä.), geht es im Arbeitsspeicher weiter */
++  private keep(blob: Blob) {
++    const m = this.meta;
++    if (!m) {
++      this.chunks.push(blob);
++      return;
++    }
++    const seq = m.parts++;
++    m.bytes += blob.size;
++    this.writes = this.writes.then(async () => {
++      // Schon in den Arbeitsspeicher gewechselt: dort anhängen, Reihenfolge bleibt
++      if (this.meta !== m) {
++        this.chunks.push(blob);
++        return;
++      }
++      try {
++        await savePart(m.id, seq, blob);
++        await saveMeta({ ...m, elapsedMs: this.elapsedMs(), aliveAt: Date.now() });
++      } catch {
++        // Ab hier im Arbeitsspeicher: Bisheriges einmal herausholen, damit die Datei vollständig bleibt
++        this.meta = null;
++        const before = await loadRecording({ ...m, parts: seq }).catch(() => new Blob());
++        this.chunks = [before, blob, ...this.chunks];
++      }
++    });
++  }
++
++  private wake = async () => {
++    if (document.visibilityState !== 'visible' || this.rec?.state === undefined || this.rec.state === 'inactive') return;
++    try {
++      // Hält den Bildschirm an, solange die App im Vordergrund ist; nach dem Zurückkehren neu anfordern
++      const nav = navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } };
++      this.wakeLock = (await nav.wakeLock?.request('screen')) ?? null;
++    } catch {
++      this.wakeLock = null;
++    }
++  };
++
+   get state(): 'idle' | 'recording' | 'paused' {
+@@ -65,6 +134,37 @@ export class WebRecorder implements Recorder {
+     this.chunks = [];
++    this.meta = null;
++    this.id = null;
++    if (this.target && hasRecordingStore()) {
++      const meta: StoredRecording = {
++        ...this.target,
++        id: `${this.target.sessionId}-${Date.now().toString(36)}`,
++        mimeType: this.rec.mimeType || mimeType || 'audio/webm',
++        startedAt: new Date().toISOString(),
++        elapsedMs: 0,
++        parts: 0,
++        bytes: 0,
++        state: 'recording',
++        aliveAt: Date.now()
++      };
++      try {
++        await saveMeta(meta);
++        this.meta = meta;
++        this.id = meta.id;
++        // Gerät bitten, den Speicher nicht von selbst zu räumen (stillschweigend, wenn nicht unterstützt)
++        await navigator.storage?.persist?.().catch(() => false);
++      } catch {
++        this.meta = null;
++      }
++    }
+     this.rec.ondataavailable = (e) => {
+-      if (e.data.size > 0) this.chunks.push(e.data);
++      if (e.data.size > 0) this.keep(e.data);
+     };
++    this.accumulatedMs = 0;
++    this.runningSince = Date.now();
+     this.rec.start(10_000);
++    // Lebenszeichen auch in der Pause, damit ein anderes Fenster die Aufnahme nicht für abgebrochen hält
++    this.heartbeat = window.setInterval(() => {
++      const m = this.meta;
++      if (m) this.writes = this.writes.then(() => saveMeta({ ...m, elapsedMs: this.elapsedMs(), aliveAt: Date.now() }).catch(() => undefined));
++    }, 15_000);
+     try {
+@@ -78,9 +178,4 @@ export class WebRecorder implements Recorder {
+     }
+-    try {
+-      // Hält den Bildschirm an, solange die App im Vordergrund ist
+-      const nav = navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<{ release(): Promise<void> }> } };
+-      this.wakeLock = (await nav.wakeLock?.request('screen')) ?? null;
+-    } catch {
+-      this.wakeLock = null;
+-    }
++    await this.wake();
++    document.addEventListener('visibilitychange', this.wake);
+   }
+@@ -88,3 +183,5 @@ export class WebRecorder implements Recorder {
+   pause(): void {
+-    this.rec?.pause();
++    if (this.rec?.state !== 'recording') return;
++    this.accumulatedMs += Date.now() - this.runningSince;
++    this.rec.pause();
+   }
+@@ -92,3 +189,5 @@ export class WebRecorder implements Recorder {
+   resume(): void {
+-    this.rec?.resume();
++    if (this.rec?.state !== 'paused') return;
++    this.runningSince = Date.now();
++    this.rec.resume();
+   }
+@@ -99,3 +198,4 @@ export class WebRecorder implements Recorder {
+       if (!rec) return resolve(new Blob());
+-      rec.onstop = () => {
++      const elapsed = this.elapsedMs();
++      rec.onstop = async () => {
+         this.stream?.getTracks().forEach((t) => t.stop());
+@@ -104,5 +204,19 @@ export class WebRecorder implements Recorder {
+         this.analyser = null;
++        if (this.heartbeat !== null) window.clearInterval(this.heartbeat);
++        this.heartbeat = null;
++        document.removeEventListener('visibilitychange', this.wake);
+         this.wakeLock?.release().catch(() => undefined);
+-        resolve(new Blob(this.chunks, { type: rec.mimeType || 'audio/webm' }));
+         this.rec = null;
++        // Das letzte Stück kommt vor onstop; erst warten, bis alles abgelegt ist
++        await this.writes;
++        const type = rec.mimeType || 'audio/webm';
++        const m = this.meta;
++        if (!m) return resolve(new Blob(this.chunks, { type }));
++        const stopped: StoredRecording = { ...m, elapsedMs: elapsed, state: 'stopped', aliveAt: Date.now() };
++        await saveMeta(stopped).catch(() => undefined);
++        try {
++          resolve(new Blob([await loadRecording(stopped), ...this.chunks], { type }));
++        } catch {
++          resolve(new Blob(this.chunks, { type }));
++        }
+       };
+@@ -113,4 +227,4 @@ export class WebRecorder implements Recorder {
+ 
+-export function createRecorder(): Recorder {
+-  return new WebRecorder();
++export function createRecorder(target?: RecordingTarget): Recorder {
++  return new WebRecorder(target);
+ }
+diff --git a/src/recorder/webStore.ts b/src/recorder/webStore.ts
+new file mode 100644
+index 0000000..492e86e
+--- /dev/null
++++ b/src/recorder/webStore.ts
+@@ -0,0 +1,147 @@
++/**
++ * Zwischenspeicher für Aufnahmen im Browser. Der MediaRecorder liefert alle 10 Sekunden ein Stück; jedes Stück wird
++ * sofort im Gerät abgelegt (IndexedDB), nicht im Arbeitsspeicher gesammelt. Schließt jemand das Fenster, stürzt der
++ * Browser ab oder ist der Server beim Hochladen nicht erreichbar, bleibt die Aufnahme erhalten und die Aufnahme-Seite
++ * bietet „Jetzt hochladen“ an – wie die Android-App mit ihren Abschnitten auf dem Handy.
++ *
++ * Die Stücke einer Aufnahme ergeben aneinandergehängt wieder eine gültige Datei (das erste enthält den Kopf).
++ * Gelöscht wird nur nach erfolgreichem Hochladen oder wenn die SL „Verwerfen“ bestätigt – nie von selbst.
++ */
++
++export interface StoredRecording {
++  id: string;
++  /** Verbindung (Server), zu der die Runde gehört – Kennungen gelten nur dort */
++  connId: string;
++  sessionId: string;
++  campaignId: string;
++  title: string;
++  mimeType: string;
++  startedAt: string;
++  elapsedMs: number;
++  parts: number;
++  bytes: number;
++  state: 'recording' | 'stopped';
++  /** Letztes Lebenszeichen der laufenden Aufnahme (ms seit 1970) */
++  aliveAt: number;
++}
++
++export interface StoreBackend {
++  putMeta(m: StoredRecording): Promise<void>;
++  allMeta(): Promise<StoredRecording[]>;
++  putPart(id: string, seq: number, blob: Blob): Promise<void>;
++  parts(id: string): Promise<Blob[]>;
++  remove(id: string): Promise<void>;
++}
++
++/** Ohne Lebenszeichen so lange gilt eine „laufende“ Aufnahme als abgebrochen */
++export const STALE_MS = 45_000;
++
++const DB = 'taleward-aufnahmen';
++const META = 'aufnahmen';
++const PARTS = 'stuecke';
++
++function req<T>(r: IDBRequest<T>): Promise<T> {
++  return new Promise((resolve, reject) => {
++    r.onsuccess = () => resolve(r.result);
++    r.onerror = () => reject(r.error);
++  });
++}
++
++function done(tx: IDBTransaction): Promise<void> {
++  return new Promise((resolve, reject) => {
++    tx.oncomplete = () => resolve();
++    tx.onerror = () => reject(tx.error);
++    tx.onabort = () => reject(tx.error);
++  });
++}
++
++function idbBackend(): StoreBackend | null {
++  if (typeof indexedDB === 'undefined') return null;
++  let db: Promise<IDBDatabase> | null = null;
++  const open = () => {
++    db ??= new Promise((resolve, reject) => {
++      const r = indexedDB.open(DB, 1);
++      r.onupgradeneeded = () => {
++        r.result.createObjectStore(META, { keyPath: 'id' });
++        r.result.createObjectStore(PARTS);
++      };
++      r.onsuccess = () => resolve(r.result);
++      r.onerror = () => { db = null; reject(r.error); };
++    });
++    return db;
++  };
++  const range = (id: string) => IDBKeyRange.bound([id, 0], [id, Number.MAX_SAFE_INTEGER]);
++  return {
++    async putMeta(m) {
++      const tx = (await open()).transaction(META, 'readwrite');
++      tx.objectStore(META).put(m);
++      await done(tx);
++    },
++    async allMeta() {
++      return req((await open()).transaction(META).objectStore(META).getAll() as IDBRequest<StoredRecording[]>);
++    },
++    async putPart(id, seq, blob) {
++      const tx = (await open()).transaction(PARTS, 'readwrite');
++      tx.objectStore(PARTS).put(blob, [id, seq]);
++      await done(tx);
++    },
++    async parts(id) {
++      // Schlüssel [id, seq] sind nach seq sortiert
++      return req((await open()).transaction(PARTS).objectStore(PARTS).getAll(range(id)) as IDBRequest<Blob[]>);
++    },
++    async remove(id) {
++      const tx = (await open()).transaction([META, PARTS], 'readwrite');
++      tx.objectStore(META).delete(id);
++      tx.objectStore(PARTS).delete(range(id));
++      await done(tx);
++    }
++  };
++}
++
++let backend: StoreBackend | null | undefined;
++const store = () => (backend === undefined ? (backend = idbBackend()) : backend);
++
++/** Nur für Tests: eigenen Speicher einsetzen (null = keiner vorhanden) */
++export function setStoreBackend(b: StoreBackend | null): void {
++  backend = b;
++}
++
++export function hasRecordingStore(): boolean {
++  return !!store();
++}
++
++export async function saveMeta(m: StoredRecording): Promise<void> {
++  const b = store();
++  if (!b) throw new Error('kein Speicher');
++  await b.putMeta(m);
++}
++
++export async function savePart(id: string, seq: number, blob: Blob): Promise<void> {
++  const b = store();
++  if (!b) throw new Error('kein Speicher');
++  await b.putPart(id, seq, blob);
++}
++
++/** Die ganze Aufnahme als eine Datei (Stücke in Reihenfolge) */
++export async function loadRecording(m: StoredRecording): Promise<Blob> {
++  const b = store();
++  return new Blob(b ? await b.parts(m.id) : [], { type: m.mimeType || 'audio/webm' });
++}
++
++export async function removeRecording(id: string): Promise<void> {
++  await store()?.remove(id);
++}
++
++/**
++ * Nicht hochgeladene Aufnahmen dieser Verbindung, neueste zuerst. Eine „laufende“ ohne Lebenszeichen ist abgebrochen
++ * (Fenster zu, Absturz) und zählt mit; eine, die gerade in einem anderen Fenster läuft, nicht.
++ */
++export async function leftoverRecordings(connId: string, now = Date.now()): Promise<StoredRecording[]> {
++  const b = store();
++  if (!b) return [];
++  const all = await b.allMeta().catch(() => [] as StoredRecording[]);
++  const ended = all.filter((m) => m.connId === connId && (m.state === 'stopped' || now - m.aliveAt > STALE_MS));
++  // Abgebrochen, bevor das erste Stück da war: enthält keinen Ton, nur aufräumen
++  for (const m of ended) if (m.parts === 0) await b.remove(m.id).catch(() => undefined);
++  return ended.filter((m) => m.parts > 0).sort((a, c) => c.startedAt.localeCompare(a.startedAt));
++}
+From e2b67be556ebc2093afc52e7ccec1d807b909f4d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 13 Oct 2026 08:22:06 +0200
+Subject: [PATCH] =?UTF-8?q?Android:=20Wachhalten=20bei=20langen=20Aufnahme?=
+ =?UTF-8?q?n=20verl=C3=A4ngern?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Die Aufnahme hielt das Handy ab dem Start höchstens 8 Stunden wach (Pausen
+eingerechnet). Jetzt wird die Frist mit jedem neuen Abschnitt (etwa alle
+5 Minuten) und beim Fortsetzen erneuert.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018aiEzsk3JkKj9Ft8xrcuW2
+---
+ native-android/RecorderService.java | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/native-android/RecorderService.java b/native-android/RecorderService.java
+index 4a4adc0..bb24f2c 100644
+--- a/native-android/RecorderService.java
++++ b/native-android/RecorderService.java
+@@ -154,2 +154,4 @@ public class RecorderService extends Service {
+             pendingNext = null;
++            // Lange Runden: Wachhalten bei jedem Abschnitt verlängern, statt nach 8 h ab Start zu enden
++            acquireWakeLock();
+             saveState(paused ? "paused" : "recording");
+@@ -173,2 +175,3 @@ public class RecorderService extends Service {
+             if (paused) recorder.pause();
++            else acquireWakeLock();
+         } catch (Exception e) {
+@@ -195,2 +198,3 @@ public class RecorderService extends Service {
+         paused = false;
++        acquireWakeLock();
+         saveState("recording");
+From 45d6932fed471fc2d997ca64a86fbf0d67eca8c4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 13 Oct 2026 08:27:09 +0200
+Subject: [PATCH] Schnittstelle 0.4.16: publicUrl und serverId in /info
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ServerInfo.publicUrl nennt die Adresse, unter der andere Geräte den Server
+erreichen (für Einladungslink und QR-Code, wenn die App über localhost
+verbunden ist). ServerInfo.serverId ist die feste Kennung des Servers, damit
+die App ihn unter neuer Adresse wiedererkennt. Beides optional.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018aiEzsk3JkKj9Ft8xrcuW2
+---
+ docs/session-chronik-api.yaml | 25 ++++++++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 348cd86..33826b1 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.15
++  version: 0.4.16
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -183,4 +183,8 @@ info:
+     eigenen Worten, was nicht stimmt oder fehlt; der Server schreibt nur die betroffenen Absätze neu und legt einen
+     Entwurf vor (`Recap.revision`, nur SL). POST …/recap/revision/decision übernimmt oder verwirft ihn als Ganzes.
++    Änderungen in 0.4.16 (Server auf einem PC im Heimnetz): ServerInfo.publicUrl – unter welcher Adresse andere Geräte
++    diesen Server erreichen; die App baut Einladungslink und QR-Code daraus, wenn sie selbst über localhost verbunden
++    ist. ServerInfo.serverId – feste Kennung des Servers; die App erkennt daran denselben Server unter neuer Adresse.
++    Beides optional, ältere Apps ignorieren es.
+ 
+ servers:
+@@ -2990,4 +2994,23 @@ components:
+             - $ref: "#/components/schemas/CloudProviderInfo"
+             - type: "null"
++        publicUrl:
++          type: [string, "null"]
++          example: "http://192.168.178.24:8000"
++          description: |
++            Ab 0.4.16. Herkunft (Schema, Host, Port; ohne Pfad, ohne `/` am Ende), unter der andere Geräte diesen Server
++            erreichen. Auf einem PC im Heimnetz die aktuelle Heimnetz-Adresse (ändert sie sich, meldet der Server die neue);
++            sonst die öffentliche Adresse oder null. http nur für private Adressen (wie die App sie auch sonst nur dort
++            zulässt). Die App nimmt sie für Einladungslink (`<publicUrl>/einladung/<CODE>`) und QR-Code, wenn sie selbst
++            über localhost / 127.0.0.1 / ::1 verbunden ist; sonst wie bisher die eigene Adresse. Fehlt das Feld oder ist es
++            null, gilt das bisherige Verhalten.
++        serverId:
++          type: [string, "null"]
++          pattern: "^[A-Za-z0-9_-]{1,64}$"
++          description: |
++            Ab 0.4.16. Feste Kennung dieses Servers (dieselbe wie `serverId` bei der Anmeldung mit Diensten und `aud` im
++            Token); ändert sich nie, auch nicht mit der Adresse. Liest die App eine Einladung unter neuer Adresse und
++            meldet der Server dort dieselbe serverId wie eine gespeicherte Verbindung, bietet sie „Adresse aktualisieren“
++            an statt einer zweiten Verbindung. Das Token geht dabei nicht an die neue Adresse; die Person meldet sich dort
++            neu an (Name ist vorausgefüllt). Kein Geheimnis – nur zum Wiedererkennen.
+ 
+     CloudProviderInfo:
+From 5e3033e298732aea84090dcea7c2e13b78cfead0 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 13 Oct 2026 08:27:09 +0200
+Subject: [PATCH] =?UTF-8?q?Eigener=20Server=20unter=20/app/,=20Einladung?=
+ =?UTF-8?q?=20mit=20Heimnetz-Adresse,=20neue=20Adresse=20=C3=BCbernehmen?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Läuft die Web-App unter /app/ eines Servers, ist dieser Server vorgegeben: Wer
+noch nicht verbunden ist, sieht gleich die Anmeldung. Ist die App über
+localhost verbunden, bauen Einladungslink und QR-Code auf publicUrl auf.
+Meldet ein Server unter neuer Adresse dieselbe serverId wie eine gespeicherte
+Verbindung, wird diese nach dem Anmelden auf die neue Adresse umgestellt statt
+eine zweite anzulegen. Testserver auf 0.4.16.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018aiEzsk3JkKj9Ft8xrcuW2
+---
+ scripts/tests/own-server.test.mjs | 39 +++++++++++++++++++++++++++++++
+ src/api/addresses.ts              | 37 +++++++++++++++++++++++++++++
+ src/api/connections.ts            |  2 ++
+ src/api/musterRuntime.ts          |  2 +-
+ src/api/types.ts                  |  4 ++++
+ src/components/InviteBox.tsx      |  4 +++-
+ src/components/Seats.tsx          |  4 +++-
+ src/i18n/en.ts                    |  1 +
+ src/invite.ts                     | 12 ++++++----
+ src/mocks/handlers.ts             |  5 ++--
+ src/pages/Campaigns.tsx           |  2 +-
+ src/pages/ConnectPage.tsx         | 37 +++++++++++++++++++++++------
+ 12 files changed, 132 insertions(+), 17 deletions(-)
+ create mode 100644 scripts/tests/own-server.test.mjs
+
+diff --git a/scripts/tests/own-server.test.mjs b/scripts/tests/own-server.test.mjs
+new file mode 100644
+index 0000000..1373a3f
+--- /dev/null
++++ b/scripts/tests/own-server.test.mjs
+@@ -0,0 +1,39 @@
++// Server auf einem PC im Heimnetz (Schnittstelle 0.4.16): eigener Server unter /app/, Einladungslink mit publicUrl
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { inviteOrigin, isLoopbackHost, ownServerBase } from '../../src/api/addresses.ts';
++
++test('nur dieses Gerät', () => {
++  for (const h of ['localhost', '127.0.0.1', '127.1.2.3', '[::1]', 'app.localhost']) assert.equal(isLoopbackHost(h), true, h);
++  for (const h of ['192.168.178.24', 'taleward.example.org', '10.0.0.1', '1270.0.0.1']) assert.equal(isLoopbackHost(h), false, h);
++});
++
++test('Einladung im Programmfenster: Heimnetz-Adresse statt localhost', () => {
++  assert.equal(inviteOrigin('http://localhost:8000', 'http://192.168.178.24:8000'), 'http://192.168.178.24:8000');
++  assert.equal(inviteOrigin('http://127.0.0.1:8000', 'http://192.168.178.24:8000/'), 'http://192.168.178.24:8000');
++});
++
++test('Einladung sonst wie bisher', () => {
++  // Eigene Adresse ist schon erreichbar
++  assert.equal(inviteOrigin('https://taleward.example.org', 'https://anders.example.org'), 'https://taleward.example.org');
++  assert.equal(inviteOrigin('http://192.168.178.24:8000', 'http://192.168.178.30:8000'), 'http://192.168.178.24:8000');
++  // Nichts gemeldet, Unsinn, http ins Internet, wieder localhost
++  assert.equal(inviteOrigin('http://localhost:8000', null), 'http://localhost:8000');
++  assert.equal(inviteOrigin('http://localhost:8000', 'kein link'), 'http://localhost:8000');
++  assert.equal(inviteOrigin('http://localhost:8000', 'http://taleward.example.org'), 'http://localhost:8000');
++  assert.equal(inviteOrigin('http://localhost:8000', 'http://127.0.0.1:8000'), 'http://localhost:8000');
++  assert.equal(inviteOrigin('http://localhost:8000', 'javascript:alert(1)'), 'http://localhost:8000');
++  // https ins Internet ist erlaubt
++  assert.equal(inviteOrigin('http://localhost:8000', 'https://taleward.example.org'), 'https://taleward.example.org');
++});
++
++test('eigener Server nur unter /app/ eines Servers', () => {
++  assert.equal(ownServerBase({ origin: 'http://localhost:8000', hostname: 'localhost', pathname: '/app/' }), 'http://localhost:8000/api/v1');
++  assert.equal(ownServerBase({ origin: 'https://taleward.example.org', hostname: 'taleward.example.org', pathname: '/app/index.html' }),
++    'https://taleward.example.org/api/v1');
++  assert.equal(ownServerBase({ origin: 'https://app.taleward.org', hostname: 'app.taleward.org', pathname: '/' }), null);
++  assert.equal(ownServerBase({ origin: 'https://taleward.org', hostname: 'taleward.org', pathname: '/app/' }), null);
++  assert.equal(ownServerBase({ origin: 'http://localhost:5173', hostname: 'localhost', pathname: '/' }), null);
++  assert.equal(ownServerBase({ origin: 'capacitor://localhost', hostname: 'localhost', pathname: '/app/' }), null);
++  assert.equal(ownServerBase({ origin: 'https://x.example', hostname: 'x.example', pathname: '/apps/' }), null);
++});
+diff --git a/src/api/addresses.ts b/src/api/addresses.ts
+index c3791ae..4953d37 100644
+--- a/src/api/addresses.ts
++++ b/src/api/addresses.ts
+@@ -67 +67,38 @@ export function parseInvite(input: string): { baseUrl: string | null; code: stri
+ }
++
++/** Nur dieses Gerät selbst (localhost, 127.x, ::1) – von anderen Geräten aus nicht erreichbar */
++export function isLoopbackHost(hostname: string): boolean {
++  const h = hostname.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
++  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
++}
++
++/**
++ * Herkunft für Einladungslinks (Schnittstelle 0.4.16): Ist die App selbst über localhost verbunden (Programmfenster auf
++ * dem PC), nimmt sie die Adresse, die der Server für andere Geräte meldet (`publicUrl`); sonst die eigene.
++ * http nur zu Adressen im Heimnetz, alles andere bleibt bei der eigenen Herkunft.
++ */
++export function inviteOrigin(ownOrigin: string, publicUrl?: string | null): string {
++  try {
++    if (!publicUrl || !isLoopbackHost(new URL(ownOrigin).hostname)) return ownOrigin;
++    const u = new URL(publicUrl);
++    if (u.protocol !== 'https:' && !(u.protocol === 'http:' && isHomeNetworkHost(u.hostname))) return ownOrigin;
++    if (isLoopbackHost(u.hostname)) return ownOrigin;
++    return u.origin;
++  } catch {
++    return ownOrigin;
++  }
++}
++
++/** Die zentrale Web-Fassung – dort gibt es keinen „eigenen“ Server */
++const CENTRAL_HOSTS = ['taleward.org', 'www.taleward.org', 'app.taleward.org'];
++
++/**
++ * Läuft die Web-App unter /app/ eines Taleward-Servers, ist dieser Server vorgegeben: `<Herkunft>/api/v1`.
++ * Sonst (zentrale Web-Fassung, Android-App, Entwicklung) null.
++ */
++export function ownServerBase(loc: { origin: string; hostname: string; pathname: string }): string | null {
++  if (!/^\/app(\/|$)/.test(loc.pathname)) return null;
++  if (CENTRAL_HOSTS.includes(loc.hostname.toLowerCase())) return null;
++  if (!/^https?:\/\//.test(loc.origin)) return null;
++  return `${loc.origin}/api/v1`;
++}
+diff --git a/src/api/connections.ts b/src/api/connections.ts
+index dcc0f0a..f80ec04 100644
+--- a/src/api/connections.ts
++++ b/src/api/connections.ts
+@@ -30,2 +30,4 @@ export interface Connection {
+   appOutdated?: boolean;
++  /** Feste Kennung des Servers aus /info (ab 0.4.16) – erkennt ihn unter neuer Adresse wieder */
++  serverId?: string | null;
+ }
+diff --git a/src/api/musterRuntime.ts b/src/api/musterRuntime.ts
+index f337b5b..5ead903 100644
+--- a/src/api/musterRuntime.ts
++++ b/src/api/musterRuntime.ts
+@@ -50,3 +50,3 @@ export async function startMuster(role: MusterRole): Promise<Connection> {
+   await install(lang);
+-  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.15', token: null, expiresAt: null, user: null });
++  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.16', token: null, expiresAt: null, user: null });
+   const res = await apiFor(probe).login(role, 'muster');
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 5a72784..ce5234b 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -603,2 +603,6 @@ export interface ServerInfo {
+   appDownloadSizeBytes?: number | null;
++  /** Adresse für andere Geräte, z. B. http://192.168.178.24:8000 – für Einladungen aus dem Programmfenster (ab 0.4.16) */
++  publicUrl?: string | null;
++  /** Feste Kennung des Servers, auch wenn sich seine Adresse ändert (ab 0.4.16) */
++  serverId?: string | null;
+ }
+diff --git a/src/components/InviteBox.tsx b/src/components/InviteBox.tsx
+index 0414c91..36cb2a3 100644
+--- a/src/components/InviteBox.tsx
++++ b/src/components/InviteBox.tsx
+@@ -3,2 +3,3 @@ import QRCode from 'qrcode';
+ import { api } from '../api/client';
++import { useServerInfo } from './CloudNotice';
+ import { currentConnection } from '../api/connections';
+@@ -16,2 +17,3 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
+   const [error, setError] = useState<unknown>(null);
++  const info = useServerInfo();
+ 
+@@ -21,3 +23,3 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
+       const r = await api.createInvite(campaignId);
+-      setInvite({ ...r, link: inviteLink(currentConnection(), r.code) });
++      setInvite({ ...r, link: inviteLink(currentConnection(), r.code, (info ?? (await api.info().catch(() => null)))?.publicUrl) });
+     } catch (e) {
+diff --git a/src/components/Seats.tsx b/src/components/Seats.tsx
+index 3c7d45a..f37c0fb 100644
+--- a/src/components/Seats.tsx
++++ b/src/components/Seats.tsx
+@@ -10,2 +10,3 @@ import { formatDate, formatDateFull } from './format';
+ import { ErrorBox } from './Screen';
++import { useServerInfo } from './CloudNotice';
+ 
+@@ -219,2 +220,3 @@ export function OpenSeatDialog({ campaign, seat, onDone, onClose }: { campaign:
+   const name = seat.characterName ?? (seat.role === 'gm' ? t('Spielleitung') : t('Offener Platz'));
++  const info = useServerInfo();
+ 
+@@ -225,3 +227,3 @@ export function OpenSeatDialog({ campaign, seat, onDone, onClose }: { campaign:
+       const r = await api.seatInvite(campaign.id, seat.id);
+-      setInvite({ code: r.code, expiresAt: r.expiresAt, link: inviteLink(currentConnection(), r.code) });
++      setInvite({ code: r.code, expiresAt: r.expiresAt, link: inviteLink(currentConnection(), r.code, (info ?? (await api.info().catch(() => null)))?.publicUrl) });
+     } catch (e) {
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index d1e0380..693bde4 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -191,2 +191,3 @@ export const en: Record<string, string> = {
+   "Runde": "Session",
++  "Diesen Server kennt die App schon unter {old}. Melde dich hier an, dann gilt die neue Adresse. Deine Kampagnen bleiben, wie sie sind.": "The app already knows this server at {old}. Log in here and the new address applies. Your campaigns stay as they are.",
+   "Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.": "No microphone access. Allow it in the app settings.",
+diff --git a/src/invite.ts b/src/invite.ts
+index 5fb6d48..e5b29b6 100644
+--- a/src/invite.ts
++++ b/src/invite.ts
+@@ -2,2 +2,3 @@ import { Capacitor } from '@capacitor/core';
+ import type { Connection } from './api/connections';
++import { inviteOrigin } from './api/addresses';
+ 
+@@ -9,6 +10,9 @@ import type { Connection } from './api/connections';
+ 
+-/** https://<server>/einladung/<CODE> – aus der API-Adresse der Verbindung */
+-export function inviteLink(conn: Connection, code: string): string {
+-  const origin = conn.baseUrl.startsWith('/') ? window.location.origin : new URL(conn.baseUrl).origin;
+-  return `${origin}/einladung/${encodeURIComponent(code)}`;
++/**
++ * https://<server>/einladung/<CODE> – aus der API-Adresse der Verbindung. Ist die App über localhost verbunden
++ * (Programmfenster auf dem PC), nimmt sie die Adresse, die der Server für andere Geräte meldet (publicUrl, ab 0.4.16).
++ */
++export function inviteLink(conn: Connection, code: string, publicUrl?: string | null): string {
++  const own = conn.baseUrl.startsWith('/') ? window.location.origin : new URL(conn.baseUrl).origin;
++  return `${inviteOrigin(own, publicUrl)}/einladung/${encodeURIComponent(code)}`;
+ }
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 8cbf6fe..b53c348 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -480,3 +480,3 @@ export const handlers = [
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.15', registration: 'invite_only',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.16', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+@@ -490,3 +490,4 @@ export const handlers = [
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.15',
++      apiVersion: nachbar ? '0.3.9' : '0.4.16',
++      serverId: nachbar ? undefined : 'testserver',
+       registration: 'invite_only',
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 7dc3ebb..97ee3fe 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -88,3 +88,3 @@ export function Campaigns() {
+         const tooOld = !!appInfo.minAppVersion && versionLess(APP_VERSION, appInfo.minAppVersion);
+-        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld });
++        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null });
+         if (tooOld || versionLess(info.apiVersion, MIN_API_VERSION)) return { conn, list: [] as CampaignSummary[], ok: true };
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index e3ebb85..5f1d8c1 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -9,4 +9,6 @@ import { apiFor, fetchInvitePreview, fetchServerInfo, isApiError } from '../api/
+ import {
+-  APP_VERSION, isOutdated, normalizeBaseUrl, versionLess, parseInvite, REQUIRED_API_VERSION, saveConnection, type Connection
++  APP_VERSION, getConnection, isOutdated, listConnections, normalizeBaseUrl, versionLess, parseInvite, REQUIRED_API_VERSION,
++  saveConnection, updateConnection, type Connection
+ } from '../api/connections';
++import { ownServerBase } from '../api/addresses';
+ import type { InvitePreview, ServerInfo } from '../api/types';
+@@ -21,2 +23,4 @@ const DEFAULT_SERVER: string = import.meta.env.VITE_API_BASE ?? '';
+ const MOCK = import.meta.env.VITE_API_MODE === 'mock';
++// Web-App unter /app/ eines Servers (z. B. im Programmfenster auf dem PC): dieser Server ist vorgegeben
++const OWN_SERVER = MOCK ? null : ownServerBase(window.location);
+ 
+@@ -30,3 +34,3 @@ export function ConnectPage() {
+   const params = new URLSearchParams(useLocation().search);
+-  const [address, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : DEFAULT_SERVER));
++  const [address, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : OWN_SERVER ?? DEFAULT_SERVER));
+   const [baseUrl, setBaseUrl] = useState<string | null>(null);
+@@ -48,2 +52,4 @@ export function ConnectPage() {
+   const [tried, setTried] = useState(false);
++  // Derselbe Server (gleiche serverId, ab 0.4.16) ist schon unter einer anderen Adresse gespeichert
++  const [moved, setMoved] = useState<Connection | null>(null);
+ 
+@@ -51,3 +57,3 @@ export function ConnectPage() {
+   useEffect(() => {
+-    if (params.get('invite') || params.get('oidc')) checkServer();
++    if (params.get('invite') || params.get('oidc') || (OWN_SERVER && !active.length && !params.get('server'))) checkServer();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+@@ -84,2 +90,8 @@ export function ConnectPage() {
+       }
++      const same = i.serverId ? listConnections().find((c) => c.serverId === i.serverId && c.baseUrl !== url) : undefined;
++      setMoved(same ?? null);
++      if (same) {
++        setMode('login');
++        setUsername(same.user?.username ?? '');
++      }
+       setInfo(i);
+@@ -102,4 +114,5 @@ export function ConnectPage() {
+     if (code.trim()) {
+-      const c = await apiFor(conn).joinCampaign(code.trim());
+-      navigate(`/v/${conn.id}/k/${c.id}/willkommen`, { replace: true });
++      // Nach einem Adresswechsel ist man meist schon dabei – dann einfach zur Kampagnenliste
++      const c = await apiFor(conn).joinCampaign(code.trim()).catch((e) => { if (moved) return null; throw e; });
++      navigate(c ? `/v/${conn.id}/k/${c.id}/willkommen` : '/', { replace: true });
+     } else {
+@@ -117,3 +130,6 @@ export function ConnectPage() {
+     try {
+-      const probe = saveConnection({ baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, user: null });
++      const fields = { baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, serverId: info.serverId ?? null };
++      // Neue Adresse eines bekannten Servers: dieselbe Verbindung behalten (Kampagnen, Charaktere), nur neu anmelden
++      if (moved) updateConnection(moved.id, fields);
++      const probe = (moved && getConnection(moved.id)) || saveConnection({ ...fields, user: null });
+       const res = mode === 'login'
+@@ -212,3 +228,10 @@ export function ConnectPage() {
+               )}
+-              <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => { setInfo(null); setBaseUrl(null); setPreview(null); }}>{t('Anderer Server')}</button>
++              {moved && (
++                <div className="notice">
++                  {t('Diesen Server kennt die App schon unter {old}. Melde dich hier an, dann gilt die neue Adresse. Deine Kampagnen bleiben, wie sie sind.', {
++                    old: moved.baseUrl.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '')
++                  })}
++                </div>
++              )}
++              <button type="button" className="btn ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => { setInfo(null); setBaseUrl(null); setPreview(null); setMoved(null); }}>{t('Anderer Server')}</button>
+             </section>
+From 9b65a827a2669374f281c33f2946b3ff8d054f87 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 13 Oct 2026 08:27:50 +0200
+Subject: [PATCH] Version 0.21.0
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018aiEzsk3JkKj9Ft8xrcuW2
+---
+ package-lock.json | 4 ++--
+ package.json      | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index 20dfc52..4b0ee78 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -2,3 +2,3 @@
+   "name": "taleward-app",
+-  "version": "0.20.2",
++  "version": "0.21.0",
+   "lockfileVersion": 3,
+@@ -8,3 +8,3 @@
+       "name": "taleward-app",
+-      "version": "0.20.2",
++      "version": "0.21.0",
+       "dependencies": {
+diff --git a/package.json b/package.json
+index 0e9c633..739896e 100644
+--- a/package.json
++++ b/package.json
+@@ -3,3 +3,3 @@
+   "private": true,
+-  "version": "0.20.2",
++  "version": "0.21.0",
+   "type": "module",
