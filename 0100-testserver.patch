@@ -1,0 +1,355 @@
+From 21fb32b3004c80f15724d5431a80077e6161fc4c Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 00:32:17 +0200
+Subject: [PATCH 100/101] =?UTF-8?q?Testserver=20und=20Typen=20f=C3=BCr=20S?=
+ =?UTF-8?q?chnittstelle=200.4.18?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/api/client.ts        |   8 ++-
+ src/api/musterRuntime.ts |   2 +-
+ src/api/types.ts         |  31 ++++++++-
+ src/mocks/db.ts          |  24 +++++--
+ src/mocks/handlers.ts    | 146 +++++++++++++++++++++++++++++++++------
+ 5 files changed, 183 insertions(+), 28 deletions(-)
+
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 95eb2d1..f73b4e1 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -4,3 +4,3 @@ import { getLang, t, tk } from '../i18n';
+ import { APP_VERSION, currentConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
+-import type { InvitePreview,
++import type { InvitePreview, CharacterAnalysis,
+   ApiError,
+@@ -216,2 +216,6 @@ function makeApi(conn: () => Connection) {
+   characterProposals: (campaignId: string) => request<Proposal[]>('GET', `/campaigns/${campaignId}/character-proposals`),
++  // Auswertung von Charakterbögen und Hintergründen (ab 0.4.18)
++  characterAnalyses: (campaignId: string) => request<CharacterAnalysis[]>('GET', `/campaigns/${campaignId}/character-analyses`),
++  requestBackstoryAnalysis: (campaignId: string) => request<CharacterAnalysis>('POST', `/campaigns/${campaignId}/members/me/backstory-analysis`),
++  decideCharacterAnalysis: (analysisId: string, approve: boolean) => request<CharacterAnalysis>('POST', `/character-analyses/${analysisId}/decision`, { body: { approve } }),
+   /** Hinweis an die SL erledigen (ab 0.4.7) */
+@@ -232,2 +236,4 @@ function makeApi(conn: () => Connection) {
+       allowCloudSummary?: boolean;
++      /** Auswertung von Charakterbögen und Hintergründen erlauben (nur SL, ab 0.4.18) */
++      allowCharacterAnalysis?: boolean;
+       /** Namenshilfe ganz ersetzen (nur SL, ab 0.4.6) */
+diff --git a/src/api/musterRuntime.ts b/src/api/musterRuntime.ts
+index 01d9aa7..ed07bbd 100644
+--- a/src/api/musterRuntime.ts
++++ b/src/api/musterRuntime.ts
+@@ -50,3 +50,3 @@ export async function startMuster(role: MusterRole): Promise<Connection> {
+   await install(lang);
+-  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.17', token: null, expiresAt: null, user: null });
++  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.18', token: null, expiresAt: null, user: null });
+   const res = await apiFor(probe).login(role, 'muster');
+diff --git a/src/api/types.ts b/src/api/types.ts
+index c996545..4b37bd2 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -141,4 +141,6 @@ export interface GmNotice {
+    * member_joined (ab 0.4.14): jemand ist beigetreten oder wieder eingetreten (memberId).
++   * character_analysis_pending (ab 0.4.18): jemand möchte Bogen oder Hintergrund auswerten lassen (analysisId).
+    */
+-  code: 'hidden_entries_for_newcomer' | 'seat_claimed' | 'character_orphaned' | 'member_joined' | string;
++  code: 'hidden_entries_for_newcomer' | 'seat_claimed' | 'character_orphaned' | 'member_joined' | 'character_analysis_pending' | string;
++  analysisId?: string | null;
+   memberId: string | null;
+@@ -205,2 +207,4 @@ export interface Campaign extends CampaignSummary {
+   allowCloudSummary?: boolean;
++  /** Dürfen Mitglieder Charakterbogen und Hintergrund auswerten lassen? Nur SL ändert, alle sehen es (ab 0.4.18) */
++  allowCharacterAnalysis?: boolean;
+   /** Sprache der Runde: Transkription, Recaps, Vorschläge (ab 0.3.2) */
+@@ -301,2 +305,4 @@ export interface Proposal {
+   submittedByMemberId?: string | null;
++  /** Aus welcher Auswertung von Bogen oder Hintergrund (ab 0.4.18); null = mitgebrachte Welt */
++  analysisId?: string | null;
+   entryType: EntryType;
+@@ -488,3 +494,3 @@ export interface Comment {
+ 
+-/** character_sheet = Charakterbogen eines Mitglieds (ab 0.4.7; nur SL und Urheberin, keine Auswertung) */
++/** character_sheet = Charakterbogen eines Mitglieds (ab 0.4.7; nur SL und Urheberin; Auswertung ab 0.4.18 nach Zustimmung der SL) */
+ export type DocumentKind = 'handout' | 'gm' | 'mixed' | 'character_sheet';
+@@ -509,2 +515,4 @@ export interface CampaignDocument {
+   uploadedByMemberId?: string | null;
++  /** Bei character_sheet die zugehörige Auswertung (ab 0.4.18) */
++  analysisId?: string | null;
+   createdAt: string;
+@@ -512,2 +520,21 @@ export interface CampaignDocument {
+ 
++/** Auswertung eines Charakterbogens oder Hintergrunds (ab 0.4.18); Spieler sehen nur den Stand ihrer eigenen */
++export interface CharacterAnalysis {
++  id: string;
++  campaignId: string;
++  memberId: string;
++  source: 'sheet' | 'backstory';
++  documentId: string | null;
++  title: string;
++  state: 'awaiting_gm' | 'rejected' | 'queued' | 'processing' | 'done' | 'failed';
++  usesCloud: boolean;
++  pageCount: number | null;
++  pagesLimited: boolean;
++  message: string | null;
++  /** Nur für die SL, sobald done */
++  proposalCount: number | null;
++  createdAt: string;
++  decidedAt: string | null;
++}
++
+ /** Text einer Unterlage je Seite (ab 0.4.12) */
+diff --git a/src/mocks/db.ts b/src/mocks/db.ts
+index 23088be..16065e1 100644
+--- a/src/mocks/db.ts
++++ b/src/mocks/db.ts
+@@ -1,2 +1,2 @@
+-import type { CampaignDocument, ChapterPlan, Comment, Link, DatePoll, Entry, GmNotice, Member, Proposal, Recap, Session, Speaker, TranscriptSegment, UncertainTerm } from '../api/types';
++import type { CampaignDocument, CharacterAnalysis, ChapterPlan, Comment, Link, DatePoll, Entry, GmNotice, Member, Proposal, Recap, Session, Speaker, TranscriptSegment, UncertainTerm } from '../api/types';
+ 
+@@ -28,2 +28,4 @@ export interface MockCampaign {
+   allowCloudSummary?: boolean;
++  /** Auswertung von Charakterbögen und Hintergründen (ab 0.4.18) */
++  allowCharacterAnalysis?: boolean;
+   archivedAt?: string | null;
+@@ -47,3 +49,3 @@ export const campaigns: MockCampaign[] = [
+     system: 'dsa',
+-    allowExternalTranscription: true, allowCloudSummary: true,
++    allowExternalTranscription: true, allowCloudSummary: true, allowCharacterAnalysis: true,
+     hotwords: ['Grauwacht', 'Kaltenfurt', 'Thorwald', 'Nyra', 'Ilsabet', 'Hedda', 'Rabenzirkel', 'Vier Wasser'],
+@@ -69,2 +71,3 @@ export const campaigns: MockCampaign[] = [
+     system: 'other', systemName: 'Household',
++    allowCharacterAnalysis: true,
+     coverPreset: 'mountains',
+@@ -76,3 +79,3 @@ export const campaigns: MockCampaign[] = [
+       { id: 'm-mara', userId: 'u-mara', displayName: 'Mara', characterName: null, role: 'gm' , recordingConsentAt: '2026-07-01T18:00:00Z' },
+-      { id: 'm-robin2', userId: 'u-robin', displayName: 'Robin', characterName: 'Ilvara', role: 'player' , recordingConsentAt: null },
++      { id: 'm-robin2', userId: 'u-robin', displayName: 'Robin', characterName: 'Ilvara', characterBackstory: 'Ilvara wuchs bei den Hirten am Nebelkamm auf. Ihr Bruder Kesh verschwand im Winter vor drei Jahren am Pass; seitdem sucht sie ihn. Sie trägt seinen Wanderstab.', role: 'player' , recordingConsentAt: null },
+       { id: 'm-tim', userId: 'u-tim', displayName: 'Tim', characterName: 'Garrek', role: 'player' , recordingConsentAt: '2026-07-01T18:00:00Z' }
+@@ -300,5 +303,18 @@ export const gmNotices: Record<string, GmNotice[]> = {
+   // Testmodus (0.4.9): Brakk gehörte einem inzwischen gelöschten Konto – die SL entscheidet, was aus der Figur wird
+-  'c-grau': [{ id: 'gn-brakk', code: 'character_orphaned', memberId: 'm-del', entryIds: ['pc-brakk'], createdAt: '2026-09-20T10:00:00Z' }]
++  'c-grau': [
++    { id: 'gn-brakk', code: 'character_orphaned', memberId: 'm-del', entryIds: ['pc-brakk'], createdAt: '2026-09-20T10:00:00Z' },
++    // Ab 0.4.18: Jonas möchte Thorwalds Hintergrund auswerten lassen
++    { id: 'gn-ca-jonas', code: 'character_analysis_pending', memberId: 'm-jonas', analysisId: 'ca-jonas', entryIds: [], createdAt: '2026-10-12T19:00:00Z' }
++  ]
+ };
+ 
++/** Auswertungen von Charakterbögen und Hintergründen (ab 0.4.18); phaseStartedAt nur im Testmodus */
++export const characterAnalyses: (CharacterAnalysis & { phaseStartedAt: number })[] = [
++  {
++    id: 'ca-jonas', campaignId: 'c-grau', memberId: 'm-jonas', source: 'backstory', documentId: null, title: 'Thorwald',
++    state: 'awaiting_gm', usesCloud: true, pageCount: null, pagesLimited: false, message: null, proposalCount: null,
++    createdAt: '2026-10-12T19:00:00Z', decidedAt: null, phaseStartedAt: 0
++  }
++];
++
+ /** Charakterbilder im Speicher: Mitglieds-ID → Bild */
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 5c5d570..a6cd69c 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -6,5 +6,5 @@ import { textToPdf } from './minipdf';
+ const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
+-import type { CampaignDocument, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
++import type { CampaignDocument, CharacterAnalysis, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
+ import {
+-  ME, NACHBAR_HOST, account, gmNotices, world, type WorldRecord, campaigns, comments, coverImages, datePolls, documentTexts, documents, plans, portraits, proposalsForDocument, seen, entries, gmNotes, proposals, proposalsFor, recaps, sessions, speakersFor, uploads, speakerLists, transcripts, uncertainTerms,
++  ME, NACHBAR_HOST, account, characterAnalyses, gmNotices, world, type WorldRecord, campaigns, comments, coverImages, datePolls, documentTexts, documents, plans, portraits, proposalsForDocument, seen, entries, gmNotes, proposals, proposalsFor, recaps, sessions, speakersFor, uploads, speakerLists, transcripts, uncertainTerms,
+   type MockCampaign, type MockSession
+@@ -316,2 +316,46 @@ function toneWav(): ArrayBuffer {
+ /** Simulierte Auswertung einer Unterlage: 2 s Warteschlange, 6 s Auswertung */
++/** Auswertung von Bogen oder Hintergrund im Testmodus: nach der Zustimmung ein paar Sekunden, dann Vorschläge (0.4.18) */
++function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean): CharacterAnalysis {
++  // Zeit seit der Zustimmung: nach 2 s läuft sie, nach 6 s ist sie fertig
++  const t = (Date.now() - a.phaseStartedAt) / 1000;
++  if (a.state === 'queued' && t > 2) a.state = 'processing';
++  if (a.state === 'processing' && t > 6) {
++    a.state = 'done';
++    const c = campaigns.find((x) => x.id === a.campaignId)!;
++    const others = c.members.filter((x) => x.id !== a.memberId && !x.leftAt && !x.deletedAt && x.role === 'player').map((x) => x.id);
++    const made = analysisProposals(a).map((x) => ({
++      ...x, id: 'cp-' + crypto.randomUUID().slice(0, 8), sessionId: null, documentId: null, source: 'character' as const,
++      originCharacterId: null, originEntryId: null, submittedByMemberId: a.memberId, analysisId: a.id, action: 'create' as const,
++      targetEntryId: null, suggestedVisibility: 'public' as const, hiddenFromMemberIds: others, confidence: 0.8, flags: [],
++      evidence: [], decision: 'open' as const
++    }));
++    proposals.push(...made);
++    a.proposalCount = made.length;
++  }
++  const { phaseStartedAt: _p, ...rest } = a;
++  return forGm ? rest : { ...rest, proposalCount: null };
++}
++
++function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[] {
++  if (a.memberId === 'm-jonas') return [
++    { entryType: 'faction', title: 'Diebesgilde von Kaltenfurt', detail: 'Thorwald schuldet ihr 300 Silber.', gmNotes: null }
++  ];
++  return [
++    { entryType: 'npc', title: 'Kesh', detail: 'Bruder der Figur, vor drei Jahren am Pass verschwunden.', gmNotes: null },
++    { entryType: 'location', title: 'Nebelkamm', detail: 'Hirtenland, in dem die Figur aufwuchs.', gmNotes: null }
++  ];
++}
++
++/** Neue Auswertung anlegen und der SL Bescheid geben (0.4.18) */
++function newAnalysis(c: MockCampaign, memberId: string, source: 'sheet' | 'backstory', title: string, documentId: string | null, pageCount: number | null) {
++  const a = {
++    id: 'ca-' + crypto.randomUUID().slice(0, 8), campaignId: c.id, memberId, source, documentId, title, state: 'awaiting_gm' as const,
++    usesCloud: !!c.allowCloudSummary, pageCount, pagesLimited: (pageCount ?? 0) > 20, message: null, proposalCount: null,
++    createdAt: new Date().toISOString(), decidedAt: null, phaseStartedAt: 0
++  };
++  characterAnalyses.push(a);
++  (gmNotices[c.id] ??= []).push({ id: 'gn-' + a.id, code: 'character_analysis_pending', memberId, analysisId: a.id, entryIds: [], createdAt: a.createdAt });
++  return a;
++}
++
+ function advanceDoc(d: (typeof documents)[number]): CampaignDocument {
+@@ -480,3 +524,3 @@ export const handlers = [
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.17', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.18', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+@@ -712,3 +756,3 @@ export const handlers = [
+     campaigns.push(c);
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, members: membersFor(c) }, { status: 201 });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) }, { status: 201 });
+   }),
+@@ -728,3 +772,3 @@ export const handlers = [
+       (gmNotices[c.id] ??= []).push({ id: 'gn-' + crypto.randomUUID().slice(0, 8), code: 'seat_claimed', memberId: m.id, entryIds: [], createdAt: new Date().toISOString() });
+-      return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, members: membersFor(c) });
++      return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, allowCharacterAnalysis: false, members: membersFor(c) });
+     }
+@@ -748,3 +792,3 @@ export const handlers = [
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
+   }),
+@@ -754,3 +798,3 @@ export const handlers = [
+     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+   }),
+@@ -852,2 +896,36 @@ export const handlers = [
+ 
++  // ---- Auswertung von Charakterbögen und Hintergründen (0.4.18)
++  http.get(`${B}/campaigns/:id/character-analyses`, ({ params }) => {
++    const c = campaigns.find((x) => x.id === params.id);
++    const m = c && myMember(c);
++    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
++    const gm = m.role === 'gm';
++    const list = characterAnalyses.filter((a) => a.campaignId === c.id && (gm || a.memberId === m.id));
++    return HttpResponse.json(list.map((a) => advanceAnalysis(a, gm)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
++  }),
++
++  http.post(`${B}/campaigns/:id/members/me/backstory-analysis`, ({ params }) => {
++    const c = campaigns.find((x) => x.id === params.id);
++    const m = c && myMember(c);
++    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
++    if (!c.allowCharacterAnalysis) return err(409, 'analysis_off', 'In dieser Kampagne werden Hintergründe nicht ausgewertet.');
++    if (!m.characterBackstory?.trim()) return err(409, 'backstory_empty', 'Der Hintergrund ist noch leer.');
++    if (characterAnalyses.some((a) => a.memberId === m.id && a.source === 'backstory' && ['awaiting_gm', 'queued', 'processing'].includes(a.state))) {
++      return err(409, 'analysis_pending', 'Dein Hintergrund liegt schon bei der Spielleitung.');
++    }
++    return HttpResponse.json(advanceAnalysis(newAnalysis(c, m.id, 'backstory', m.characterName ?? m.displayName, null, null), m.role === 'gm'), { status: 201 });
++  }),
++
++  http.post(`${B}/character-analyses/:aid/decision`, async ({ params, request }) => {
++    const a = characterAnalyses.find((x) => x.id === params.aid);
++    if (!a || !isGm(a.campaignId)) return err(404, 'not_found', 'Nicht gefunden.');
++    if (a.state !== 'awaiting_gm') return err(409, 'wrong_state', 'Darüber ist schon entschieden.');
++    const body = (await request.json()) as { approve?: boolean };
++    a.state = body.approve ? 'queued' : 'rejected';
++    a.decidedAt = new Date().toISOString();
++    a.phaseStartedAt = Date.now();
++    gmNotices[a.campaignId] = (gmNotices[a.campaignId] ?? []).filter((n) => n.analysisId !== a.id);
++    return HttpResponse.json(advanceAnalysis(a, true));
++  }),
++
+   http.get(`${B}/campaigns/:id/character-proposals`, ({ params }) => {
+@@ -855,2 +933,3 @@ export const handlers = [
+     if (!c || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
++    for (const a of characterAnalyses) if (a.campaignId === c.id) advanceAnalysis(a, true);
+     const mine = proposals.filter((p) => p.source === 'character' && c.members.some((m) => m.id === p.submittedByMemberId));
+@@ -885,2 +964,10 @@ export const handlers = [
+     }
++    if (typeof (body as { allowCharacterAnalysis?: boolean }).allowCharacterAnalysis === 'boolean') {
++      c.allowCharacterAnalysis = (body as { allowCharacterAnalysis: boolean }).allowCharacterAnalysis;
++      // Ausschalten lehnt offene Anfragen ab (0.4.18)
++      if (!c.allowCharacterAnalysis) {
++        for (const a of characterAnalyses) if (a.campaignId === c.id && a.state === 'awaiting_gm') { a.state = 'rejected'; a.decidedAt = new Date().toISOString(); }
++        gmNotices[c.id] = (gmNotices[c.id] ?? []).filter((n) => n.code !== 'character_analysis_pending');
++      }
++    }
+     if (typeof (body as { allowExternalTranscription?: boolean }).allowExternalTranscription === 'boolean') {
+@@ -908,3 +995,3 @@ export const handlers = [
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, hotwords: c.hotwords ?? [], members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, hotwords: c.hotwords ?? [], members: membersFor(c) });
+   }),
+@@ -1007,3 +1094,3 @@ export const handlers = [
+     c.members = c.members.filter((x) => x !== me);
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, gmNotices: gmNotices[c.id] ?? [], members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, allowCharacterAnalysis: false, gmNotices: gmNotices[c.id] ?? [], members: membersFor(c) });
+   }),
+@@ -1147,4 +1234,8 @@ export const handlers = [
+   http.get(`${B}/campaigns/:id/documents`, ({ params }) => {
+-    if (!isGm(params.id as string)) return err(403, 'forbidden', 'Unterlagen sieht nur die Spielleitung.');
+-    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id).map(advanceDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
++    const c = campaigns.find((x) => x.id === params.id);
++    const m = c && myMember(c);
++    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
++    // Spieler (ab 0.4.7): nur die eigenen Charakterbögen
++    const mine = (d: (typeof documents)[number]) => isGm(c.id) || (d.kind === 'character_sheet' && d.uploadedByMemberId === m.id);
++    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id && mine(d)).map(advanceDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+   }),
+@@ -1152,16 +1243,26 @@ export const handlers = [
+   http.post(`${B}/campaigns/:id/documents`, async ({ params, request }) => {
+-    if (!isGm(params.id as string)) return err(403, 'forbidden', 'Unterlagen lädt nur die Spielleitung hoch.');
++    const c = campaigns.find((x) => x.id === params.id);
++    const m = c && myMember(c);
++    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+     const form = await request.formData();
+     const file = form.get('file');
+-    const kind = form.get('kind') as 'handout' | 'gm' | 'mixed';
++    const kind = form.get('kind') as 'handout' | 'gm' | 'mixed' | 'character_sheet';
++    if (kind !== 'character_sheet' && !isGm(c.id)) return err(403, 'forbidden', 'Unterlagen lädt nur die Spielleitung hoch.');
+     if (!(file instanceof File)) return err(400, 'invalid_input', 'Datei fehlt.');
+-    if (!['handout', 'gm', 'mixed'].includes(kind)) return err(400, 'invalid_input', 'Unbekannte Art der Unterlage.');
++    if (!['handout', 'gm', 'mixed', 'character_sheet'].includes(kind)) return err(400, 'invalid_input', 'Unbekannte Art der Unterlage.');
++    if (kind === 'character_sheet' && documents.filter((d) => d.campaignId === c.id && d.kind === 'character_sheet' && d.uploadedByMemberId === m.id).length >= 3) {
++      return err(409, 'sheet_limit', 'Du hast schon drei Charakterbögen hochgeladen. Lösch erst einen.');
++    }
+     if (!/\.(pdf|docx|txt|md)$/i.test(file.name)) return err(400, 'unsupported_document', 'Bitte PDF, Word (.docx) oder Text hochladen.');
+     if (file.size > 50 * 1024 * 1024) return err(413, 'document_too_large', 'Die Datei ist zu groß (höchstens 50 MB).');
+-    const d = {
++    const sheet = kind === 'character_sheet';
++    const d: (typeof documents)[number] = {
+       id: 'doc-' + crypto.randomUUID().slice(0, 8), campaignId: params.id as string, title: String(form.get('title') || file.name),
+-      fileName: file.name, kind, sizeBytes: file.size, pageCount: /\.pdf$/i.test(file.name) ? 12 : null, state: 'queued' as const,
+-      progress: 0, message: null, proposalCount: 0, openProposalCount: 0, worldInfoSuggestion: null,
+-      createdAt: new Date().toISOString(), phaseStartedAt: Date.now(), failNext: file.name.toLowerCase().includes('fehler')
++      // Bögen wertet nur die Auswertung aus – nach Zustimmung der SL (0.4.18)
++      fileName: file.name, kind, sizeBytes: file.size, pageCount: /\.pdf$/i.test(file.name) ? 12 : null, state: sheet ? 'done' : 'queued',
++      progress: sheet ? null : 0, message: null, proposalCount: 0, openProposalCount: 0, worldInfoSuggestion: null,
++      createdAt: new Date().toISOString(), phaseStartedAt: Date.now(), failNext: file.name.toLowerCase().includes('fehler'),
++      uploadedByMemberId: m.id, analysisId: null
+     };
++    if (sheet && c.allowCharacterAnalysis) d.analysisId = newAnalysis(c, m.id, 'sheet', d.title, d.id, d.pageCount).id;
+     documents.push(d);
+@@ -1299,3 +1400,8 @@ export const handlers = [
+     const i = documents.findIndex((x) => x.id === params.did);
+-    if (i < 0 || !isGm(documents[i].campaignId)) return err(404, 'not_found', 'Unterlage nicht gefunden.');
++    const doc = documents[i];
++    const owner = doc && doc.kind === 'character_sheet' && doc.uploadedByMemberId === myMember(campaigns.find((c) => c.id === doc.campaignId)!)?.id;
++    if (i < 0 || !(isGm(doc.campaignId) || owner)) return err(404, 'not_found', 'Unterlage nicht gefunden.');
++    // Eine noch nicht entschiedene Auswertung des Bogens entfällt (0.4.18)
++    for (const a of characterAnalyses) if (a.documentId === doc.id && a.state === 'awaiting_gm') { a.state = 'rejected'; a.decidedAt = new Date().toISOString(); }
++    gmNotices[doc.campaignId] = (gmNotices[doc.campaignId] ?? []).filter((n) => !characterAnalyses.some((a) => a.id === n.analysisId && a.documentId === doc.id));
+     documents.splice(i, 1);
+@@ -1371,3 +1477,3 @@ export const handlers = [
+     c.coverPreset = null;
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
+   }),
