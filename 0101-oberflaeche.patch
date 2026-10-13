@@ -1,0 +1,379 @@
+From 6d9667995d7fd7009af94af8155dabe1c29699b3 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 00:32:17 +0200
+Subject: [PATCH 101/101] =?UTF-8?q?Charakterb=C3=B6gen=20und=20Hintergr?=
+ =?UTF-8?q?=C3=BCnde:=20Schalter,=20Zustimmung=20der=20SL,=20Stand=20f?=
+ =?UTF-8?q?=C3=BCr=20die=20Spielerin?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/CharacterAnalysis.tsx | 224 +++++++++++++++++++++++++++
+ src/i18n/en.ts                       |  34 ++++
+ src/pages/BroughtPage.tsx            |  20 ++-
+ src/pages/CharacterPage.tsx          |   4 +
+ src/pages/Overview.tsx               |  14 +-
+ 5 files changed, 291 insertions(+), 5 deletions(-)
+ create mode 100644 src/components/CharacterAnalysis.tsx
+
+diff --git a/src/components/CharacterAnalysis.tsx b/src/components/CharacterAnalysis.tsx
+new file mode 100644
+index 0000000..a45507e
+--- /dev/null
++++ b/src/components/CharacterAnalysis.tsx
+@@ -0,0 +1,224 @@
++import { useEffect, useRef, useState } from 'react';
++import { api, isApiError } from '../api/client';
++import { currentConnection } from '../api/connections';
++import type { Campaign, CampaignDocument, CharacterAnalysis, GmNotice, Member, ServerInfo } from '../api/types';
++import { isDeletedMember } from '../api/types';
++import { confirmDialog } from './confirm';
++import { providerLabel } from './CloudNotice';
++import { ErrorBox } from './Screen';
++import { MAX_MB } from '../pages/DocumentsPage';
++import { t, tk } from '../i18n';
++
++/*
++ * Charakterbögen und Hintergründe auswerten (Schnittstelle 0.4.18): Die SL schaltet es je Kampagne ein, die Spielerin
++ * gibt Bogen oder Hintergrund ab, die SL stimmt jeder Auswertung einzeln zu. Ergebnis sind Vorschläge unter
++ * „Mitgebrachte Welt“ – die Spielerin sieht nur den Stand, nie die Vorschläge.
++ */
++
++const MAX_SHEETS = 3;
++const ACCEPT = '.pdf,.docx,.txt,.md,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
++
++/** Wer liest mit: Cloud-Anbieter (nur mit Freigabe der SL für die Kampagne) oder das lokale Modell des Servers */
++function reader(info: ServerInfo | null, campaign: Campaign, usesCloud?: boolean): string {
++  const cloud = usesCloud ?? (!!campaign.allowCloudSummary && !!info?.cloudSummary);
++  const provider = cloud ? providerLabel(info?.cloudSummary, info?.cloudSummaryInfo) : null;
++  return provider
++    ? t('Ausgewertet wird in der Cloud über {provider}.', { provider })
++    : t('Ausgewertet wird mit dem Modell eures Servers, nichts geht in die Cloud.');
++}
++
++const STATE: Record<CharacterAnalysis['state'], string> = {
++  awaiting_gm: tk('Wartet auf die Spielleitung'),
++  rejected: tk('Von der Spielleitung abgelehnt'),
++  queued: tk('Wird gleich ausgewertet'),
++  processing: tk('Wird ausgewertet'),
++  done: tk('Ausgewertet – die Spielleitung entscheidet über die Vorschläge'),
++  failed: tk('Auswertung fehlgeschlagen')
++};
++
++/** Schalter unter „Kampagne verwalten“ (nur SL) */
++export function AnalysisSwitch({ campaign, info, busy, onChange }: {
++  campaign: Campaign; info: ServerInfo | null; busy: boolean; onChange: (value: boolean) => void;
++}) {
++  const toggle = async (value: boolean) => {
++    if (value) {
++      const q = t('Spieler dürfen in „{campaign}“ auf „{server}“ ihren Charakterbogen und Hintergrund auswerten lassen. Jede Auswertung startet erst, wenn du zustimmst, und kostet wie eine Unterlage. {reader}', {
++        campaign: campaign.title, server: currentConnection().name, reader: reader(info, campaign)
++      });
++      if (!(await confirmDialog(q, { confirmLabel: t('Erlauben') }))) return;
++    }
++    onChange(value);
++  };
++  return (
++    <div className="field">
++      <label className="check" style={{ alignItems: 'flex-start' }}>
++        <input type="checkbox" checked={!!campaign.allowCharacterAnalysis} disabled={busy}
++          onChange={(e) => toggle(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
++        <span>{t('Charakterbögen und Hintergründe auswerten lassen')}</span>
++      </label>
++      <span className="muted small">
++        {t('Daraus werden Vorschläge für die Bibel – Familie, Heimat, alte Feinde –, über die du entscheidest. Du stimmst jeder Auswertung einzeln zu.')}
++      </span>
++    </div>
++  );
++}
++
++/** Hinweis an die SL: jemand möchte Bogen oder Hintergrund auswerten lassen */
++export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campaign: Campaign; notice: GmNotice; info: ServerInfo | null; onDone: () => void }) {
++  const [analysis, setAnalysis] = useState<CharacterAnalysis | null>(null);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  useEffect(() => {
++    api.characterAnalyses(campaign.id).then((list) => setAnalysis(list.find((a) => a.id === notice.analysisId) ?? null)).catch(() => undefined);
++  }, [campaign.id, notice.analysisId]);
++  const m = campaign.members.find((x) => x.id === notice.memberId);
++  if (!m || isDeletedMember(m) || !analysis || analysis.state !== 'awaiting_gm') return null;
++  const name = m.characterName ?? m.displayName;
++
++  const decide = async (approve: boolean) => {
++    setBusy(true);
++    setError(null);
++    try {
++      await api.decideCharacterAnalysis(analysis.id, approve);
++      onDone();
++    } catch (e) {
++      setError(e);
++      setBusy(false);
++    }
++  };
++
++  return (
++    <div className="card">
++      <strong>
++        {analysis.source === 'backstory'
++          ? t('{person} möchte den Hintergrund von {name} auswerten lassen', { person: m.displayName, name })
++          : t('{person} möchte den Charakterbogen „{title}“ auswerten lassen', { person: m.displayName, title: analysis.title })}
++      </strong>
++      <span className="muted small">
++        {t('Daraus werden Vorschläge für die Bibel, über die du entscheidest. Kostet wie eine Unterlage.')}{' '}
++        {reader(info, campaign, analysis.usesCloud)}
++        {analysis.pagesLimited ? ' ' + t('Ausgewertet werden nur die ersten 20 Seiten.') : ''}
++      </span>
++      <ErrorBox error={error} />
++      <div className="row wrap" style={{ gap: 8 }}>
++        <button type="button" className="btn small" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
++        <button type="button" className="btn small outline" disabled={busy} onClick={() => decide(false)}>{t('Ablehnen')}</button>
++      </div>
++    </div>
++  );
++}
++
++/** Auf der eigenen Charakterseite: Bogen und Hintergrund der SL zur Auswertung geben, Stand sehen */
++export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Member; info: ServerInfo | null }) {
++  const [analyses, setAnalyses] = useState<CharacterAnalysis[] | null>(null);
++  const [sheets, setSheets] = useState<CampaignDocument[]>([]);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  const picker = useRef<HTMLInputElement>(null);
++
++  const load = () => Promise.all([api.characterAnalyses(campaign.id), api.documents(campaign.id)])
++    .then(([list, docs]) => {
++      setAnalyses(list.filter((a) => a.memberId === me.id));
++      setSheets(docs.filter((d) => d.kind === 'character_sheet' && d.uploadedByMemberId === me.id));
++    })
++    .catch(setError);
++
++  useEffect(() => {
++    load();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [campaign.id]);
++
++  // Läuft gerade etwas, alle paar Sekunden nachsehen
++  const running = analyses?.some((a) => a.state === 'queued' || a.state === 'processing');
++  useEffect(() => {
++    if (!running) return;
++    const id = window.setInterval(load, 3000);
++    return () => window.clearInterval(id);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [running]);
++
++  const run = async (action: () => Promise<unknown>) => {
++    setBusy(true);
++    setError(null);
++    try {
++      await action();
++      await load();
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const upload = (file: File | undefined) => {
++    if (!file) return;
++    if (file.size > MAX_MB * 1024 * 1024) {
++      setError(new Error(t('Die Datei ist zu groß (höchstens {mb} MB).', { mb: MAX_MB })));
++      return;
++    }
++    run(() => api.uploadDocument(campaign.id, file, 'character_sheet', file.name.replace(/\.[^.]+$/, '')));
++  };
++
++  const removeSheet = async (d: CampaignDocument) => {
++    if (await confirmDialog(t('Charakterbogen „{title}“ löschen? Vorschläge, die die Spielleitung schon übernommen hat, bleiben.', { title: d.title }), { confirmLabel: t('Löschen'), danger: true })) {
++      run(() => api.deleteDocument(d.id));
++    }
++  };
++
++  const backstory = analyses?.find((a) => a.source === 'backstory');
++  const backstoryOpen = backstory && ['awaiting_gm', 'queued', 'processing'].includes(backstory.state);
++  const byDoc = (id: string) => analyses?.find((a) => a.documentId === id);
++
++  return (
++    <section className="card" style={{ gap: 10 }}>
++      <h2>{t('Für die Spielleitung auswerten')}</h2>
++      <span className="muted small">
++        {t('Aus deinem Hintergrund und deinem Charakterbogen werden Vorschläge für die Bibel, über die die Spielleitung entscheidet. Was geheim ist, sehen nur sie und du. Ausgewertet wird erst, wenn sie zustimmt.')}{' '}
++        {reader(info, campaign)}
++      </span>
++      <ErrorBox error={error} />
++
++      {me.characterBackstory?.trim() ? (
++        <div className="row between wrap" style={{ gap: 8 }}>
++          <span className="small">
++            <strong>{t('Hintergrund')}</strong>
++            {backstory && <span className="muted"> · {t(STATE[backstory.state])}</span>}
++          </span>
++          {!backstoryOpen && (
++            <button type="button" className="btn small outline" disabled={busy}
++              onClick={() => run(() => api.requestBackstoryAnalysis(campaign.id).catch((e) => { if (!isApiError(e, 'analysis_pending')) throw e; }))}>
++              {backstory ? t('Neuen Stand abgeben') : t('Zur Auswertung abgeben')}
++            </button>
++          )}
++        </div>
++      ) : (
++        <span className="muted small">{t('Noch kein Hintergrund. Schreib ihn in deiner Sammlung, dann kannst du ihn hier abgeben.')}</span>
++      )}
++
++      {sheets.map((d) => {
++        const a = d.analysisId ? byDoc(d.id) : undefined;
++        return (
++          <div key={d.id} className="row between wrap" style={{ gap: 8 }}>
++            <span className="small">
++              <strong>{d.title}</strong>
++              <span className="muted"> · {a ? t(STATE[a.state]) : t('Nur gespeichert')}</span>
++              {a?.state === 'failed' && a.message && <span className="muted"> – {a.message}</span>}
++            </span>
++            <button type="button" className="btn small ghost" disabled={busy} onClick={() => removeSheet(d)}>{t('Löschen')}</button>
++          </div>
++        );
++      })}
++      {sheets.length < MAX_SHEETS ? (
++        <>
++          <button type="button" className="btn outline" disabled={busy} onClick={() => picker.current?.click()}>
++            {busy ? t('Lade hoch …') : t('Charakterbogen abgeben')}
++          </button>
++          <input ref={picker} type="file" hidden accept={ACCEPT} onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
++          <span className="muted small">{t('PDF, Word oder Text, höchstens drei Bögen. Ausgewertet werden die ersten 20 Seiten.')}</span>
++        </>
++      ) : (
++        <span className="muted small">{t('Drei Bögen sind abgegeben. Lösch einen, um einen neuen abzugeben.')}</span>
++      )}
++    </section>
++  );
++}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 6d6a517..def9199 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1193,2 +1193,36 @@ export const en: Record<string, string> = {
+   "ausgefüllt": "filled in",
++  // Charakterbögen und Hintergründe auswerten (0.4.18)
++  "Ausgewertet wird in der Cloud über {provider}.": "It is read in the cloud by {provider}.",
++  "Ausgewertet wird mit dem Modell eures Servers, nichts geht in die Cloud.": "It is read by your server's own model; nothing goes to the cloud.",
++  "Wartet auf die Spielleitung": "Waiting for the game master",
++  "Von der Spielleitung abgelehnt": "Declined by the game master",
++  "Wird gleich ausgewertet": "About to be read",
++  "Ausgewertet – die Spielleitung entscheidet über die Vorschläge": "Read – the game master decides on the suggestions",
++  "Auswertung fehlgeschlagen": "Reading failed",
++  "Spieler dürfen in „{campaign}“ auf „{server}“ ihren Charakterbogen und Hintergrund auswerten lassen. Jede Auswertung startet erst, wenn du zustimmst, und kostet wie eine Unterlage. {reader}": "Players in “{campaign}” on “{server}” may have their character sheet and backstory read. Each one only starts once you agree, and costs the same as a document. {reader}",
++  "Charakterbögen und Hintergründe auswerten lassen": "Read character sheets and backstories",
++  "Daraus werden Vorschläge für die Bibel – Familie, Heimat, alte Feinde –, über die du entscheidest. Du stimmst jeder Auswertung einzeln zu.": "They become suggestions for the bible – family, home, old enemies – and you decide on them. You agree to each one separately.",
++  "{person} möchte den Hintergrund von {name} auswerten lassen": "{person} would like {name}'s backstory to be read",
++  "{person} möchte den Charakterbogen „{title}“ auswerten lassen": "{person} would like the character sheet “{title}” to be read",
++  "Daraus werden Vorschläge für die Bibel, über die du entscheidest. Kostet wie eine Unterlage.": "It becomes suggestions for the bible, and you decide on them. Costs the same as a document.",
++  "Ausgewertet werden nur die ersten 20 Seiten.": "Only the first 20 pages are read.",
++  "Auswerten": "Read it",
++  "Ablehnen": "Decline",
++  "Die Datei ist zu groß (höchstens {mb} MB).": "The file is too large (at most {mb} MB).",
++  "Charakterbogen „{title}“ löschen? Vorschläge, die die Spielleitung schon übernommen hat, bleiben.": "Delete the character sheet “{title}”? Suggestions the game master has already accepted stay.",
++  "Für die Spielleitung auswerten": "Have it read for the game master",
++  "Aus deinem Hintergrund und deinem Charakterbogen werden Vorschläge für die Bibel, über die die Spielleitung entscheidet. Was geheim ist, sehen nur sie und du. Ausgewertet wird erst, wenn sie zustimmt.": "Your backstory and character sheet become suggestions for the bible, and the game master decides on them. Anything secret is seen only by them and you. Nothing is read until they agree.",
++  "Neuen Stand abgeben": "Hand in the current version",
++  "Zur Auswertung abgeben": "Hand in to be read",
++  "Noch kein Hintergrund. Schreib ihn in deiner Sammlung, dann kannst du ihn hier abgeben.": "No backstory yet. Write it in your collection, then you can hand it in here.",
++  "Nur gespeichert": "Stored only",
++  "Lade hoch …": "Uploading …",
++  "Charakterbogen abgeben": "Hand in a character sheet",
++  "PDF, Word oder Text, höchstens drei Bögen. Ausgewertet werden die ersten 20 Seiten.": "PDF, Word or text, at most three sheets. The first 20 pages are read.",
++  "Drei Bögen sind abgegeben. Lösch einen, um einen neuen abzugeben.": "Three sheets are handed in. Delete one to hand in a new one.",
++  "Aus dem Charakterbogen „{title}“": "From the character sheet “{title}”",
++  "Aus dem Hintergrund": "From the backstory",
++  "Aus Charakterbogen oder Hintergrund": "From a character sheet or backstory",
++  "Vorschläge aus Charakterbögen und Hintergründen sind zunächst nur für dich und die Spielerin sichtbar.": "Suggestions from character sheets and backstories are at first visible only to you and the player.",
++  "Charaktere": "Characters"
+ };
+diff --git a/src/pages/BroughtPage.tsx b/src/pages/BroughtPage.tsx
+index 756fdea..4d2c31f 100644
+--- a/src/pages/BroughtPage.tsx
++++ b/src/pages/BroughtPage.tsx
+@@ -3,3 +3,4 @@ import { useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+-import { isDeletedMember, type Campaign, type Proposal } from '../api/types';
++import { isDeletedMember, type Campaign, type CharacterAnalysis, type Proposal } from '../api/types';
++import { apiAtLeast } from '../api/connections';
+ import { Avatar } from '../components/Avatar';
+@@ -17,2 +18,3 @@ export function BroughtPage() {
+   const [proposals, setProposals] = useState<Proposal[] | null>(null);
++  const [analyses, setAnalyses] = useState<CharacterAnalysis[]>([]);
+   const [error, setError] = useState<unknown>(null);
+@@ -23,4 +25,14 @@ export function BroughtPage() {
+       .catch(setError);
++    // Ab 0.4.18: woher ein Vorschlag stammt (Hintergrund oder Charakterbogen)
++    if (apiAtLeast('0.4.18')) api.characterAnalyses(campaignId).then(setAnalyses).catch(() => undefined);
+   }, [campaignId]);
+ 
++  const origin = (p: Proposal) => {
++    const a = p.analysisId ? analyses.find((x) => x.id === p.analysisId) : undefined;
++    if (!p.analysisId) return null;
++    if (a?.source === 'sheet') return t('Aus dem Charakterbogen „{title}“', { title: a.title });
++    if (a?.source === 'backstory') return t('Aus dem Hintergrund');
++    return t('Aus Charakterbogen oder Hintergrund');
++  };
++
+   const players = campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? [];
+@@ -36,2 +48,3 @@ export function BroughtPage() {
+         {t('Was die Charaktere mitbringen: Übernehmen legt den Eintrag sofort in der Bibel an, Ablehnen verwirft ihn. Vorher kannst du alles bearbeiten.')}
++        {analyses.length > 0 && ' ' + t('Vorschläge aus Charakterbögen und Hintergründen sind zunächst nur für dich und die Spielerin sichtbar.')}
+       </p>
+@@ -55,3 +68,6 @@ export function BroughtPage() {
+             {mine.map((p) => (
+-              <ProposalCard key={p.id} proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
++              <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
++                {origin(p) && <span className="muted small">{origin(p)}</span>}
++                <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
++              </div>
+             ))}
+diff --git a/src/pages/CharacterPage.tsx b/src/pages/CharacterPage.tsx
+index b38cec5..266bdff 100644
+--- a/src/pages/CharacterPage.tsx
++++ b/src/pages/CharacterPage.tsx
+@@ -17,2 +17,4 @@ import { MoveConsent } from './Overview';
+ import { apiAtLeast } from '../api/connections';
++import { MyAnalyses } from '../components/CharacterAnalysis';
++import { useServerInfo } from '../components/CloudNotice';
+ 
+@@ -22,2 +24,3 @@ export function CharacterPage() {
+   const { user } = useAuth();
++  const info = useServerInfo();
+   const [campaign, setCampaign] = useState<Campaign | null>(null);
+@@ -118,2 +121,3 @@ export function CharacterPage() {
+               {member.role === 'player' && apiAtLeast('0.4.8') && <MoveConsent campaign={campaign} me={member} onChanged={load} />}
++              {member.role === 'player' && campaign.allowCharacterAnalysis && apiAtLeast('0.4.18') && <MyAnalyses campaign={campaign} me={member} info={info} />}
+             </>
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index d2238e2..61e6065 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -2,2 +2,3 @@ import { VoiceProfileHint } from '../components/VoiceProfileHint';
+ import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
++import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
+ import { isDeletedMember } from '../api/types';
+@@ -132,3 +133,3 @@ export function Overview() {
+           )}
+-          {gm && campaign.gmNotices?.map((n) => <GmNoticeCard key={n.id} campaign={campaign} notice={n} onDone={load} />)}
++          {gm && campaign.gmNotices?.map((n) => <GmNoticeCard key={n.id} campaign={campaign} notice={n} info={serverInfo} onDone={load} />)}
+           {/* Nächste Runde */}
+@@ -666,3 +667,9 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+       )}
+-      {gm && <span className="overline" style={(externalProvider || summaryProvider) ? { marginTop: 6 } : undefined}>{t('Weitergeben')}</span>}
++      {gm && apiAtLeast('0.4.18') && (
++        <>
++          <span className="overline" style={(externalProvider || summaryProvider) ? { marginTop: 6 } : undefined}>{t('Charaktere')}</span>
++          <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
++        </>
++      )}
++      {gm && <span className="overline" style={{ marginTop: 6 }}>{t('Weitergeben')}</span>}
+       {gm && (
+@@ -708,3 +715,4 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+ /** Hinweis an die SL (ab 0.4.7), z. B. ein Neuzugang ist vor teilweise verborgenen Einträgen verborgen */
+-function GmNoticeCard({ campaign, notice, onDone }: { campaign: Campaign; notice: GmNotice; onDone: () => void }) {
++function GmNoticeCard({ campaign, notice, info, onDone }: { campaign: Campaign; notice: GmNotice; info: ServerInfo | null; onDone: () => void }) {
++  if (notice.code === 'character_analysis_pending') return <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} />;
+   if (notice.code === 'seat_claimed') return <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} />;
