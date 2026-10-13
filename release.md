@@ -1,4 +1,0 @@
-- Längere Kapitel können Zwischenüberschriften haben. Beim Bearbeiten steht eine Überschrift als eigene Zeile mit „# “ davor.
-- Wiederholt die erste Überschrift nur den Kapiteltitel, lässt die App sie weg.
-- Der Link zum Quelltext unter „Konto“ führt zur neuen Adresse.
-- Kleinere Fehler behoben.
