@@ -1,2 +1,0 @@
-- Beim Abmelden fragt die App nach, wenn im Browser noch eine Aufnahme dieses Servers liegt, die nicht hochgeladen ist.
-- Kleinere Fehler behoben.
