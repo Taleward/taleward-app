@@ -7,6 +7,7 @@
  *
  * Ergebnis: screenshots/taleward-<nr>-<sprache>-<thema>.png, 1080 × 2400 px (Pixel-7-Maße, Dichte 2,625).
  * Die Aufnahmen entstehen im Browser in Handy-Größe – ohne Android-Statusleiste, die setzt die Website selbst.
+ * Ausnahme Nr. 16 (SL-Schirm am Tablet quer): 2560 × 1600 px (1280 × 800, Dichte 2).
  */
 import { existsSync, mkdirSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
@@ -27,10 +28,12 @@ if (!CHROME) throw new Error('Chrome/Edge nicht gefunden – bitte CHROME_PATH s
 const L = {
   de: { cid: 'c-wasser', next: 'Weiter', askConsent: 'Zustimmen lassen', agree: 'Zustimmen',
     accept: 'Übernehmen', publish: 'Recap veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
-    all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701' },
+    all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701',
+    played: 'Gespielt', search: 'Sefa Mor', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.' },
   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
     accept: 'Accept', publish: 'Publish recap', invite: 'Invite players', qr: 'Show QR code',
-    all: 'All (', world: 'Brought-along world', mara: '00000000-0000-4000-8000-000000000801' }
+    all: 'All (', world: 'Brought-along world', mara: '00000000-0000-4000-8000-000000000801',
+    played: 'Played', search: 'Sefa Mor', hint: 'She did not flee. She left before they could come for her.' }
 };
 
 // Welche Aufnahmen in welchem Thema (Stern in der Anfrage = zusätzlich Spielabend)
@@ -38,11 +41,14 @@ const L = {
 // 15: Startbildschirm (drei Wege: Einladung, selbst leiten, ohne Server ausprobieren)
 const CHAR = [10, 11, 12, 13, 14];
 const START = [15];
+// 16: SL-Schirm am Tablet quer (eine Szene abgehakt, Bibel-Suche mit Tippfehler), 17: SL-Schirm am Handy (Kurzfassung),
+// 18: Prüfen-Seite mit einem Hinweis an einem Absatz („Stimmt etwas nicht oder fehlt etwas?“, ab Schnittstelle 0.4.15)
+const GM = [16, 17, 18];
 const RUNS = [
-  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START] },
-  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START] },
-  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START] },
-  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START] }
+  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM] },
+  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM] },
+  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM] },
+  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM] }
 ].map((r) => (process.env.SHOTS ? { ...r, shots: r.shots.filter((n) => process.env.SHOTS.split(',').map(Number).includes(n)) } : r));
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -66,13 +72,14 @@ for (const run of RUNS) {
     };
   });
 
-  const shot = async (nr) => {
+  const shot = async (nr, size = { width: W, height: H }) => {
     if (!run.shots.includes(nr)) return;
     await wait(700);
     const file = `${OUT}/taleward-${String(nr).padStart(2, '0')}-${run.lang}-${run.theme}.png`;
-    await page.screenshot({ path: file, clip: { x: 0, y: 0, width: W, height: H } });
+    await page.screenshot({ path: file, clip: { x: 0, y: 0, ...size } });
     console.log('  ', file);
   };
+  const phone = () => page.setViewport({ width: W, height: Math.ceil(H), deviceScaleFactor: DPR, isMobile: true, hasTouch: true });
   const go = async (hash) => { await page.evaluate((h) => { location.hash = h; }, hash); await wait(1200); };
   const click = async (text, scope = 'body') => page.evaluate((txt, sc) => {
     const el = [...document.querySelectorAll(`${sc} button, ${sc} summary`)].find((b) => b.textContent.trim() === txt || b.textContent.trim().startsWith(txt));
@@ -126,9 +133,30 @@ for (const run of RUNS) {
   await go(`${s}/freigabe`);
   await page.evaluate(() => document.querySelector('details.card summary')?.click());
   await shot(5);
+  if (run.shots.includes(18)) {
+    // Zweiten Absatz antippen und einen Hinweis schreiben (abgeschickt wird nichts)
+    await page.evaluate(() => { const d = document.querySelector('details.card'); if (d) d.open = true; }); await wait(400);
+    await page.evaluate(() => document.querySelectorAll('.recap.pickable')[1]?.click()); await wait(500);
+    const field = await page.$('.paragraph-hint textarea, .paragraph-hint input');
+    if (!field) throw new Error('Hinweisfeld fehlt');
+    await field.type(t.hint);
+    await page.evaluate(() => { document.querySelectorAll('.recap.pickable')[1]?.scrollIntoView({ block: 'start' }); document.querySelector('.screen-main').scrollBy(0, -12); });
+    await shot(18);
+  }
   await go(k); await click(t.invite); await wait(600); await click(t.qr); await wait(400);
   await page.evaluate(() => [...document.querySelectorAll('.card')].find((c) => c.querySelector('svg') && c.textContent.includes('/einladung/'))?.scrollIntoView({ block: 'start' }));
   await shot(9);
+  if (run.shots.some((n) => n === 16 || n === 17)) {
+    // SL-Schirm: erste Szene abhaken, in der Bibel mit Tippfehler suchen; erst Tablet quer, dann Handy
+    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 2, hasTouch: true });
+    await go(`${k}/tisch`); await wait(800);
+    await page.evaluate((txt) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(txt))?.click(), t.played); await wait(600);
+    const search = await page.$('#tb-search');
+    if (search) { await search.type(t.search); await wait(600); }
+    await shot(16, { width: 1280, height: 800 });
+    await phone(); await go(`${k}/tisch`); await wait(800);
+    await shot(17);
+  }
   if (run.shots.includes(3)) {
     await go(`${k}/aufnahme`);
     await click(t.askConsent); await wait(300);
