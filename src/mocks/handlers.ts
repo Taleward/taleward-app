@@ -4,9 +4,9 @@ import { textToPdf } from './minipdf';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
 const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
-import type { CampaignDocument, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
+import type { CampaignDocument, CharacterAnalysis, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
 import {
-  ME, NACHBAR_HOST, account, gmNotices, world, type WorldRecord, campaigns, comments, coverImages, datePolls, documentTexts, documents, plans, portraits, proposalsForDocument, seen, entries, gmNotes, proposals, proposalsFor, recaps, sessions, speakersFor, uploads, speakerLists, transcripts, uncertainTerms,
+  ME, NACHBAR_HOST, account, characterAnalyses, gmNotices, world, type WorldRecord, campaigns, comments, coverImages, datePolls, documentTexts, documents, plans, portraits, proposalsForDocument, seen, entries, gmNotes, proposals, proposalsFor, recaps, sessions, speakersFor, uploads, speakerLists, transcripts, uncertainTerms,
   type MockCampaign, type MockSession
 } from './db';
 
@@ -314,6 +314,50 @@ function toneWav(): ArrayBuffer {
 }
 
 /** Simulierte Auswertung einer Unterlage: 2 s Warteschlange, 6 s Auswertung */
+/** Auswertung von Bogen oder Hintergrund im Testmodus: nach der Zustimmung ein paar Sekunden, dann Vorschläge (0.4.18) */
+function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean): CharacterAnalysis {
+  // Zeit seit der Zustimmung: nach 2 s läuft sie, nach 6 s ist sie fertig
+  const t = (Date.now() - a.phaseStartedAt) / 1000;
+  if (a.state === 'queued' && t > 2) a.state = 'processing';
+  if (a.state === 'processing' && t > 6) {
+    a.state = 'done';
+    const c = campaigns.find((x) => x.id === a.campaignId)!;
+    const others = c.members.filter((x) => x.id !== a.memberId && !x.leftAt && !x.deletedAt && x.role === 'player').map((x) => x.id);
+    const made = analysisProposals(a).map((x) => ({
+      ...x, id: 'cp-' + crypto.randomUUID().slice(0, 8), sessionId: null, documentId: null, source: 'character' as const,
+      originCharacterId: null, originEntryId: null, submittedByMemberId: a.memberId, analysisId: a.id, action: 'create' as const,
+      targetEntryId: null, suggestedVisibility: 'public' as const, hiddenFromMemberIds: others, confidence: 0.8, flags: [],
+      evidence: [], decision: 'open' as const
+    }));
+    proposals.push(...made);
+    a.proposalCount = made.length;
+  }
+  const { phaseStartedAt: _p, ...rest } = a;
+  return forGm ? rest : { ...rest, proposalCount: null };
+}
+
+function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[] {
+  if (a.memberId === 'm-jonas') return [
+    { entryType: 'faction', title: 'Diebesgilde von Kaltenfurt', detail: 'Thorwald schuldet ihr 300 Silber.', gmNotes: null }
+  ];
+  return [
+    { entryType: 'npc', title: 'Kesh', detail: 'Bruder der Figur, vor drei Jahren am Pass verschwunden.', gmNotes: null },
+    { entryType: 'location', title: 'Nebelkamm', detail: 'Hirtenland, in dem die Figur aufwuchs.', gmNotes: null }
+  ];
+}
+
+/** Neue Auswertung anlegen und der SL Bescheid geben (0.4.18) */
+function newAnalysis(c: MockCampaign, memberId: string, source: 'sheet' | 'backstory', title: string, documentId: string | null, pageCount: number | null) {
+  const a = {
+    id: 'ca-' + crypto.randomUUID().slice(0, 8), campaignId: c.id, memberId, source, documentId, title, state: 'awaiting_gm' as const,
+    usesCloud: !!c.allowCloudSummary, pageCount, pagesLimited: (pageCount ?? 0) > 20, message: null, proposalCount: null,
+    createdAt: new Date().toISOString(), decidedAt: null, phaseStartedAt: 0
+  };
+  characterAnalyses.push(a);
+  (gmNotices[c.id] ??= []).push({ id: 'gn-' + a.id, code: 'character_analysis_pending', memberId, analysisId: a.id, entryIds: [], createdAt: a.createdAt });
+  return a;
+}
+
 function advanceDoc(d: (typeof documents)[number]): CampaignDocument {
   const t = (Date.now() - d.phaseStartedAt) / 1000;
   if (d.state === 'queued' && t > 2) { d.state = 'processing'; d.phaseStartedAt = Date.now(); }
@@ -478,7 +522,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.17', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.18', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -710,7 +754,7 @@ export const handlers = [
       members: [{ id: 'm-' + crypto.randomUUID().slice(0, 8), userId: ME.id, displayName: ME.displayName, characterName: null, role: 'gm' }]
     };
     campaigns.push(c);
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, members: membersFor(c) }, { status: 201 });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) }, { status: 201 });
   }),
 
   http.post(`${B}/campaigns/join`, async ({ request }) => {
@@ -726,7 +770,7 @@ export const handlers = [
       Object.assign(m, { userId: ME.id, displayName: ME.displayName, openSeat: false, role: 'player' });
       if (body.character) applyCharacter(c, m, body.character);
       (gmNotices[c.id] ??= []).push({ id: 'gn-' + crypto.randomUUID().slice(0, 8), code: 'seat_claimed', memberId: m.id, entryIds: [], createdAt: new Date().toISOString() });
-      return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, members: membersFor(c) });
+      return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, allowCharacterAnalysis: false, members: membersFor(c) });
     }
     const c = campaigns.find((x) => (x.host ?? 'local') === host && x.inviteCode.toUpperCase() === body.code.trim().toUpperCase());
     if (!c) return err(404, 'invite_invalid', 'Dieser Einladungscode ist ungültig oder abgelaufen. Frag deine Spielleitung nach einem neuen.');
@@ -746,13 +790,13 @@ export const handlers = [
       (gmNotices[c.id] ??= []).push({ id: 'gn-' + crypto.randomUUID().slice(0, 8), code: 'member_joined', memberId: m.id, entryIds: [], createdAt: new Date().toISOString() });
       seen.chronicle[c.id] = seen.bible[c.id] = new Date().toISOString();
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
   }),
 
   http.get(`${B}/campaigns/:id`, ({ params }) => {
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
   }),
 
   // ---------------- Charaktere (0.4.7)
@@ -850,9 +894,44 @@ export const handlers = [
     return HttpResponse.json(out);
   }),
 
+  // ---- Auswertung von Charakterbögen und Hintergründen (0.4.18)
+  http.get(`${B}/campaigns/:id/character-analyses`, ({ params }) => {
+    const c = campaigns.find((x) => x.id === params.id);
+    const m = c && myMember(c);
+    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    const gm = m.role === 'gm';
+    const list = characterAnalyses.filter((a) => a.campaignId === c.id && (gm || a.memberId === m.id));
+    return HttpResponse.json(list.map((a) => advanceAnalysis(a, gm)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+  }),
+
+  http.post(`${B}/campaigns/:id/members/me/backstory-analysis`, ({ params }) => {
+    const c = campaigns.find((x) => x.id === params.id);
+    const m = c && myMember(c);
+    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    if (!c.allowCharacterAnalysis) return err(409, 'analysis_off', 'In dieser Kampagne werden Hintergründe nicht ausgewertet.');
+    if (!m.characterBackstory?.trim()) return err(409, 'backstory_empty', 'Der Hintergrund ist noch leer.');
+    if (characterAnalyses.some((a) => a.memberId === m.id && a.source === 'backstory' && ['awaiting_gm', 'queued', 'processing'].includes(a.state))) {
+      return err(409, 'analysis_pending', 'Dein Hintergrund liegt schon bei der Spielleitung.');
+    }
+    return HttpResponse.json(advanceAnalysis(newAnalysis(c, m.id, 'backstory', m.characterName ?? m.displayName, null, null), m.role === 'gm'), { status: 201 });
+  }),
+
+  http.post(`${B}/character-analyses/:aid/decision`, async ({ params, request }) => {
+    const a = characterAnalyses.find((x) => x.id === params.aid);
+    if (!a || !isGm(a.campaignId)) return err(404, 'not_found', 'Nicht gefunden.');
+    if (a.state !== 'awaiting_gm') return err(409, 'wrong_state', 'Darüber ist schon entschieden.');
+    const body = (await request.json()) as { approve?: boolean };
+    a.state = body.approve ? 'queued' : 'rejected';
+    a.decidedAt = new Date().toISOString();
+    a.phaseStartedAt = Date.now();
+    gmNotices[a.campaignId] = (gmNotices[a.campaignId] ?? []).filter((n) => n.analysisId !== a.id);
+    return HttpResponse.json(advanceAnalysis(a, true));
+  }),
+
   http.get(`${B}/campaigns/:id/character-proposals`, ({ params }) => {
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    for (const a of characterAnalyses) if (a.campaignId === c.id) advanceAnalysis(a, true);
     const mine = proposals.filter((p) => p.source === 'character' && c.members.some((m) => m.id === p.submittedByMemberId));
     return HttpResponse.json([...mine.filter((p) => p.decision === 'open'), ...mine.filter((p) => p.decision !== 'open').slice(-50)]);
   }),
@@ -883,6 +962,14 @@ export const handlers = [
     if (typeof (body as { allowCloudSummary?: boolean }).allowCloudSummary === 'boolean') {
       c.allowCloudSummary = (body as { allowCloudSummary: boolean }).allowCloudSummary;
     }
+    if (typeof (body as { allowCharacterAnalysis?: boolean }).allowCharacterAnalysis === 'boolean') {
+      c.allowCharacterAnalysis = (body as { allowCharacterAnalysis: boolean }).allowCharacterAnalysis;
+      // Ausschalten lehnt offene Anfragen ab (0.4.18)
+      if (!c.allowCharacterAnalysis) {
+        for (const a of characterAnalyses) if (a.campaignId === c.id && a.state === 'awaiting_gm') { a.state = 'rejected'; a.decidedAt = new Date().toISOString(); }
+        gmNotices[c.id] = (gmNotices[c.id] ?? []).filter((n) => n.code !== 'character_analysis_pending');
+      }
+    }
     if (typeof (body as { allowExternalTranscription?: boolean }).allowExternalTranscription === 'boolean') {
       c.allowExternalTranscription = (body as { allowExternalTranscription: boolean }).allowExternalTranscription;
     }
@@ -906,7 +993,7 @@ export const handlers = [
       c.coverPreset = body.coverPreset;
       delete coverImages[c.id]; // Motiv gewählt: eigenes Bild entfällt
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, hotwords: c.hotwords ?? [], members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, hotwords: c.hotwords ?? [], members: membersFor(c) });
   }),
 
   http.patch(`${B}/campaigns/:id/members/:mid`, async ({ params, request }) => {
@@ -1005,7 +1092,7 @@ export const handlers = [
     if (!seat?.openSeat) return err(409, 'seat_not_open', 'Dieser Platz ist schon besetzt.');
     Object.assign(seat, { userId: ME.id, displayName: ME.displayName, openSeat: false, role: 'gm', recordingConsentAt: me.recordingConsentAt ?? null });
     c.members = c.members.filter((x) => x !== me);
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, gmNotices: gmNotices[c.id] ?? [], members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: false, allowCloudSummary: false, allowCharacterAnalysis: false, gmNotices: gmNotices[c.id] ?? [], members: membersFor(c) });
   }),
 
   http.post(`${B}/campaigns/:id/members/:mid/release`, ({ params }) => {
@@ -1145,25 +1232,39 @@ export const handlers = [
   // ---------------- SL-Unterlagen (0.3.2)
 
   http.get(`${B}/campaigns/:id/documents`, ({ params }) => {
-    if (!isGm(params.id as string)) return err(403, 'forbidden', 'Unterlagen sieht nur die Spielleitung.');
-    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id).map(advanceDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    const c = campaigns.find((x) => x.id === params.id);
+    const m = c && myMember(c);
+    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    // Spieler (ab 0.4.7): nur die eigenen Charakterbögen
+    const mine = (d: (typeof documents)[number]) => isGm(c.id) || (d.kind === 'character_sheet' && d.uploadedByMemberId === m.id);
+    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id && mine(d)).map(advanceDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
   }),
 
   http.post(`${B}/campaigns/:id/documents`, async ({ params, request }) => {
-    if (!isGm(params.id as string)) return err(403, 'forbidden', 'Unterlagen lädt nur die Spielleitung hoch.');
+    const c = campaigns.find((x) => x.id === params.id);
+    const m = c && myMember(c);
+    if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
     const form = await request.formData();
     const file = form.get('file');
-    const kind = form.get('kind') as 'handout' | 'gm' | 'mixed';
+    const kind = form.get('kind') as 'handout' | 'gm' | 'mixed' | 'character_sheet';
+    if (kind !== 'character_sheet' && !isGm(c.id)) return err(403, 'forbidden', 'Unterlagen lädt nur die Spielleitung hoch.');
     if (!(file instanceof File)) return err(400, 'invalid_input', 'Datei fehlt.');
-    if (!['handout', 'gm', 'mixed'].includes(kind)) return err(400, 'invalid_input', 'Unbekannte Art der Unterlage.');
+    if (!['handout', 'gm', 'mixed', 'character_sheet'].includes(kind)) return err(400, 'invalid_input', 'Unbekannte Art der Unterlage.');
+    if (kind === 'character_sheet' && documents.filter((d) => d.campaignId === c.id && d.kind === 'character_sheet' && d.uploadedByMemberId === m.id).length >= 3) {
+      return err(409, 'sheet_limit', 'Du hast schon drei Charakterbögen hochgeladen. Lösch erst einen.');
+    }
     if (!/\.(pdf|docx|txt|md)$/i.test(file.name)) return err(400, 'unsupported_document', 'Bitte PDF, Word (.docx) oder Text hochladen.');
     if (file.size > 50 * 1024 * 1024) return err(413, 'document_too_large', 'Die Datei ist zu groß (höchstens 50 MB).');
-    const d = {
+    const sheet = kind === 'character_sheet';
+    const d: (typeof documents)[number] = {
       id: 'doc-' + crypto.randomUUID().slice(0, 8), campaignId: params.id as string, title: String(form.get('title') || file.name),
-      fileName: file.name, kind, sizeBytes: file.size, pageCount: /\.pdf$/i.test(file.name) ? 12 : null, state: 'queued' as const,
-      progress: 0, message: null, proposalCount: 0, openProposalCount: 0, worldInfoSuggestion: null,
-      createdAt: new Date().toISOString(), phaseStartedAt: Date.now(), failNext: file.name.toLowerCase().includes('fehler')
+      // Bögen wertet nur die Auswertung aus – nach Zustimmung der SL (0.4.18)
+      fileName: file.name, kind, sizeBytes: file.size, pageCount: /\.pdf$/i.test(file.name) ? 12 : null, state: sheet ? 'done' : 'queued',
+      progress: sheet ? null : 0, message: null, proposalCount: 0, openProposalCount: 0, worldInfoSuggestion: null,
+      createdAt: new Date().toISOString(), phaseStartedAt: Date.now(), failNext: file.name.toLowerCase().includes('fehler'),
+      uploadedByMemberId: m.id, analysisId: null
     };
+    if (sheet && c.allowCharacterAnalysis) d.analysisId = newAnalysis(c, m.id, 'sheet', d.title, d.id, d.pageCount).id;
     documents.push(d);
     return HttpResponse.json(advanceDoc(d), { status: 201 });
   }),
@@ -1297,7 +1398,12 @@ export const handlers = [
 
   http.delete(`${B}/documents/:did`, ({ params }) => {
     const i = documents.findIndex((x) => x.id === params.did);
-    if (i < 0 || !isGm(documents[i].campaignId)) return err(404, 'not_found', 'Unterlage nicht gefunden.');
+    const doc = documents[i];
+    const owner = doc && doc.kind === 'character_sheet' && doc.uploadedByMemberId === myMember(campaigns.find((c) => c.id === doc.campaignId)!)?.id;
+    if (i < 0 || !(isGm(doc.campaignId) || owner)) return err(404, 'not_found', 'Unterlage nicht gefunden.');
+    // Eine noch nicht entschiedene Auswertung des Bogens entfällt (0.4.18)
+    for (const a of characterAnalyses) if (a.documentId === doc.id && a.state === 'awaiting_gm') { a.state = 'rejected'; a.decidedAt = new Date().toISOString(); }
+    gmNotices[doc.campaignId] = (gmNotices[doc.campaignId] ?? []).filter((n) => !characterAnalyses.some((a) => a.id === n.analysisId && a.documentId === doc.id));
     documents.splice(i, 1);
     return new HttpResponse(null, { status: 204 });
   }),
@@ -1369,7 +1475,7 @@ export const handlers = [
     if (data.byteLength > 5 * 1024 * 1024) return err(413, 'image_too_large', 'Das Bild ist zu groß (höchstens 5 MB).');
     coverImages[c.id] = { data, type, updatedAt: new Date().toISOString() };
     c.coverPreset = null;
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
   }),
 
   http.delete(`${B}/campaigns/:id/cover-image`, ({ params }) => {

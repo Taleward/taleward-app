@@ -1,4 +1,4 @@
-import type { CampaignDocument, ChapterPlan, Comment, Link, DatePoll, Entry, GmNotice, Member, Proposal, Recap, Session, Speaker, TranscriptSegment, UncertainTerm } from '../api/types';
+import type { CampaignDocument, CharacterAnalysis, ChapterPlan, Comment, Link, DatePoll, Entry, GmNotice, Member, Proposal, Recap, Session, Speaker, TranscriptSegment, UncertainTerm } from '../api/types';
 
 // Testdaten, angelehnt an den Klick-Prototyp. Alles erfunden.
 
@@ -26,6 +26,8 @@ export interface MockCampaign {
   systemName?: string | null;
   allowExternalTranscription?: boolean;
   allowCloudSummary?: boolean;
+  /** Auswertung von Charakterbögen und Hintergründen (ab 0.4.18) */
+  allowCharacterAnalysis?: boolean;
   archivedAt?: string | null;
   /** Namenshilfe (ab 0.4.6, nur SL) */
   hotwords?: string[];
@@ -45,7 +47,7 @@ export const campaigns: MockCampaign[] = [
     title: 'Die Schatten von Grauwacht',
     description: 'Düstere Stadtkampagne am Grauen Strom.',
     system: 'dsa',
-    allowExternalTranscription: true, allowCloudSummary: true,
+    allowExternalTranscription: true, allowCloudSummary: true, allowCharacterAnalysis: true,
     hotwords: ['Grauwacht', 'Kaltenfurt', 'Thorwald', 'Nyra', 'Ilsabet', 'Hedda', 'Rabenzirkel', 'Vier Wasser'],
     coverPreset: 'swamp',
     language: 'de',
@@ -67,6 +69,7 @@ export const campaigns: MockCampaign[] = [
     title: 'Die Erben des Drachenpasses',
     description: 'Reisekampagne durch das Hochgebirge.',
     system: 'other', systemName: 'Household',
+    allowCharacterAnalysis: true,
     coverPreset: 'mountains',
     language: 'de',
     worldInfo: '',
@@ -74,7 +77,7 @@ export const campaigns: MockCampaign[] = [
     nextSessionAt: '2026-10-04T15:00:00Z',
     members: [
       { id: 'm-mara', userId: 'u-mara', displayName: 'Mara', characterName: null, role: 'gm' , recordingConsentAt: '2026-07-01T18:00:00Z' },
-      { id: 'm-robin2', userId: 'u-robin', displayName: 'Robin', characterName: 'Ilvara', role: 'player' , recordingConsentAt: null },
+      { id: 'm-robin2', userId: 'u-robin', displayName: 'Robin', characterName: 'Ilvara', characterBackstory: 'Ilvara wuchs bei den Hirten am Nebelkamm auf. Ihr Bruder Kesh verschwand im Winter vor drei Jahren am Pass; seitdem sucht sie ihn. Sie trägt seinen Wanderstab.', role: 'player' , recordingConsentAt: null },
       { id: 'm-tim', userId: 'u-tim', displayName: 'Tim', characterName: 'Garrek', role: 'player' , recordingConsentAt: '2026-07-01T18:00:00Z' }
     ]
   }
@@ -298,8 +301,21 @@ export type WorldRecord = { id: string; version: number; proposalId: string | nu
 export const world: Record<string, Record<string, WorldRecord>> = {};
 export const gmNotices: Record<string, GmNotice[]> = {
   // Testmodus (0.4.9): Brakk gehörte einem inzwischen gelöschten Konto – die SL entscheidet, was aus der Figur wird
-  'c-grau': [{ id: 'gn-brakk', code: 'character_orphaned', memberId: 'm-del', entryIds: ['pc-brakk'], createdAt: '2026-09-20T10:00:00Z' }]
+  'c-grau': [
+    { id: 'gn-brakk', code: 'character_orphaned', memberId: 'm-del', entryIds: ['pc-brakk'], createdAt: '2026-09-20T10:00:00Z' },
+    // Ab 0.4.18: Jonas möchte Thorwalds Hintergrund auswerten lassen
+    { id: 'gn-ca-jonas', code: 'character_analysis_pending', memberId: 'm-jonas', analysisId: 'ca-jonas', entryIds: [], createdAt: '2026-10-12T19:00:00Z' }
+  ]
 };
+
+/** Auswertungen von Charakterbögen und Hintergründen (ab 0.4.18); phaseStartedAt nur im Testmodus */
+export const characterAnalyses: (CharacterAnalysis & { phaseStartedAt: number })[] = [
+  {
+    id: 'ca-jonas', campaignId: 'c-grau', memberId: 'm-jonas', source: 'backstory', documentId: null, title: 'Thorwald',
+    state: 'awaiting_gm', usesCloud: true, pageCount: null, pagesLimited: false, message: null, proposalCount: null,
+    createdAt: '2026-10-12T19:00:00Z', decidedAt: null, phaseStartedAt: 0
+  }
+];
 
 /** Charakterbilder im Speicher: Mitglieds-ID → Bild */
 export const portraits: Record<string, { data: ArrayBuffer; type: string; updatedAt: string; thumb?: ArrayBuffer }> = {};

@@ -139,8 +139,10 @@ export interface GmNotice {
    * seat_claimed (ab 0.4.8): jemand hat per Beitritt mit Charakter einen offenen Platz eingenommen.
    * character_orphaned (ab 0.4.9): ein Spieler ist ausgetreten; entryIds = seine Figuren (pc ohne Halter).
    * member_joined (ab 0.4.14): jemand ist beigetreten oder wieder eingetreten (memberId).
+   * character_analysis_pending (ab 0.4.18): jemand möchte Bogen oder Hintergrund auswerten lassen (analysisId).
    */
-  code: 'hidden_entries_for_newcomer' | 'seat_claimed' | 'character_orphaned' | 'member_joined' | string;
+  code: 'hidden_entries_for_newcomer' | 'seat_claimed' | 'character_orphaned' | 'member_joined' | 'character_analysis_pending' | string;
+  analysisId?: string | null;
   memberId: string | null;
   entryIds: string[];
   createdAt: string;
@@ -203,6 +205,8 @@ export interface Campaign extends CampaignSummary {
   allowExternalTranscription?: boolean;
   /** Darf der Server Recap und Vorschläge dieser Kampagne über eine Cloud-API erstellen? Nur SL (ab 0.3.10) */
   allowCloudSummary?: boolean;
+  /** Dürfen Mitglieder Charakterbogen und Hintergrund auswerten lassen? Nur SL ändert, alle sehen es (ab 0.4.18) */
+  allowCharacterAnalysis?: boolean;
   /** Sprache der Runde: Transkription, Recaps, Vorschläge (ab 0.3.2) */
   language?: 'de' | 'en';
   /** Hintergrund der Spielwelt für alle Mitspielenden (ab Schnittstelle 0.3.2) */
@@ -299,6 +303,8 @@ export interface Proposal {
   originCharacterId?: string | null;
   originEntryId?: string | null;
   submittedByMemberId?: string | null;
+  /** Aus welcher Auswertung von Bogen oder Hintergrund (ab 0.4.18); null = mitgebrachte Welt */
+  analysisId?: string | null;
   entryType: EntryType;
   /** create = neuer Eintrag, update = ergänzt, reveal = geheimer Eintrag ist am Tisch bekannt geworden (ab 0.3.5) */
   action: 'create' | 'update' | 'reveal';
@@ -486,7 +492,7 @@ export interface Comment {
   editedAt: string | null;
 }
 
-/** character_sheet = Charakterbogen eines Mitglieds (ab 0.4.7; nur SL und Urheberin, keine Auswertung) */
+/** character_sheet = Charakterbogen eines Mitglieds (ab 0.4.7; nur SL und Urheberin; Auswertung ab 0.4.18 nach Zustimmung der SL) */
 export type DocumentKind = 'handout' | 'gm' | 'mixed' | 'character_sheet';
 
 /** Hochgeladene SL-Unterlage (ab 0.3.2), nur für die SL sichtbar */
@@ -507,7 +513,28 @@ export interface CampaignDocument {
   worldInfoSuggestion: string | null;
   /** Wer hochgeladen hat (ab 0.4.7) */
   uploadedByMemberId?: string | null;
+  /** Bei character_sheet die zugehörige Auswertung (ab 0.4.18) */
+  analysisId?: string | null;
   createdAt: string;
+}
+
+/** Auswertung eines Charakterbogens oder Hintergrunds (ab 0.4.18); Spieler sehen nur den Stand ihrer eigenen */
+export interface CharacterAnalysis {
+  id: string;
+  campaignId: string;
+  memberId: string;
+  source: 'sheet' | 'backstory';
+  documentId: string | null;
+  title: string;
+  state: 'awaiting_gm' | 'rejected' | 'queued' | 'processing' | 'done' | 'failed';
+  usesCloud: boolean;
+  pageCount: number | null;
+  pagesLimited: boolean;
+  message: string | null;
+  /** Nur für die SL, sobald done */
+  proposalCount: number | null;
+  createdAt: string;
+  decidedAt: string | null;
 }
 
 /** Text einer Unterlage je Seite (ab 0.4.12) */

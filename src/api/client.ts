@@ -2,7 +2,7 @@ import { withSafeLinks } from './safeUrl';
 import { isSafePath } from './pathGuard';
 import { getLang, t, tk } from '../i18n';
 import { APP_VERSION, currentConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
-import type { InvitePreview,
+import type { InvitePreview, CharacterAnalysis,
   ApiError,
   Campaign,
   CampaignSummary,
@@ -214,6 +214,10 @@ function makeApi(conn: () => Connection) {
   myChronicle: (campaignId: string) => request<Chronicle>('GET', `/campaigns/${campaignId}/members/me/chronicle`),
   /** Vorschläge aus mitgebrachter Welt (nur SL, ab 0.4.7) */
   characterProposals: (campaignId: string) => request<Proposal[]>('GET', `/campaigns/${campaignId}/character-proposals`),
+  // Auswertung von Charakterbögen und Hintergründen (ab 0.4.18)
+  characterAnalyses: (campaignId: string) => request<CharacterAnalysis[]>('GET', `/campaigns/${campaignId}/character-analyses`),
+  requestBackstoryAnalysis: (campaignId: string) => request<CharacterAnalysis>('POST', `/campaigns/${campaignId}/members/me/backstory-analysis`),
+  decideCharacterAnalysis: (analysisId: string, approve: boolean) => request<CharacterAnalysis>('POST', `/character-analyses/${analysisId}/decision`, { body: { approve } }),
   /** Hinweis an die SL erledigen (ab 0.4.7) */
   dismissGmNotice: (campaignId: string, noticeId: string) => request<void>('DELETE', `/campaigns/${campaignId}/gm-notices/${noticeId}`),
   updateCampaign: (
@@ -230,6 +234,8 @@ function makeApi(conn: () => Connection) {
       systemName?: string | null;
       allowExternalTranscription?: boolean;
       allowCloudSummary?: boolean;
+      /** Auswertung von Charakterbögen und Hintergründen erlauben (nur SL, ab 0.4.18) */
+      allowCharacterAnalysis?: boolean;
       /** Namenshilfe ganz ersetzen (nur SL, ab 0.4.6) */
       hotwords?: string[];
       /** Links der Kampagne ganz ersetzen (nur SL, ab 0.4.13) */
