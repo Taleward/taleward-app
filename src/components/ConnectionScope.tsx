@@ -1,15 +1,19 @@
 import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { appTooOld, serverTooOld, getConnection, hasValidToken, setCurrentConnection } from '../api/connections';
 import { UpdateAction } from './UpdateNotices';
 import { t } from '../i18n';
+import { allSafeIds } from '../api/pathGuard';
 
 /**
  * Alles unter /v/<id>/… gehört zu einem Server. Setzt die aktuelle Verbindung,
  * bevor die Seite rendert, damit api.* den richtigen Server und das richtige Token nutzt.
  */
 export function ConnectionScope({ children }: { children: ReactNode }) {
-  const { conn = '' } = useParams();
+  const params = useParams();
+  const conn = params.conn ?? '';
+  // Kennungen aus der Adresse (auch aus Links von außen) nie ungeprüft an den Server geben
+  if (!allSafeIds(params)) return <Navigate to="/" replace />;
   const c = getConnection(conn);
   if (!c) {
     return (

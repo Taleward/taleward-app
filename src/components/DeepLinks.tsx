@@ -6,6 +6,7 @@ import { apiFor, fetchInvitePreview } from '../api/client';
 import { activeConnections, apiAtLeast, parseInvite } from '../api/connections';
 import { inviteFromAppUrl } from '../invite';
 import { t } from '../i18n';
+import { isSafeAppPath } from '../api/pathGuard';
 import { confirmDialog } from './confirm';
 
 function hostOf(baseUrl: string): string {
@@ -38,7 +39,7 @@ export function DeepLinks() {
       // Benachrichtigung angetippt: taleward://oeffnen?pfad=/v/<server>/k/<kampagne>/…
       if (url.toLowerCase().startsWith('taleward://oeffnen')) {
         const path = new URL(url.replace(/^taleward:/i, 'http:')).searchParams.get('pfad') ?? '';
-        navigate(path.startsWith('/v/') ? path : '/');
+        navigate(isSafeAppPath(path) ? path : '/');
         return;
       }
       // Rückkehr vom Anmeldedienst

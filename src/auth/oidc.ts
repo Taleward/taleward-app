@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { apiFor, fetchServerInfo } from '../api/client';
 import { activeConnections, getConnection, saveConnection, versionLess, type Connection } from '../api/connections';
 import type { AuthProviderId } from '../api/types';
+import { readAuthReturn } from './authReturn';
 
 /*
  * Anmelden mit Google, Discord, Apple, Microsoft (Schnittstelle 0.4.0). Die App spricht nie selbst mit dem Dienst:
@@ -118,16 +119,15 @@ export async function handleAuthUrl(url: string): Promise<string> {
     const { Browser } = await import('@capacitor/browser');
     Browser.close().catch(() => undefined);
   }
-  const params = new URLSearchParams(url.split('?')[1] ?? '');
   const pending: PendingLogin | null = (() => {
     try { return JSON.parse(localStorage.getItem(PENDING) ?? 'null'); } catch { return null; }
   })();
   localStorage.removeItem(PENDING);
-  const error = params.get('error');
-  const ticket = params.get('ticket');
-  if (!pending || Date.now() - pending.at > 15 * 60_000) return '/verbinden?oidc=error&code=expired';
+  const ret = readAuthReturn(url, pending, Date.now());
+  if (ret.kind === 'discard' || !pending) return '/verbinden?oidc=error&code=expired';
   const back = pending.purpose === 'link' ? '/konto' : `/verbinden?server=${encodeURIComponent(pending.baseUrl)}`;
-  if (error || !ticket) return `${back}${back.includes('?') ? '&' : '?'}oidc=error&code=${encodeURIComponent(error ?? 'oidc_failed')}`;
+  if (ret.kind === 'error') return `${back}${back.includes('?') ? '&' : '?'}oidc=error&code=${encodeURIComponent(ret.code)}`;
+  const ticket = ret.ticket;
 
   try {
     const result = await apiFor(probe(pending.baseUrl)).oidcExchange(ticket, pending.verifier);
