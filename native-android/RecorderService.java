@@ -152,6 +152,8 @@ public class RecorderService extends Service {
             }
         } else if (what == MediaRecorder.MEDIA_RECORDER_INFO_NEXT_OUTPUT_FILE_STARTED) {
             pendingNext = null;
+            // Lange Runden: Wachhalten bei jedem Abschnitt verlängern, statt nach 8 h ab Start zu enden
+            acquireWakeLock();
             saveState(paused ? "paused" : "recording");
         } else if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED) {
             restartAfterFailure();
@@ -171,6 +173,7 @@ public class RecorderService extends Service {
             recorder = createRecorder(nextFile());
             recorder.start();
             if (paused) recorder.pause();
+            else acquireWakeLock();
         } catch (Exception e) {
             lastError = "Aufnahme wurde unterbrochen: " + e.getMessage();
             if (!paused) accumulatedMs += SystemClock.elapsedRealtime() - runningSince;
@@ -193,6 +196,7 @@ public class RecorderService extends Service {
         recorder.resume();
         runningSince = SystemClock.elapsedRealtime();
         paused = false;
+        acquireWakeLock();
         saveState("recording");
         updateNotification();
     }
