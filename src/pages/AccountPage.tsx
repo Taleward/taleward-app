@@ -17,7 +17,7 @@ import { LanguageSwitch, t } from '../i18n';
 
 /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
 /** Quellcode dieser App – Pflicht nach AGPL §13 für Nutzer über das Netzwerk */
-const SOURCE_URL = 'https://github.com/Tinkerworkss/taleward-app';
+const SOURCE_URL = 'https://github.com/Taleward/taleward-app';
 
 export function AccountPage() {
   const { connections } = useAuth();

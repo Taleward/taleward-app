@@ -1,6 +1,6 @@
 # App veröffentlichen
 
-Die Server holen neue Fassungen täglich aus den GitHub-Releases von `Tinkerworkss/taleward-app` und verteilen sie
+Die Server holen neue Fassungen täglich aus den GitHub-Releases von `Taleward/taleward-app` und verteilen sie
 selbst. Die App fragt nie GitHub, sondern nur ihre Server. Zwei Abläufe hängen an jedes Release:
 
 - `web-release.yml` → `taleward-web-<version>.zip` (Web-Fassung für `/app/`)

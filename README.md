@@ -22,9 +22,9 @@ Dieses Repository enthält die **App** (Android und Web). Dazu gehören:
 
 | Repository | Inhalt |
 |---|---|
-| [taleward-app](https://github.com/Tinkerworkss/taleward-app) | App für Spielleitung und Spielende (dieses Repository) |
-| [taleward-server](https://github.com/Tinkerworkss/taleward-server) | Server: Konten, Kampagnen, Verarbeitung, Verwaltung |
-| [taleward-worker](https://github.com/Tinkerworkss/taleward-worker) | Worker: Transkription und Zusammenfassung auf eigener Hardware |
+| [taleward-app](https://github.com/Taleward/taleward-app) | App für Spielleitung und Spielende (dieses Repository) |
+| [taleward-server](https://github.com/Taleward/taleward-server) | Server: Konten, Kampagnen, Verarbeitung, Verwaltung |
+| [taleward-worker](https://github.com/Taleward/taleward-worker) | Worker: Transkription und Zusammenfassung auf eigener Hardware |
 
 *English summary at the end.*
 
@@ -138,8 +138,8 @@ SIL Open Font License. Einzelheiten in [`NOTICE.md`](NOTICE.md).
 
 Taleward records tabletop role-playing sessions and turns them into recaps and a campaign bible – with spoiler
 protection, consent from everyone at the table, and your data on your own server. This repository contains the
-**app** (Android and web); see [taleward-server](https://github.com/Tinkerworkss/taleward-server) and
-[taleward-worker](https://github.com/Tinkerworkss/taleward-worker) for the other parts.
+**app** (Android and web); see [taleward-server](https://github.com/Taleward/taleward-server) and
+[taleward-worker](https://github.com/Taleward/taleward-worker) for the other parts.
 
 Try it without a server: `npm install && npm run dev:mock`, open <http://localhost:5173>, confirm `/api/v1` and sign in
 with any name and password. The interface is German and English. Licence: AGPL-3.0-only; the Taleward name and logo
