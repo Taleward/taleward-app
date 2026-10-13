@@ -15,11 +15,14 @@ import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Scree
 import { t } from '../i18n';
 import { MoveConsent } from './Overview';
 import { apiAtLeast } from '../api/connections';
+import { MyAnalyses } from '../components/CharacterAnalysis';
+import { useServerInfo } from '../components/CloudNotice';
 
 /** Charakterseite: großes Bild, Name, Kurzbeschreibung; Hintergrund nur für die Person selbst und die SL. */
 export function CharacterPage() {
   const { campaignId = '', memberId = '' } = useParams();
   const { user } = useAuth();
+  const info = useServerInfo();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -116,6 +119,7 @@ export function CharacterPage() {
                   </button>
                 )}
               {member.role === 'player' && apiAtLeast('0.4.8') && <MoveConsent campaign={campaign} me={member} onChanged={load} />}
+              {member.role === 'player' && campaign.allowCharacterAnalysis && apiAtLeast('0.4.18') && <MyAnalyses campaign={campaign} me={member} info={info} />}
             </>
           )}
           {/* Mitglieder verwalten (nur SL): Rolle ändern, entfernen */}

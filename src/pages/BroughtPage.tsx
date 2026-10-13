@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { isDeletedMember, type Campaign, type Proposal } from '../api/types';
+import { isDeletedMember, type Campaign, type CharacterAnalysis, type Proposal } from '../api/types';
+import { apiAtLeast } from '../api/connections';
 import { Avatar } from '../components/Avatar';
 import { ProposalCard } from '../components/ProposalCard';
 import { ErrorBox, Screen } from '../components/Screen';
@@ -15,13 +16,24 @@ export function BroughtPage() {
   const { campaignId = '' } = useParams();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  const [analyses, setAnalyses] = useState<CharacterAnalysis[]>([]);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     Promise.all([api.campaign(campaignId), api.characterProposals(campaignId)])
       .then(([c, list]) => { setCampaign(c); setProposals(list); })
       .catch(setError);
+    // Ab 0.4.18: woher ein Vorschlag stammt (Hintergrund oder Charakterbogen)
+    if (apiAtLeast('0.4.18')) api.characterAnalyses(campaignId).then(setAnalyses).catch(() => undefined);
   }, [campaignId]);
+
+  const origin = (p: Proposal) => {
+    const a = p.analysisId ? analyses.find((x) => x.id === p.analysisId) : undefined;
+    if (!p.analysisId) return null;
+    if (a?.source === 'sheet') return t('Aus dem Charakterbogen „{title}“', { title: a.title });
+    if (a?.source === 'backstory') return t('Aus dem Hintergrund');
+    return t('Aus Charakterbogen oder Hintergrund');
+  };
 
   const players = campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? [];
   const open = proposals?.filter((p) => p.decision === 'open') ?? [];
@@ -34,6 +46,7 @@ export function BroughtPage() {
       <ErrorBox error={error} />
       <p className="muted small" style={{ margin: 0 }}>
         {t('Was die Charaktere mitbringen: Übernehmen legt den Eintrag sofort in der Bibel an, Ablehnen verwirft ihn. Vorher kannst du alles bearbeiten.')}
+        {analyses.length > 0 && ' ' + t('Vorschläge aus Charakterbögen und Hintergründen sind zunächst nur für dich und die Spielerin sichtbar.')}
       </p>
       {proposals && open.length === 0 && <div className="empty">{t('Nichts Neues mitgebracht.')}</div>}
 
@@ -53,7 +66,10 @@ export function BroughtPage() {
               </div>
             </div>
             {mine.map((p) => (
-              <ProposalCard key={p.id} proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
+              <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {origin(p) && <span className="muted small">{origin(p)}</span>}
+                <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
+              </div>
             ))}
           </section>
         );

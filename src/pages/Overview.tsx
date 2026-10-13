@@ -1,5 +1,6 @@
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
 import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
+import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
 import { isDeletedMember } from '../api/types';
 import { InviteBox } from '../components/InviteBox';
 import { confirmDialog } from '../components/confirm';
@@ -130,7 +131,7 @@ export function Overview() {
               <span className="muted small">{t('Die Charaktere bringen Einträge für die Bibel mit. Tippen zum Prüfen.')}</span>
             </Link>
           )}
-          {gm && campaign.gmNotices?.map((n) => <GmNoticeCard key={n.id} campaign={campaign} notice={n} onDone={load} />)}
+          {gm && campaign.gmNotices?.map((n) => <GmNoticeCard key={n.id} campaign={campaign} notice={n} info={serverInfo} onDone={load} />)}
           {/* Nächste Runde */}
           <Link to={p(`/k/${campaignId}/termin`)} className={campaign.datePollNeedsMyVote ? 'card task' : 'card'}>
             <div className="row between">
@@ -664,7 +665,13 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           )}
         </>
       )}
-      {gm && <span className="overline" style={(externalProvider || summaryProvider) ? { marginTop: 6 } : undefined}>{t('Weitergeben')}</span>}
+      {gm && apiAtLeast('0.4.18') && (
+        <>
+          <span className="overline" style={(externalProvider || summaryProvider) ? { marginTop: 6 } : undefined}>{t('Charaktere')}</span>
+          <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
+        </>
+      )}
+      {gm && <span className="overline" style={{ marginTop: 6 }}>{t('Weitergeben')}</span>}
       {gm && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/spielleitung`)}>{t('Spielleitung übergeben')}</Link>
       )}
@@ -706,7 +713,8 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
 }
 
 /** Hinweis an die SL (ab 0.4.7), z. B. ein Neuzugang ist vor teilweise verborgenen Einträgen verborgen */
-function GmNoticeCard({ campaign, notice, onDone }: { campaign: Campaign; notice: GmNotice; onDone: () => void }) {
+function GmNoticeCard({ campaign, notice, info, onDone }: { campaign: Campaign; notice: GmNotice; info: ServerInfo | null; onDone: () => void }) {
+  if (notice.code === 'character_analysis_pending') return <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} />;
   if (notice.code === 'seat_claimed') return <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} />;
   if (notice.code === 'character_orphaned') return <OrphanNoticeCard campaign={campaign} notice={notice} onDone={onDone} />;
   if (notice.code === 'member_joined') return <MemberJoinedCard campaign={campaign} notice={notice} onDone={onDone} />;
