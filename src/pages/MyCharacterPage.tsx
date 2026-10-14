@@ -148,6 +148,7 @@ export function MyCharacterPage() {
                 <span className="pill">{t(ENTRY_KIND[w.type])}</span>
               </span>
             </div>
+            {w.relation && <span className="muted small">{w.relation}</span>}
             <span className="small" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{w.summary}</span>
             {c.links.map((l) => {
               const s = worldState(w, l);

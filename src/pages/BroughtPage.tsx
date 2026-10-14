@@ -68,6 +68,7 @@ export function BroughtPage() {
             {mine.map((p) => (
               <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {origin(p) && <span className="muted small">{origin(p)}</span>}
+                {p.relation && <span className="muted small">{t('Beziehung: {relation}', { relation: p.relation })}</span>}
                 <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
               </div>
             ))}

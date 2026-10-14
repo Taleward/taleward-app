@@ -7,7 +7,7 @@ import { confirmDialog } from './confirm';
 import { providerLabel } from './CloudNotice';
 import { ErrorBox } from './Screen';
 import { MAX_MB } from '../pages/DocumentsPage';
-import { t, tk } from '../i18n';
+import { t, tk, tn } from '../i18n';
 import { analysisReader } from '../characters/analysisReader';
 
 /*
@@ -16,7 +16,8 @@ import { analysisReader } from '../characters/analysisReader';
  * „Mitgebrachte Welt“ – die Spielerin sieht nur den Stand, nie die Vorschläge.
  */
 
-const MAX_SHEETS = 3;
+/** Ohne Angabe des Servers (vor 0.4.19) gelten 3 Bögen wie in 0.4.18 – der Server meldet sonst 409 sheet_limit */
+const DEFAULT_MAX_SHEETS = 3;
 const ACCEPT = '.pdf,.docx,.txt,.md,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** Wer liest mit: Cloud-Anbieter (nur mit Freigabe der SL für die Kampagne) oder das lokale Modell des Servers */
@@ -43,7 +44,8 @@ export function AnalysisSwitch({ campaign, info, busy, onChange }: {
 }) {
   const toggle = async (value: boolean) => {
     if (value) {
-      const q = t('Spieler dürfen in „{campaign}“ auf „{server}“ ihren Charakterbogen und Hintergrund auswerten lassen. Jede Auswertung startet erst, wenn du zustimmst, und kostet wie eine Unterlage. {reader}', {
+      // Frage zuerst (wird Überschrift der Rückfrage), Erklärung in normaler Schrift darunter (Design-Prüfung 14.10.)
+      const q = t('Charakterbögen und Hintergründe in „{campaign}“ auf „{server}“ auswerten lassen? Jede Auswertung startet erst, wenn du zustimmst. {reader}', {
         campaign: campaign.title, server: currentConnection().name, reader: reader(info, campaign)
       });
       if (!(await confirmDialog(q, { confirmLabel: t('Erlauben') }))) return;
@@ -89,20 +91,22 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
   };
 
   return (
-    <div className="card">
+    <div className="card task">
       <strong>
         {analysis.source === 'backstory'
           ? t('{person} möchte den Hintergrund von {name} auswerten lassen', { person: m.displayName, name })
           : t('{person} möchte den Charakterbogen „{title}“ auswerten lassen', { person: m.displayName, title: analysis.title })}
       </strong>
       <span className="muted small">
-        {t('Daraus werden Vorschläge für die Bibel, über die du entscheidest. Kostet wie eine Unterlage.')}{' '}
+        {t('Daraus werden Vorschläge für die Bibel, über die du entscheidest.')}{' '}
         {reader(info, campaign, analysis.usesCloud)}
-        {analysis.pagesLimited ? ' ' + t('Ausgewertet werden nur die ersten 20 Seiten.') : ''}
+        {analysis.pagesLimited ? ' ' + (campaign.characterSheetLimits
+          ? t('Ausgewertet werden nur die ersten {n} Seiten.', { n: campaign.characterSheetLimits.maxPages })
+          : t('Ausgewertet werden nur die ersten Seiten.')) : ''}
       </span>
       <ErrorBox error={error} />
       <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn small" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
+        <button type="button" className="btn small moss" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
         <button type="button" className="btn small outline" disabled={busy} onClick={() => decide(false)}>{t('Ablehnen')}</button>
       </div>
     </div>
@@ -116,6 +120,9 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const picker = useRef<HTMLInputElement>(null);
+  // Grenzen vom Server (ab 0.4.19), sonst die von 0.4.18 ohne Zahlen im Text
+  const limits = campaign.characterSheetLimits ?? null;
+  const maxSheets = limits?.maxSheets ?? DEFAULT_MAX_SHEETS;
 
   const load = () => Promise.all([api.characterAnalyses(campaign.id), api.documents(campaign.id)])
     .then(([list, docs]) => {
@@ -209,16 +216,23 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
           </div>
         );
       })}
-      {sheets.length < MAX_SHEETS ? (
+      {limits?.maxSheets === 0 ? (
+        <span className="muted small">{t('In dieser Kampagne werden keine Charakterbögen angenommen.')}</span>
+      ) : sheets.length < maxSheets ? (
         <>
           <button type="button" className="btn outline" disabled={busy} onClick={() => picker.current?.click()}>
             {busy ? t('Lade hoch …') : t('Charakterbogen abgeben')}
           </button>
           <input ref={picker} type="file" hidden accept={ACCEPT} onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ''; }} />
-          <span className="muted small">{t('PDF, Word oder Text, höchstens drei Bögen. Ausgewertet werden die ersten 20 Seiten.')}</span>
+          <span className="muted small">
+            {limits
+              ? tn(limits.maxSheets, 'PDF, Word oder Text, höchstens {n} Bogen. Ausgewertet werden die ersten {pages} Seiten.',
+                'PDF, Word oder Text, höchstens {n} Bögen. Ausgewertet werden die ersten {pages} Seiten.', { pages: limits.maxPages })
+              : t('PDF, Word oder Text. Ausgewertet werden nur die ersten Seiten.')}
+          </span>
         </>
       ) : (
-        <span className="muted small">{t('Drei Bögen sind abgegeben. Lösch einen, um einen neuen abzugeben.')}</span>
+        <span className="muted small">{t('Mehr Bögen gehen nicht. Lösch einen, um einen neuen abzugeben.')}</span>
       )}
     </section>
   );

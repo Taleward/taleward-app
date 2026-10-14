@@ -1,6 +1,7 @@
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
 import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
 import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
+import { DataSummary } from '../components/DataSummary';
 import { isDeletedMember } from '../api/types';
 import { InviteBox } from '../components/InviteBox';
 import { confirmDialog } from '../components/confirm';
@@ -190,6 +191,7 @@ export function Overview() {
 
           {gm && <div id="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
           {gm && <UsageLine campaignId={campaignId} />}
+          {me && <DataSummary campaign={campaign} info={serverInfo} gm={gm} />}
           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} />}
           </div>
           </div>
@@ -643,9 +645,15 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
       <summary style={{ fontWeight: 700 }}>{gm ? t('Kampagne verwalten') : t('Kampagne verlassen')}</summary>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
       <ErrorBox error={error} />
+      {gm && (externalProvider || summaryProvider || (!muster && apiAtLeast('0.4.18'))) && (
+        <>
+          <h3 style={{ margin: 0 }}>{t('Einstellungen')}</h3>
+          <span className="muted small">{t('Gelten für alle am Tisch. Alle sehen sie unter „Was mit deinen Daten passiert“.')}</span>
+        </>
+      )}
       {gm && (externalProvider || summaryProvider) && (
         <>
-          <span className="overline">{t('Cloud-Dienste')}</span>
+          <span className="overline" style={{ marginTop: 6 }}>{t('Cloud-Dienste')}</span>
           {externalProvider && (
             <div className="field">
               <label className="check" style={{ alignItems: 'flex-start' }}>
@@ -674,20 +682,21 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           )}
         </>
       )}
-      {gm && apiAtLeast('0.4.18') && (
+      {/* Musterkampagne: kein Server, der auswerten könnte (Design-Prüfung 14.10.) */}
+      {gm && !muster && apiAtLeast('0.4.18') && (
         <>
-          <span className="overline" style={(externalProvider || summaryProvider) ? { marginTop: 6 } : undefined}>{t('Charaktere')}</span>
+          <span className="overline" style={{ marginTop: 6 }}>{t('Charaktere')}</span>
           <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
         </>
       )}
-      {gm && !muster && <span className="overline" style={(externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? { marginTop: 6 } : undefined}>{t('Weitergeben')}</span>}
+      {gm && !muster && <h3 style={{ margin: (externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? '10px 0 0' : 0 }}>{t('Weitergeben')}</h3>}
       {gm && !muster && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/spielleitung`)}>{t('Spielleitung übergeben')}</Link>
       )}
       {gm && !muster && apiAtLeast('0.4.8') && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/umziehen`)}>{t('Kampagne umziehen')}</Link>
       )}
-      {gm && <span className="overline" style={{ marginTop: 6 }}>{t('Beenden')}</span>}
+      {gm && <h3 style={{ margin: '10px 0 0' }}>{t('Beenden')}</h3>}
       {gm && (
         <button type="button" className="btn outline" disabled={busy} onClick={() => archive(!campaign.archivedAt)}>
           {campaign.archivedAt ? t('Wieder aufnehmen') : t('Kampagne abschließen')}
@@ -737,7 +746,7 @@ function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNoti
 
 /** Hinweis an die SL (ab 0.4.7), z. B. ein Neuzugang ist vor teilweise verborgenen Einträgen verborgen */
 function GmNoticeCard({ campaign, notice, info, onDone }: { campaign: Campaign; notice: GmNotice; info: ServerInfo | null; onDone: () => void }) {
-  if (notice.code === 'character_analysis_pending') return <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} />;
+  if (notice.code === 'character_analysis_pending') return apiAtLeast('0.4.18') && <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} />;
   if (notice.code === 'seat_claimed') return <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} />;
   if (notice.code === 'character_orphaned') return <OrphanNoticeCard campaign={campaign} notice={notice} onDone={onDone} />;
   if (notice.code === 'member_joined') return <MemberJoinedCard campaign={campaign} notice={notice} onDone={onDone} />;

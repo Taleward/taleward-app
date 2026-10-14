@@ -16,7 +16,7 @@ export interface ConsentContext {
   summaryProvider?: string | null;
 }
 
-function retentionSentence(ctx: ConsentContext): string {
+export function retentionSentence(ctx: ConsentContext): string {
   const r = ctx.retention;
   if (r?.mode === 'until_release') {
     return t('Die Aufnahme wird auf dem Server des Vereins in Text umgewandelt. Zur Prüfung der Zusammenfassung bleibt sie dort, bis die Spielleitung das Kapitel freigibt, höchstens {days} Tage, und wird dann gelöscht.', { days: r.maxDays ?? 7 });

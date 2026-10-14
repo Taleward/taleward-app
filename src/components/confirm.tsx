@@ -23,6 +23,15 @@ export function confirmDialog(message: string, opts: Omit<Request, 'message' | '
   });
 }
 
+/** „Frage? Erklärung …“ → Überschrift und Erklärung; sonst erster Satz und Rest */
+export function splitMessage(message: string): { title: string; body: string } {
+  const q = message.indexOf('?');
+  if (q > 0) return { title: message.slice(0, q + 1), body: message.slice(q + 1).trim() };
+  const s = message.search(/[.!](\s|$)/);
+  if (s > 0 && s < message.length - 1) return { title: message.slice(0, s + 1), body: message.slice(s + 1).trim() };
+  return { title: message, body: '' };
+}
+
 export function ConfirmHost() {
   const [req, setReq] = useState<Request | null>(null);
   useEffect(() => {
@@ -30,10 +39,9 @@ export function ConfirmHost() {
     return () => { push = null; };
   }, []);
   if (!req) return null;
-  // Erste Frage als Überschrift, der Rest als Erklärung
-  const q = req.message.indexOf('?');
-  const title = q > 0 ? req.message.slice(0, q + 1) : req.message;
-  const body = q > 0 ? req.message.slice(q + 1).trim() : '';
+  // Erste Frage als Überschrift, der Rest als Erklärung in normaler Schrift. Ohne Frage: erster Satz als
+  // Überschrift, damit lange Rückfragen nicht als ein fetter Block erscheinen (Design-Prüfung 14.10.)
+  const { title, body } = splitMessage(req.message);
   const close = (ok: boolean) => { req.resolve(ok); setReq(null); };
   return (
     <Dialog title={title} onClose={() => close(false)}>

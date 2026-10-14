@@ -16,11 +16,12 @@ export function WorldItemDialog({ character, item, onClose }: { character: Store
   const [name, setName] = useState(item?.name ?? '');
   const [summary, setSummary] = useState(item?.summary ?? '');
   const [secret, setSecret] = useState(item?.secret ?? false);
+  const [relation, setRelation] = useState(item?.relation ?? '');
   const [error, setError] = useState<unknown>(null);
 
   const save = () => {
     try {
-      saveWorldItem(character.id, { id: item?.id, type, name: name.trim(), summary: summary.trim(), secret });
+      saveWorldItem(character.id, { id: item?.id, type, name: name.trim(), summary: summary.trim(), secret, relation: relation.trim() || null });
       onClose();
     } catch (e) {
       setError(e);
@@ -50,6 +51,11 @@ export function WorldItemDialog({ character, item, onClose }: { character: Store
         <label htmlFor="w-name">{t('Name')}</label>
         <input id="w-name" type="text" maxLength={200} value={name} onChange={(e) => setName(e.target.value)}
           placeholder={t('z. B. Onkel Brann, Hafen von Velmar')} />
+      </div>
+      <div className="field">
+        <label htmlFor="w-relation">{t('Beziehung zu {name} (freiwillig)', { name: character.nickname || character.name })}</label>
+        <input id="w-relation" type="text" maxLength={120} value={relation} onChange={(e) => setRelation(e.target.value)}
+          placeholder={t('z. B. Schwester, alter Lehrmeister, Erbstück der Mutter')} />
       </div>
       <div className="field">
         <label htmlFor="w-summary">{t('Beschreibung')}</label>
