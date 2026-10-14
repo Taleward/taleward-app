@@ -15,11 +15,16 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
   const rows: { title: string; text: string }[] = [
     {
       title: t('Aufnahmen'),
-      text: t('Aufgenommen wird nur, wenn alle am Tisch selbst zugestimmt haben.') + ' ' + retentionSentence({ retention: info?.audioRetention })
+      // Ohne Angaben des Servers (z. B. ohne Netz) nichts zur Aufbewahrung behaupten (Sicherheit A17)
+      text: t('Aufgenommen wird nur, wenn alle am Tisch selbst zugestimmt haben.') + ' ' + (info
+        ? retentionSentence({ retention: info.audioRetention })
+        : t('Wie lange die Aufnahme auf dem Server bleibt, steht hier, sobald der Server erreichbar ist.'))
     },
     {
       title: t('Abschrift'),
-      text: !cloud.transcription
+      text: !info && campaign.allowExternalTranscription
+        ? t('Für diese Kampagne ist die Cloud erlaubt, die Abschrift entsteht also möglicherweise dort.')
+        : !cloud.transcription
         ? t('Die Abschrift entsteht ohne Cloud, auf eurem Server oder einem Worker der Runde.')
         : cloud.transcription.primary
           ? t('Die Abschrift entsteht über {provider}. Dafür geht die Aufnahme dorthin.', { provider: cloud.transcription.provider })
@@ -27,7 +32,9 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
     },
     {
       title: t('Kapitel'),
-      text: cloud.summary
+      text: !info && campaign.allowCloudSummary
+        ? t('Für diese Kampagne ist die Cloud erlaubt, Kapitel und Vorschläge entstehen also möglicherweise dort. Dorthin geht nur Text, keine Aufnahme.')
+        : cloud.summary
         ? t('Kapitel und Vorschläge schreibt {provider}. Dorthin geht nur Text, keine Aufnahme.', { provider: cloud.summary.provider })
         : t('Kapitel und Vorschläge entstehen ohne Cloud, mit einem lokalen Modell.')
     }
@@ -42,7 +49,7 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
   }
   rows.push({
     title: t('Geheimes'),
-    text: t('Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie.')
+    text: t('Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie – außer in Sicherungen, die du selbst speicherst.')
   });
 
   return (
