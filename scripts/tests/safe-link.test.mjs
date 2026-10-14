@@ -1,4 +1,4 @@
-// Prüft, dass Adressen vom Server nur als http(s)-Link durchkommen (Sicherheitspunkt A6).
+// Prüft, dass Adressen vom Server nur als http(s)-Link durchkommen.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { safeLink, withSafeLinks } from '../../src/api/safeUrl.ts';

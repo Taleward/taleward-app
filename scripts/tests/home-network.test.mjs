@@ -1,4 +1,4 @@
-// Unverschlüsselt nur im Heimnetz (Sicherheitspunkt A1) und Einladungscodes in beiden Formaten (A3).
+// Unverschlüsselt nur im Heimnetz und Einladungscodes in beiden Formaten.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isHomeNetworkHost, normalizeBaseUrl, parseInvite, secureUrl } from '../../src/api/addresses.ts';

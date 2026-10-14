@@ -27,6 +27,21 @@ export function copyable(path: string): boolean {
   return RULES.some((r) => r.pattern.test(p));
 }
 
+/** Zu welcher Kampagne gehört die Kopie? Kapitelwege tragen die Kampagne im Kapitel-Kopf; sonst null */
+export function campaignOfPath(path: string, data: unknown): string | null {
+  const p = path.split('?')[0];
+  const m = new RegExp(`^/campaigns/(${ID})(/|$)`).exec(p);
+  if (m) return m[1];
+  if (new RegExp(`^/sessions/${ID}$`).test(p) && isObj(data) && typeof data.campaignId === 'string') return data.campaignId;
+  return null;
+}
+
+/** Kapitel-Kennung eines Kapitelwegs (für die Zuordnung zur Kampagne über den Kapitel-Kopf) */
+export function sessionOfPath(path: string): string | null {
+  const m = new RegExp(`^/sessions/(${ID})(/|$)`).exec(path.split('?')[0]);
+  return m ? m[1] : null;
+}
+
 /** Aufbereitete Fassung für die Kopie, oder null = nichts speichern (und eine alte Kopie verwerfen) */
 export function cleanForCopy(path: string, data: unknown, myUserId: string | null): unknown {
   const p = path.split('?')[0];
@@ -59,11 +74,16 @@ function campaign(c: Obj, me: string | null): Obj {
   return out;
 }
 
-/** Hintergrund einer Figur sehen nur SL und Spielerin selbst – in der Kopie nur der eigene */
+/** Felder eines Platzes, die alle am Tisch sehen dürfen */
+const MEMBER_KEYS = ['id', 'userId', 'displayName', 'characterName', 'role', 'characterSummary', 'characterNickname',
+  'characterStatus', 'portraitUpdatedAt', 'deletedAt', 'leftAt', 'moveConsentAt', 'openSeat'];
+/** Nur am eigenen Platz: Hintergrund, eigene Zustimmung und die Kennung des eigenen Charakters */
+const OWN_MEMBER_KEYS = ['characterBackstory', 'recordingConsentAt', 'characterId', 'characterVersion'];
+
+/** Positivliste je Platz: an fremden Plätzen nur, was alle am Tisch sehen */
 function member(m: Obj, me: string | null): Obj {
-  const out = { ...m };
-  if (!me || m.userId !== me) delete out.characterBackstory;
-  return out;
+  const own = !!me && m.userId === me;
+  return pick(m, own ? [...MEMBER_KEYS, ...OWN_MEMBER_KEYS] : MEMBER_KEYS);
 }
 
 const published = (s: Obj) => s.state === 'published';

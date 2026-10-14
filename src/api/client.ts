@@ -1,10 +1,10 @@
 import { withSafeLinks } from './safeUrl';
 import { isSafePath } from './pathGuard';
 import { isMusterUrl } from './muster';
-import { cleanForCopy, copyable } from './readCopyRules';
-import { hasCopy, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, saveCopy } from './readCopy';
+import { campaignOfPath, cleanForCopy, copyable } from './readCopyRules';
+import { hasCopy, keepOnlyCampaigns, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, removeCopiesOfCampaign, saveCopy } from './readCopy';
 import { getLang, t, tk } from '../i18n';
-import { APP_VERSION, currentConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
+import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
 import type { InvitePreview, CharacterAnalysis,
   ApiError,
   Campaign,
@@ -107,6 +107,8 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
   // Lesekopie für unterwegs: nur Lesewege aus readCopyRules, nur mit Anmeldung, nie für die Musterkampagne
   const copyUser = method === 'GET' && token && conn.user?.id && conn.id !== '_probe' && !isMusterUrl(conn.baseUrl) && copyable(path)
     ? conn.user.id : null;
+  // Nur speichern, solange dieselbe Anmeldung noch besteht (nicht nach Abmelden oder Entfernen des Servers)
+  const stillSignedIn = () => !!token && getConnection(conn.id)?.token === token;
 
   let res: Response;
   try {
@@ -156,15 +158,24 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
       // Anmeldung ungültig: auch die Lesekopie dieses Servers gehört niemandem mehr
       removeCopiesOf(conn.id).catch(() => undefined);
     }
-    // Nicht (mehr) sichtbar, z. B. Kapitel zurückgezogen oder aus der Kampagne entfernt: Kopie verwerfen
-    if (copyUser && (res.status === 404 || res.status === 403)) saveCopy(conn.id, copyUser, path, null).catch(() => undefined);
+    // Nicht (mehr) sichtbar: die Kampagne selbst → alles zu ihr verwerfen, sonst nur diesen Weg (z. B. Kapitel zurückgezogen)
+    if (copyUser && (res.status === 404 || res.status === 403)) {
+      const campaign = /^\/campaigns\/[^/?]+$/.test(path.split('?')[0]) ? campaignOfPath(path, null) : null;
+      (campaign ? removeCopiesOfCampaign(conn.id, campaign) : saveCopy(conn.id, copyUser, path, null)).catch(() => undefined);
+    }
     throw new ApiRequestError(res.status, err);
   }
   if (res.status === 204) return undefined as T;
   const type = res.headers.get('Content-Type') ?? '';
   if (!type.includes('application/json')) return res.blob() as Promise<T>;
   const data = await res.json();
-  if (copyUser) saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser)).catch(() => undefined);
+  if (copyUser && stillSignedIn()) {
+    saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser), campaignOfPath(path, data)).catch(() => undefined);
+    // Kampagnen, die nicht mehr in der Liste stehen (verlassen, entfernt, gelöscht): ihre Kopie verwerfen
+    if (path === '/campaigns' && Array.isArray(data)) {
+      keepOnlyCampaigns(conn.id, data.map((c: { id?: unknown }) => String(c?.id ?? ''))).catch(() => undefined);
+    }
+  }
   return data as T;
 }
 
@@ -174,15 +185,23 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
  */
 export async function fillReadCopy(conn: Connection, sessionIds: string[]): Promise<void> {
   const userId = conn.user?.id;
+  const token = conn.token;
   if (!userId || !hasValidToken(conn) || isMusterUrl(conn.baseUrl) || offlineSince(conn.id)) return;
+  // Vor jedem Abruf: dieselbe Anmeldung besteht noch (sonst nach dem Abmelden aufhören)
+  const current = () => {
+    const c = getConnection(conn.id);
+    return c && c.token === token && c.user?.id === userId && hasValidToken(c) ? c : null;
+  };
   let fetched = 0;
   for (const id of sessionIds) {
     if (fetched >= 60 || offlineSince(conn.id)) return;
     const missing = [`/sessions/${id}`, `/sessions/${id}/recap`, `/sessions/${id}/comments`];
     for (const path of missing) {
       if (await hasCopy(conn.id, userId, path).catch(() => true)) continue;
+      const c = current();
+      if (!c) return;
       fetched++;
-      await requestOn(conn, 'GET', path).catch(() => undefined);
+      await requestOn(c, 'GET', path).catch(() => undefined);
     }
   }
 }

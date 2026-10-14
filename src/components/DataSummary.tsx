@@ -7,7 +7,7 @@ import { cloudUse } from './CloudNotice';
 
 /**
  * „Was mit deinen Daten passiert“: alle Einstellungen der Runde, die Spielerinnen betreffen, an einem Ort und nur
- * lesend (Idee Sicherheits-Chat 13.10., Stufe 1). Quelle der Wahrheit ist der Server: Kampagne und ServerInfo.
+ * lesend. Quelle der Wahrheit ist der Server: Kampagne und ServerInfo.
  * Ändern kann es nur die SL unter „Kampagne verwalten“.
  */
 export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: ServerInfo | null; gm: boolean }) {
@@ -15,7 +15,7 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
   const rows: { title: string; text: string }[] = [
     {
       title: t('Aufnahmen'),
-      // Ohne Angaben des Servers (z. B. ohne Netz) nichts zur Aufbewahrung behaupten (Sicherheit A17)
+      // Ohne Angaben des Servers (z. B. ohne Netz) nichts zur Aufbewahrung behaupten
       text: t('Aufgenommen wird nur, wenn alle am Tisch selbst zugestimmt haben.') + ' ' + (info
         ? retentionSentence({ retention: info.audioRetention })
         : t('Wie lange die Aufnahme auf dem Server bleibt, steht hier, sobald der Server erreichbar ist.'))

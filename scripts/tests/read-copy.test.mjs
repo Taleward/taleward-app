@@ -1,7 +1,7 @@
 // Lesekopie ohne Netz: nur, was alle Spielerinnen sehen dürfen (Benjamin 14.10.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanForCopy, copyable } from '../../src/api/readCopyRules.ts';
+import { campaignOfPath, cleanForCopy, copyable, sessionOfPath } from '../../src/api/readCopyRules.ts';
 
 test('nur die Lesewege für Übersicht, Chronik, Kapitel, Kommentare und Bibel', () => {
   assert.ok(copyable('/campaigns'));
@@ -61,4 +61,30 @@ test('Bibel: nur öffentliche Einträge, die alle sehen, ohne SL-Notiz', () => {
 test('Kommentare: keine privaten Nachrichten', () => {
   const list = cleanForCopy('/sessions/s1/comments', [{ id: 'a', recipientMemberId: null }, { id: 'b', recipientMemberId: 'm2' }], null);
   assert.deepEqual(list.map((c) => c.id), ['a']);
+});
+
+test('fremde Plätze nur mit Feldern, die alle sehen; Charakter-Kennung nur am eigenen Platz', () => {
+  const c = cleanForCopy('/campaigns/c-1', {
+    id: 'c-1', myRole: 'gm', members: [
+      { id: 'm1', userId: 'u-sl', displayName: 'Anja', role: 'gm', characterId: 'ch-1', characterVersion: 3, recordingConsentAt: 'x', künftigesSlFeld: 'geheim' },
+      { id: 'm2', userId: '', displayName: 'Offen', role: 'player', openSeat: true, characterId: 'ch-2', characterVersion: 1, recordingConsentAt: 'y', characterSummary: 'kurz' }
+    ]
+  }, 'u-sl');
+  assert.equal(c.members[0].characterId, 'ch-1');
+  assert.equal(c.members[0].recordingConsentAt, 'x');
+  assert.equal(c.members[0].künftigesSlFeld, undefined);
+  assert.equal(c.members[1].characterId, undefined);
+  assert.equal(c.members[1].characterVersion, undefined);
+  assert.equal(c.members[1].recordingConsentAt, undefined);
+  assert.equal(c.members[1].characterSummary, 'kurz');
+  assert.equal(c.members[1].openSeat, true);
+});
+
+test('jede Kopie kennt ihre Kampagne', () => {
+  assert.equal(campaignOfPath('/campaigns/c-1', null), 'c-1');
+  assert.equal(campaignOfPath('/campaigns/c-1/entries?x=1', null), 'c-1');
+  assert.equal(campaignOfPath('/sessions/s-1', { campaignId: 'c-9' }), 'c-9');
+  assert.equal(campaignOfPath('/sessions/s-1/recap', {}), null);
+  assert.equal(sessionOfPath('/sessions/s-1/comments'), 's-1');
+  assert.equal(campaignOfPath('/campaigns', []), null);
 });
