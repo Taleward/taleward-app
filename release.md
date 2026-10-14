@@ -1,6 +1,0 @@
-- Auf Deutsch heißt es jetzt überall „Kapitel“ und „Abschrift“.
-- Beim Prüfen eines Kapitels springt der Hinweis auf unbelegte Stellen direkt zur ersten Stelle. „Kapitel neu schreiben“ steht jetzt unten.
-- Tritt jemand der Kampagne bei, erscheint dafür nur noch eine Karte.
-- Die Musterkampagne ist auf jeder Seite als solche erkennbar.
-- Die Uhr im SL-Schirm zeigt Dauern als „1 h 36 min“.
-- Kleinere Verbesserungen bei Lesbarkeit und Bedienung.
