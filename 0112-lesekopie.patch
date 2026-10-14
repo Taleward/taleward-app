@@ -1,0 +1,541 @@
+From 1b496a012d6deb30638f0f5c3cacc14d3e224516 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 17:19:13 +0200
+Subject: [PATCH 112/113] =?UTF-8?q?Lesekopie=20f=C3=BCr=20unterwegs:=20zul?=
+ =?UTF-8?q?etzt=20Gesehenes=20ohne=20Verbindung=20lesen?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/read-copy.test.mjs |  64 ++++++++++++++++++++
+ src/api/client.ts                |  47 +++++++++++++-
+ src/api/connections.ts           |   3 +
+ src/api/readCopy.ts              |  97 +++++++++++++++++++++++++++++
+ src/api/readCopyRules.ts         | 101 +++++++++++++++++++++++++++++++
+ src/components/Comments.tsx      |   7 ++-
+ src/components/OfflineNotice.tsx |  27 +++++++++
+ src/components/Screen.tsx        |   4 +-
+ src/i18n/en.ts                   |   7 ++-
+ src/main.tsx                     |   3 +
+ src/pages/Campaigns.tsx          |  12 +++-
+ src/pages/Chronicle.tsx          |   7 ++-
+ 12 files changed, 370 insertions(+), 9 deletions(-)
+ create mode 100644 scripts/tests/read-copy.test.mjs
+ create mode 100644 src/api/readCopy.ts
+ create mode 100644 src/api/readCopyRules.ts
+ create mode 100644 src/components/OfflineNotice.tsx
+
+diff --git a/scripts/tests/read-copy.test.mjs b/scripts/tests/read-copy.test.mjs
+new file mode 100644
+index 0000000..1b7ce89
+--- /dev/null
++++ b/scripts/tests/read-copy.test.mjs
+@@ -0,0 +1,64 @@
++// Lesekopie ohne Netz: nur, was alle Spielerinnen sehen dürfen (Benjamin 14.10.)
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { cleanForCopy, copyable } from '../../src/api/readCopyRules.ts';
++
++test('nur die Lesewege für Übersicht, Chronik, Kapitel, Kommentare und Bibel', () => {
++  assert.ok(copyable('/campaigns'));
++  assert.ok(copyable('/campaigns/c-1'));
++  assert.ok(copyable('/campaigns/c-1/sessions'));
++  assert.ok(copyable('/sessions/s-1/recap'));
++  assert.ok(copyable('/campaigns/c-1/entries?type=npc'));
++  for (const p of ['/sessions/s-1/transcript', '/sessions/s-1/proposals', '/sessions/s-1/gm-note', '/campaigns/c-1/plans',
++    '/campaigns/c-1/documents', '/me', '/campaigns/c-1/character-proposals', '/campaigns/../x']) assert.equal(copyable(p), false, p);
++});
++
++test('Kampagne: keine Hinweise an die SL, keine Namenshilfe, nur geteilte Links, nur der eigene Hintergrund', () => {
++  const c = cleanForCopy('/campaigns/c-1', {
++    id: 'c-1', title: 'T', myRole: 'gm', description: 'd', openCharacterProposals: 3, pendingReviewCount: 2, unread: { recaps: 1 },
++    hotwords: ['Geheimname'], gmNotices: [{ id: 'n' }],
++    links: [{ id: 'a', shared: true }, { id: 'b', shared: false }],
++    members: [{ id: 'm1', userId: 'u-sl', characterBackstory: 'eigen' }, { id: 'm2', userId: 'u-x', characterBackstory: 'fremd' }]
++  }, 'u-sl');
++  assert.equal(c.hotwords, undefined);
++  assert.equal(c.gmNotices, undefined);
++  assert.equal(c.openCharacterProposals, undefined);
++  assert.equal(c.unread, undefined);
++  assert.equal(c.pendingReviewCount, 0);
++  assert.deepEqual(c.links.map((l) => l.id), ['a']);
++  assert.equal(c.members[0].characterBackstory, 'eigen');
++  assert.equal(c.members[1].characterBackstory, undefined);
++});
++
++test('Spieler: alle gelieferten Links bleiben', () => {
++  const c = cleanForCopy('/campaigns/c-1', { id: 'c-1', myRole: 'player', links: [{ id: 'a' }], members: [] }, 'u');
++  assert.equal(c.links.length, 1);
++});
++
++test('Chronik und Kapitel: nur Veröffentlichtes, ohne Prüfteil und Entwurf', () => {
++  const list = cleanForCopy('/campaigns/c-1/sessions', [{ id: 's1', state: 'published' }, { id: 's2', state: 'awaiting_review' }], null);
++  assert.deepEqual(list.map((s) => s.id), ['s1']);
++  assert.equal(cleanForCopy('/sessions/s2', { id: 's2', state: 'awaiting_review' }, null), null);
++  assert.equal(cleanForCopy('/sessions/s2/recap', { sessionId: 's2', text: 'x', publishedAt: null }, null), null);
++  const r = cleanForCopy('/sessions/s1/recap', { sessionId: 's1', text: 'x', publishedAt: '2026-10-01', review: {}, revision: {} }, null);
++  assert.equal(r.review, undefined);
++  assert.equal(r.revision, undefined);
++  assert.equal(r.text, 'x');
++});
++
++test('Bibel: nur öffentliche Einträge, die alle sehen, ohne SL-Notiz', () => {
++  const list = cleanForCopy('/campaigns/c-1/entries', [
++    { id: 'a', visibility: 'public', gmNotes: 'geheim', formerHolderMemberId: 'm', links: [{ id: 'l1', shared: false }, { id: 'l2', shared: true }] },
++    { id: 'b', visibility: 'gm_only' },
++    { id: 'c', visibility: 'public', hiddenFromMemberIds: ['m2'] }
++  ], null);
++  assert.deepEqual(list.map((e) => e.id), ['a']);
++  assert.equal(list[0].gmNotes, undefined);
++  assert.equal(list[0].formerHolderMemberId, undefined);
++  assert.deepEqual(list[0].links.map((l) => l.id), ['l2']);
++});
++
++test('Kommentare: keine privaten Nachrichten', () => {
++  const list = cleanForCopy('/sessions/s1/comments', [{ id: 'a', recipientMemberId: null }, { id: 'b', recipientMemberId: 'm2' }], null);
++  assert.deepEqual(list.map((c) => c.id), ['a']);
++});
+diff --git a/src/api/client.ts b/src/api/client.ts
+index f73b4e1..baa15d2 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -2,2 +2,5 @@ import { withSafeLinks } from './safeUrl';
+ import { isSafePath } from './pathGuard';
++import { isMusterUrl } from './muster';
++import { cleanForCopy, copyable } from './readCopyRules';
++import { hasCopy, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, saveCopy } from './readCopy';
+ import { getLang, t, tk } from '../i18n';
+@@ -103,2 +106,6 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+ 
++  // Lesekopie für unterwegs: nur Lesewege aus readCopyRules, nur mit Anmeldung, nie für die Musterkampagne
++  const copyUser = method === 'GET' && token && conn.user?.id && conn.id !== '_probe' && !isMusterUrl(conn.baseUrl) && copyable(path)
++    ? conn.user.id : null;
++
+   let res: Response;
+@@ -115,7 +122,17 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+   } catch {
++    if (copyUser) {
++      const copy = await readCopy(conn.id, copyUser, path).catch(() => null);
++      if (copy) {
++        markOffline(conn.id, copy.savedAt);
++        return copy.data as T;
++      }
++    }
+     throw new ApiRequestError(0, {
+       code: 'network',
+-      message: t('Server nicht erreichbar. Prüfe WLAN und die Serveradresse.')
++      message: method === 'GET'
++        ? t('Server nicht erreichbar. Prüfe WLAN und die Serveradresse.')
++        : t('„{name}“ ist gerade nicht erreichbar. Ändern geht erst wieder, wenn der Server erreichbar ist.', { name: conn.name })
+     });
+   }
++  if (conn.id !== '_probe') markOnline(conn.id);
+ 
+@@ -138,3 +155,7 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+       updateConnection(conn.id, { token: null, expiresAt: null });
++      // Anmeldung ungültig: auch die Lesekopie dieses Servers gehört niemandem mehr
++      removeCopiesOf(conn.id).catch(() => undefined);
+     }
++    // Nicht (mehr) sichtbar, z. B. Kapitel zurückgezogen oder aus der Kampagne entfernt: Kopie verwerfen
++    if (copyUser && (res.status === 404 || res.status === 403)) saveCopy(conn.id, copyUser, path, null).catch(() => undefined);
+     throw new ApiRequestError(res.status, err);
+@@ -143,3 +164,25 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+   const type = res.headers.get('Content-Type') ?? '';
+-  return (type.includes('application/json') ? res.json() : res.blob()) as Promise<T>;
++  if (!type.includes('application/json')) return res.blob() as Promise<T>;
++  const data = await res.json();
++  if (copyUser) saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser)).catch(() => undefined);
++  return data as T;
++}
++
++/**
++ * Lesekopie ergänzen: veröffentlichte Kapitel, die noch nicht auf dem Gerät liegen, leise nachladen (eins nach dem
++ * anderen, höchstens 60 Abrufe je Aufruf). Nur wenn der Server gerade erreichbar ist.
++ */
++export async function fillReadCopy(conn: Connection, sessionIds: string[]): Promise<void> {
++  const userId = conn.user?.id;
++  if (!userId || !hasValidToken(conn) || isMusterUrl(conn.baseUrl) || offlineSince(conn.id)) return;
++  let fetched = 0;
++  for (const id of sessionIds) {
++    if (fetched >= 60 || offlineSince(conn.id)) return;
++    const missing = [`/sessions/${id}`, `/sessions/${id}/recap`, `/sessions/${id}/comments`];
++    for (const path of missing) {
++      if (await hasCopy(conn.id, userId, path).catch(() => true)) continue;
++      fetched++;
++      await requestOn(conn, 'GET', path).catch(() => undefined);
++    }
++  }
+ }
+diff --git a/src/api/connections.ts b/src/api/connections.ts
+index 8c6f316..d8d87d8 100644
+--- a/src/api/connections.ts
++++ b/src/api/connections.ts
+@@ -1 +1,2 @@
++import { removeCopiesOf } from './readCopy';
+ import type { User } from './types';
+@@ -162,2 +163,4 @@ export function removeConnection(id: string): void {
+   persist();
++  // Lesekopie dieses Servers mit entfernen (Abmelden, Konto gelöscht, Musterkampagne beendet)
++  removeCopiesOf(id).catch(() => undefined);
+ }
+diff --git a/src/api/readCopy.ts b/src/api/readCopy.ts
+new file mode 100644
+index 0000000..18015c0
+--- /dev/null
++++ b/src/api/readCopy.ts
+@@ -0,0 +1,97 @@
++/**
++ * Lesekopie auf dem Gerät (IndexedDB): die zuletzt gesehenen Antworten der Lesewege aus readCopyRules, je Server
++ * und Konto. Ist der Server nicht erreichbar, liefert der Client diese Kopie und merkt sich, seit wann – die
++ * Oberfläche zeigt dann „Stand vom …“ und dass Ändern erst wieder mit dem Server geht.
++ * Gelöscht wird beim Abmelden, beim Entfernen des Servers, bei abgelaufener Anmeldung (401) und beim Start, wenn
++ * Server oder Konto nicht mehr passen.
++ */
++
++const DB = 'taleward-lesekopie';
++const STORE = 'antworten';
++
++interface Row { key: string; connId: string; userId: string; savedAt: string; data: unknown }
++
++let dbp: Promise<IDBDatabase> | null = null;
++function open(): Promise<IDBDatabase> | null {
++  if (typeof indexedDB === 'undefined') return null;
++  dbp ??= new Promise((resolve, reject) => {
++    const r = indexedDB.open(DB, 1);
++    r.onupgradeneeded = () => { r.result.createObjectStore(STORE, { keyPath: 'key' }).createIndex('connId', 'connId'); };
++    r.onsuccess = () => resolve(r.result);
++    r.onerror = () => { dbp = null; reject(r.error); };
++  });
++  return dbp;
++}
++
++function req<T>(r: IDBRequest<T>): Promise<T> {
++  return new Promise((resolve, reject) => { r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); });
++}
++
++const keyOf = (connId: string, userId: string, path: string) => `${connId}|${userId}|${path}`;
++
++export async function saveCopy(connId: string, userId: string, path: string, data: unknown): Promise<void> {
++  const db = await open();
++  if (!db) return;
++  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
++  const key = keyOf(connId, userId, path);
++  // null = darf nicht (mehr) in die Kopie, z. B. Kapitel zurückgezogen
++  if (data === null) await req(store.delete(key));
++  else await req(store.put({ key, connId, userId, savedAt: new Date().toISOString(), data } satisfies Row));
++}
++
++export async function readCopy(connId: string, userId: string, path: string): Promise<{ savedAt: string; data: unknown } | null> {
++  const db = await open();
++  if (!db) return null;
++  const row = await req(db.transaction(STORE).objectStore(STORE).get(keyOf(connId, userId, path))) as Row | undefined;
++  return row ? { savedAt: row.savedAt, data: row.data } : null;
++}
++
++export async function hasCopy(connId: string, userId: string, path: string): Promise<boolean> {
++  const db = await open();
++  if (!db) return false;
++  return (await req(db.transaction(STORE).objectStore(STORE).count(keyOf(connId, userId, path)))) > 0;
++}
++
++export async function removeCopiesOf(connId: string): Promise<void> {
++  const db = await open();
++  if (!db) return;
++  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
++  const keys = await req(store.index('connId').getAllKeys(connId));
++  await Promise.all(keys.map((k) => req(store.delete(k))));
++}
++
++/** Beim Start: Kopien von Servern, die es nicht mehr gibt, oder eines anderen Kontos verwerfen */
++export async function removeOrphanCopies(current: { id: string; userId: string | null }[]): Promise<void> {
++  const db = await open();
++  if (!db) return;
++  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
++  const rows = await req(store.getAll()) as Row[];
++  const ok = new Set(current.filter((c) => c.userId).map((c) => `${c.id}|${c.userId}`));
++  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`)).map((r) => req(store.delete(r.key))));
++}
++
++// ---- Wer gerade aus der Kopie liest (je Server): für den Hinweis in der Oberfläche
++const offline = new Map<string, string>();
++const listeners = new Set<() => void>();
++const emit = () => listeners.forEach((l) => l());
++
++export function markOffline(connId: string, savedAt: string): void {
++  const old = offline.get(connId);
++  // Ältester gezeigter Stand zählt, damit „Stand vom …“ nicht schöner aussieht, als er ist
++  if (old && old <= savedAt) return;
++  offline.set(connId, savedAt);
++  emit();
++}
++
++export function markOnline(connId: string): void {
++  if (offline.delete(connId)) emit();
++}
++
++export function offlineSince(connId: string | null | undefined): string | null {
++  return connId ? offline.get(connId) ?? null : null;
++}
++
++export function onOfflineChange(fn: () => void): () => void {
++  listeners.add(fn);
++  return () => { listeners.delete(fn); };
++}
+diff --git a/src/api/readCopyRules.ts b/src/api/readCopyRules.ts
+new file mode 100644
+index 0000000..dc182b9
+--- /dev/null
++++ b/src/api/readCopyRules.ts
+@@ -0,0 +1,101 @@
++/*
++ * Lesekopie für unterwegs (ohne Netz): Welche Antworten des Servers auf dem Gerät bleiben dürfen und was vorher
++ * herausfällt. Grundsatz (Benjamin 14.10.): Auf dem Gerät liegt nur, was alle Spielerinnen der Kampagne lesen dürfen –
++ * auch bei der Spielleitung. Nie: SL-Notizen, Einträge „nur SL“ oder teilweise verborgene Einträge, offene Vorschläge,
++ * Abschriften, ungeprüfte Kapitel, Hinweise an die SL, private Nachrichten, Hintergründe anderer Figuren.
++ * Ohne Laufzeit-Importe, damit die Regeln für sich getestet werden können.
++ */
++
++type Obj = Record<string, unknown>;
++const isObj = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
++const ID = '[A-Za-z0-9_-]{1,64}';
++
++/** Nur diese Lesewege kommen in die Kopie (Pfad ohne Abfrage) */
++const RULES: { pattern: RegExp; clean: (data: unknown, myUserId: string | null) => unknown }[] = [
++  { pattern: new RegExp('^/campaigns$'), clean: (d) => (Array.isArray(d) ? d.filter(isObj).map(summary) : null) },
++  { pattern: new RegExp(`^/campaigns/${ID}$`), clean: (d, me) => (isObj(d) ? campaign(d, me) : null) },
++  { pattern: new RegExp(`^/campaigns/${ID}/sessions$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter(published).map(sessionSummary) : null) },
++  { pattern: new RegExp(`^/sessions/${ID}$`), clean: (d) => (isObj(d) && published(d) ? session(d) : null) },
++  { pattern: new RegExp(`^/sessions/${ID}/recap$`), clean: (d) => (isObj(d) && d.publishedAt ? recap(d) : null) },
++  { pattern: new RegExp(`^/sessions/${ID}/comments$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter((c) => c.recipientMemberId == null) : null) },
++  { pattern: new RegExp(`^/campaigns/${ID}/entries$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter(publicEntry).map(entry) : null) }
++];
++
++/** Darf die Antwort auf diesen Lesewege in die Kopie? (nur GET, Pfad ohne Abfrage) */
++export function copyable(path: string): boolean {
++  const p = path.split('?')[0];
++  return RULES.some((r) => r.pattern.test(p));
++}
++
++/** Aufbereitete Fassung für die Kopie, oder null = nichts speichern (und eine alte Kopie verwerfen) */
++export function cleanForCopy(path: string, data: unknown, myUserId: string | null): unknown {
++  const p = path.split('?')[0];
++  const rule = RULES.find((r) => r.pattern.test(p));
++  return rule ? rule.clean(data, myUserId) : null;
++}
++
++function pick(o: Obj, keys: string[]): Obj {
++  const out: Obj = {};
++  for (const k of keys) if (k in o) out[k] = o[k];
++  return out;
++}
++
++const SUMMARY_KEYS = ['id', 'title', 'archivedAt', 'organization', 'myRole', 'myCharacterName', 'memberCount',
++  'publishedSessionCount', 'lastPublishedAt', 'coverPreset', 'coverImageUpdatedAt', 'nextSessionAt'];
++
++/** Kampagne in der Liste: ohne Zähler für die SL und ohne „Neues“ (wäre in der Kopie ohnehin veraltet) */
++function summary(c: Obj): Obj {
++  return { ...pick(c, SUMMARY_KEYS), pendingReviewCount: 0 };
++}
++
++function campaign(c: Obj, me: string | null): Obj {
++  const out: Obj = {
++    ...summary(c),
++    ...pick(c, ['description', 'system', 'systemName', 'language', 'worldInfo', 'allowExternalTranscription', 'allowCloudSummary', 'allowCharacterAnalysis', 'characterSheetLimits'])
++  };
++  // Spieler bekommen ohnehin nur geteilte Links; bei der SL nur die ausdrücklich geteilten
++  out.links = c.myRole === 'gm' ? sharedLinks(c.links) : (Array.isArray(c.links) ? c.links.filter(isObj) : []);
++  out.members = Array.isArray(c.members) ? c.members.filter(isObj).map((m) => member(m, me)) : [];
++  return out;
++}
++
++/** Hintergrund einer Figur sehen nur SL und Spielerin selbst – in der Kopie nur der eigene */
++function member(m: Obj, me: string | null): Obj {
++  const out = { ...m };
++  if (!me || m.userId !== me) delete out.characterBackstory;
++  return out;
++}
++
++const published = (s: Obj) => s.state === 'published';
++
++function sessionSummary(s: Obj): Obj {
++  return pick(s, ['id', 'number', 'title', 'playedAt', 'state']);
++}
++
++function session(s: Obj): Obj {
++  return pick(s, ['id', 'number', 'title', 'playedAt', 'state', 'campaignId', 'publishedAt']);
++}
++
++/** Veröffentlichtes Kapitel ohne Prüfteil und Korrektur-Entwurf */
++function recap(r: Obj): Obj {
++  return pick(r, ['sessionId', 'number', 'title', 'text', 'openThreads', 'publishedAt', 'parts']);
++}
++
++/** Nur öffentliche Einträge, die alle sehen (teilweise verborgene zählen wie „nur SL“) */
++function publicEntry(e: Obj): boolean {
++  return e.visibility === 'public' && (!Array.isArray(e.hiddenFromMemberIds) || e.hiddenFromMemberIds.length === 0);
++}
++
++function entry(e: Obj): Obj {
++  const out: Obj = pick(e, ['id', 'campaignId', 'type', 'name', 'summary', 'status', 'holderMemberId', 'visibility',
++    'firstSessionNumber', 'lastSessionNumber', 'updatedAt']);
++  // Erwähnungen können bei der SL aus noch ungeprüften Kapiteln stammen – in der Kopie leer
++  out.mentions = [];
++  // Ungeteilte Links tragen shared: false (Spieler bekommen sie gar nicht)
++  out.links = Array.isArray(e.links) ? e.links.filter(isObj).filter((l) => l.shared !== false) : [];
++  return out;
++}
++
++function sharedLinks(links: unknown): Obj[] {
++  return Array.isArray(links) ? links.filter(isObj).filter((l) => l.shared === true) : [];
++}
+diff --git a/src/components/Comments.tsx b/src/components/Comments.tsx
+index 7018163..1b31990 100644
+--- a/src/components/Comments.tsx
++++ b/src/components/Comments.tsx
+@@ -5,3 +5,3 @@ import { t } from '../i18n';
+ import { useEffect, useState } from 'react';
+-import { api } from '../api/client';
++import { api, isApiError } from '../api/client';
+ import { useAuth } from '../auth/AuthContext';
+@@ -27,5 +27,7 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+   const [busy, setBusy] = useState(false);
++  const [unreachable, setUnreachable] = useState(false);
+ 
+   useEffect(() => {
+-    api.comments(sessionId).then(setList).catch(setError);
++    // Ohne Netz und ohne Kopie: still leer statt Fehler – der Hinweis oben sagt schon, dass der Server fehlt
++    api.comments(sessionId).then(setList).catch((e) => (isApiError(e, 'network') ? setUnreachable(true) : setError(e)));
+   }, [sessionId]);
+@@ -74,2 +76,3 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+       <ErrorBox error={error} />
++      {unreachable && <span className="muted small">{t('Die Kommentare siehst du wieder, wenn der Server erreichbar ist.')}</span>}
+       {list?.length === 0 && <div className="muted small">{t('Noch keine Kommentare.')}</div>}
+diff --git a/src/components/OfflineNotice.tsx b/src/components/OfflineNotice.tsx
+new file mode 100644
+index 0000000..b6931b7
+--- /dev/null
++++ b/src/components/OfflineNotice.tsx
+@@ -0,0 +1,27 @@
++import { useSyncExternalStore } from 'react';
++import { getConnection } from '../api/connections';
++import { offlineSince, onOfflineChange } from '../api/readCopy';
++import { t } from '../i18n';
++import { formatDateTime } from './format';
++import { IconInfo } from './Icons';
++
++/** Seit wann dieser Server nur aus der Lesekopie kommt (null = erreichbar) */
++export function useOfflineSince(connId: string | null | undefined): string | null {
++  return useSyncExternalStore(onOfflineChange, () => offlineSince(connId));
++}
++
++/** Hinweis oben auf jeder Seite einer Kampagne, solange die App aus der Lesekopie liest (Benjamin 14.10.) */
++export function OfflineNotice({ connId }: { connId: string | null | undefined }) {
++  const since = useOfflineSince(connId);
++  if (!since || !connId) return null;
++  const name = getConnection(connId)?.name ?? t('Server');
++  return (
++    <div className="notice offline-notice" role="status">
++      <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
++      <span>
++        <strong>{t('Stand vom {date}', { date: formatDateTime(since) })}</strong>{' '}
++        {t('„{name}“ ist gerade nicht erreichbar. Du kannst lesen, was du zuletzt gesehen hast. Ändern geht erst wieder, wenn der Server erreichbar ist.', { name })}
++      </span>
++    </div>
++  );
++}
+diff --git a/src/components/Screen.tsx b/src/components/Screen.tsx
+index 7f2e13f..7e9a66d 100644
+--- a/src/components/Screen.tsx
++++ b/src/components/Screen.tsx
+@@ -6,2 +6,3 @@ import type { Unread } from '../api/types';
+ import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
++import { OfflineNotice } from './OfflineNotice';
+ import { IconBack, IconBook, IconMic, IconScroll, IconShield } from './Icons';
+@@ -53,2 +54,3 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
+           </div>
++          <OfflineNotice connId={connId} />
+           {children}
+@@ -75,3 +77,3 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
+       </header>
+-      <main className="screen-main">{children}</main>
++      <main className="screen-main"><OfflineNotice connId={connId} />{children}</main>
+       {nav && <BottomNav />}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 27cc31c..f84c469 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1260,3 +1260,8 @@ export const en: Record<string, string> = {
+   "Mehr Bögen gehen nicht. Lösch einen, um einen neuen abzugeben.": "No more sheets fit. Delete one to hand in a new one.",
+-  "In der Musterkampagne gibt es nichts einzustellen.": "There is nothing to set in the sample campaign."
++  "In der Musterkampagne gibt es nichts einzustellen.": "There is nothing to set in the sample campaign.",
++  "„{name}“ ist gerade nicht erreichbar. Ändern geht erst wieder, wenn der Server erreichbar ist.": "“{name}” can't be reached right now. Changes are possible again once the server is reachable.",
++  "Stand vom {date}": "As of {date}",
++  "„{name}“ ist gerade nicht erreichbar. Du kannst lesen, was du zuletzt gesehen hast. Ändern geht erst wieder, wenn der Server erreichbar ist.": "“{name}” can't be reached right now. You can read what you last saw. Changes are possible again once the server is reachable.",
++  "„{name}“ ist gerade nicht erreichbar. Du siehst den Stand vom {date} und kannst lesen, aber nichts ändern.": "“{name}” can't be reached right now. You see the state as of {date} and can read, but not change anything.",
++  "Die Kommentare siehst du wieder, wenn der Server erreichbar ist.": "You will see the comments again once the server is reachable."
+ };
+diff --git a/src/main.tsx b/src/main.tsx
+index 430d4d3..1fad534 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -16,2 +16,3 @@ import { connectionsReadable, listConnections } from './api/connections';
+ import { removeOrphanRecordings } from './recorder/webStore';
++import { removeOrphanCopies } from './api/readCopy';
+ 
+@@ -37,2 +38,4 @@ async function start() {
+   if (connectionsReadable()) removeOrphanRecordings(listConnections().map((c) => c.id)).catch(() => undefined);
++  // Lesekopien nur für Server und Konten, die noch da sind
++  if (connectionsReadable()) removeOrphanCopies(listConnections().map((c) => ({ id: c.id, userId: c.user?.id ?? null }))).catch(() => undefined);
+   // Web-Fassung: installierbar auf dem Startbildschirm (Service Worker nur für die eigenen Dateien)
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 1b61a8a..e5a5baa 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -16,2 +16,3 @@ import { apiFor, fetchServerInfo } from '../api/client';
+ import { isMusterUrl } from '../api/muster';
++import { offlineSince } from '../api/readCopy';
+ import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, updateConnection, versionLess, type Connection } from '../api/connections';
+@@ -45,2 +46,3 @@ export function Campaigns() {
+   const [failed, setFailed] = useState<Connection[]>([]);
++  const [offline, setOffline] = useState<{ conn: Connection; since: string }[]>([]);
+   const [mode, setMode] = useState<'none' | 'new' | 'join'>('none');
+@@ -96,3 +98,4 @@ export function Campaigns() {
+         const list = await apiFor(conn).campaigns();
+-        return { conn, list, ok: true };
++        // Nicht erreichbar, aber Lesekopie vorhanden: Kampagnen zeigen, mit Hinweis auf den Stand
++        return { conn, list, ok: true, offline: offlineSince(conn.id) };
+       } catch {
+@@ -104,2 +107,3 @@ export function Campaigns() {
+       setFailed(results.filter((r) => !r.ok).map((r) => r.conn));
++      setOffline(results.flatMap((r) => ('offline' in r && r.offline ? [{ conn: r.conn, since: r.offline }] : [])));
+     });
+@@ -167,2 +171,8 @@ export function Campaigns() {
+       ))}
++      {offline.map(({ conn: c, since }) => (
++        <div key={c.id} className="notice" role="status">
++          <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
++          <span>{t('„{name}“ ist gerade nicht erreichbar. Du siehst den Stand vom {date} und kannst lesen, aber nichts ändern.', { name: c.name, date: formatDateTime(since) })}</span>
++        </div>
++      ))}
+       {failed.map((c) => (
+diff --git a/src/pages/Chronicle.tsx b/src/pages/Chronicle.tsx
+index 8122952..c02d92b 100644
+--- a/src/pages/Chronicle.tsx
++++ b/src/pages/Chronicle.tsx
+@@ -1,2 +1,2 @@
+-import { p } from '../api/connections';
++import { currentConnection, p } from '../api/connections';
+ import { formatDate, formatDateFull } from '../components/format';
+@@ -5,3 +5,3 @@ import { useEffect, useState } from 'react';
+ import { Link, useParams } from 'react-router-dom';
+-import { api, isApiError } from '../api/client';
++import { api, fillReadCopy, isApiError } from '../api/client';
+ import type { Campaign, Recap, SessionSummary } from '../api/types';
+@@ -41,2 +41,5 @@ export function Chronicle() {
+         }
++        // Für unterwegs: veröffentlichte Kapitel im Hintergrund auf das Gerät holen (nur was noch fehlt)
++        const conn = currentConnection();
++        window.setTimeout(() => fillReadCopy(conn, s.filter((x) => x.state === 'published').map((x) => x.id)).catch(() => undefined), 1500);
+         const newest = s.find((x) => x.state === 'published');
