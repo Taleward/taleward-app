@@ -96,6 +96,8 @@ export interface MockSession extends Session {
   // Nur im Mock: Fehler simulieren (Dateiname enthält "fehler" bzw. "weg")
   failNext?: boolean;
   audioGone?: boolean;
+  /** Testmodus: Abschließen lehnt ab (recording_unreadable) */
+  unreadable?: boolean;
   // Nur im Mock: erneute Transkription nach Korrektur (ab 0.4.6) – danach gleich zur Zusammenfassung
   retranscribing?: boolean;
   retranscribes?: number;

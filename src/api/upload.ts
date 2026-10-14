@@ -35,6 +35,14 @@ function isTransient(e: unknown): boolean {
 
 const MAX_ATTEMPTS = 5;
 
+/** Der Server hat die Aufnahme beim Abschließen abgelehnt und verworfen; ein neuer Versuch mit derselben Datei hilft nicht */
+const REJECTED = ['recording_too_long', 'recording_unreadable'];
+export function isRejectedRecording(e: unknown): boolean {
+  return isApiError(e) && e.status === 409 && REJECTED.includes(e.code);
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /**
  * Lädt Aufnahmen stückweise hoch und setzt abgebrochene Uploads fort.
  *
@@ -106,13 +114,25 @@ export async function uploadSessionAudio(
   // zweiter prüft nach und liefert eventuelle Lücken nach.
   if (!(await sendMissing())) await sendMissing();
 
+  // 429: Der Server misst gerade andere Aufnahmen; der Upload bleibt offen, nach kurzer Pause noch einmal abschließen
+  const complete = async () => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await api.completeUpload(created.uploadId);
+      } catch (e) {
+        if (!isApiError(e) || e.status !== 429 || attempt >= 6) throw e;
+        await wait(Math.min(5000 * attempt, 20000));
+      }
+    }
+  };
   try {
-    await api.completeUpload(created.uploadId);
+    await complete();
   } catch (e) {
-    // 409: Es fehlen doch noch Teile – ein letzter Nachschub, dann erneut abschließen
-    if (!isApiError(e) || e.status !== 409) throw e;
+    // 409: Es fehlen doch noch Teile – ein letzter Nachschub, dann erneut abschließen.
+    // Zu lang oder nicht lesbar: Der Server hat den Upload verworfen, hier nichts wiederholen
+    if (!isApiError(e) || e.status !== 409 || isRejectedRecording(e)) throw e;
     await sendMissing();
-    await api.completeUpload(created.uploadId);
+    await complete();
   }
   onProgress(1);
 }

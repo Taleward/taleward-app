@@ -539,7 +539,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.19', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.20', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -549,7 +549,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.19',
+      apiVersion: nachbar ? '0.3.9' : '0.4.20',
       serverId: nachbar ? undefined : 'testserver',
       registration: 'invite_only',
       authMethods: ['password'],
@@ -1656,6 +1656,8 @@ export const handlers = [
     const names = body.files.map((f) => f.fileName.toLowerCase()).join(' ');
     s.failNext = names.includes('fehler');
     s.audioGone = names.includes('weg');
+    // Testmodus: „unlesbar“ im Dateinamen → der Server lehnt beim Abschließen ab (wie mit eingeschaltetem Guthaben)
+    s.unreadable = names.includes('unlesbar') || names.includes('unreadable');
     const id = 'up-' + crypto.randomUUID().slice(0, 8);
     const files = body.files.map((f, i) => ({ fileId: `f${i}`, fileName: f.fileName, chunkCount: Math.max(1, Math.ceil(f.sizeBytes / CHUNK)) }));
     uploads[id] = { id, sessionId: s.id, signature, completed: false, files: files.map((f) => ({ fileId: f.fileId, chunkCount: f.chunkCount, received: new Set() })) };
@@ -1694,9 +1696,14 @@ export const handlers = [
   http.post(`${B}/uploads/:uid/complete`, ({ params }) => {
     const u = uploads[params.uid as string];
     if (!u) return err(404, 'not_found', 'Upload nicht gefunden.');
-    if (u.files.some((f) => f.received.size < f.chunkCount)) return err(409, 'incomplete', 'Es fehlen noch Teile der Aufnahme.');
-    u.completed = true;
+    if (u.files.some((f) => f.received.size < f.chunkCount)) return err(409, 'chunks_missing', 'Es fehlen noch Teile der Aufnahme.');
     const s = sessions.find((x) => x.id === u.sessionId)!;
+    if (s.unreadable) {
+      delete uploads[u.id];
+      s.state = 'created';
+      return err(409, 'recording_unreadable', 'Diese Aufnahme kann Taleward nicht lesen. Speichere sie bitte als gewöhnliche Audiodatei (zum Beispiel MP3 oder M4A) und lade sie noch einmal hoch.');
+    }
+    u.completed = true;
     s.state = 'queued';
     s.phaseStartedAt = Date.now();
     return HttpResponse.json(advance(s), { status: 202 });

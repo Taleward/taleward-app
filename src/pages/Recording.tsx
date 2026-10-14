@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Attendee, Member } from '../api/types';
-import { blobFile, uploadSessionAudio, type UploadFile } from '../api/upload';
+import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } from '../api/upload';
 import { ConsentHandover } from '../components/ConsentHandover';
 import { IconCheck, IconMic } from '../components/Icons';
 import { CONSENT_ON_SITE } from '../consent';
@@ -197,9 +197,11 @@ export function Recording() {
       navigate(p(`/s/${id}`), { replace: true });
     } catch (e) {
       const kept = storedId ? (await leftoverRecordings(currentConnection().id).catch(() => [])).find((r) => r.id === storedId) : undefined;
+      // Zu lang oder nicht lesbar: Die Meldung des Servers sagt, was zu tun ist; „später erneut“ hilft hier nicht
+      const rejected = isRejectedRecording(e);
       setError(new Error(
         (e instanceof Error ? e.message + ' ' : '') +
-        (native && existingSessionId ? t('Die Aufnahme bleibt auf dem Handy gespeichert, du kannst es später erneut versuchen.')
+        (rejected ? '' : native && existingSessionId ? t('Die Aufnahme bleibt auf dem Handy gespeichert, du kannst es später erneut versuchen.')
           : kept ? t('Die Aufnahme bleibt in diesem Browser gespeichert, du kannst es später erneut versuchen.') : '')
       ));
       if (native && existingSessionId) {

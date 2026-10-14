@@ -346,6 +346,12 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
   return (
     <details className="card" open={reviewNeedsAttention(recap) || !!recap.revision || undefined}>
       <summary>{head}</summary>
+      {/* Am Handy liegt der Satz in der Kopfzeile zum Aufklappen; der Sprung steht deshalb darunter */}
+      {recap.review?.state === 'done' && reviewNeedsAttention(recap) && (
+        <button type="button" className="linklike small tap-link" style={{ alignSelf: 'flex-start' }} onClick={() => jumpToFirstFlagged(recap)}>
+          {t('Zur ersten Stelle')}
+        </button>
+      )}
       {body}
     </details>
   );
