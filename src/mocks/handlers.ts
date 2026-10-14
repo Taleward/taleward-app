@@ -313,7 +313,6 @@ function toneWav(): ArrayBuffer {
   return buf;
 }
 
-/** Simulierte Auswertung einer Unterlage: 2 s Warteschlange, 6 s Auswertung */
 /** Auswertung von Bogen oder Hintergrund im Testmodus: nach der Zustimmung ein paar Sekunden, dann Vorschläge (0.4.18) */
 function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean): CharacterAnalysis {
   // Zeit seit der Zustimmung: nach 2 s läuft sie, nach 6 s ist sie fertig
@@ -358,6 +357,7 @@ function newAnalysis(c: MockCampaign, memberId: string, source: 'sheet' | 'backs
   return a;
 }
 
+/** Simulierte Auswertung einer Unterlage: 2 s Warteschlange, 6 s Auswertung */
 function advanceDoc(d: (typeof documents)[number]): CampaignDocument {
   const t = (Date.now() - d.phaseStartedAt) / 1000;
   if (d.state === 'queued' && t > 2) { d.state = 'processing'; d.phaseStartedAt = Date.now(); }

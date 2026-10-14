@@ -1193,6 +1193,8 @@ export const en: Record<string, string> = {
   "ausgefüllt": "filled in",
   // Charakterbögen und Hintergründe auswerten (0.4.18)
   "Ausgewertet wird in der Cloud über {provider}.": "It is read in the cloud by {provider}.",
+  "Für diese Kampagne ist die Cloud erlaubt, ausgewertet wird also möglicherweise dort.": "The cloud is allowed for this campaign, so it may be read there.",
+  "Ausgewertet wird in der Cloud.": "It is read in the cloud.",
   "Ausgewertet wird mit dem Modell eures Servers, nichts geht in die Cloud.": "It is read by your server's own model; nothing goes to the cloud.",
   "Wartet auf die Spielleitung": "Waiting for the game master",
   "Von der Spielleitung abgelehnt": "Declined by the game master",

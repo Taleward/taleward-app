@@ -44,13 +44,24 @@ export function serverKnowsAppVersion(c: Connection): boolean {
 
 const KEY = 'session-chronik.connections';
 
+/** Konnte die Liste der Verbindungen gelesen werden? Sonst darf beim Start nichts aufgeräumt werden. */
+let readable = true;
+
 function load(): Connection[] {
   try {
     const list = JSON.parse(localStorage.getItem(KEY) ?? '[]') as Connection[];
-    return Array.isArray(list) ? list : [];
+    if (Array.isArray(list)) return list;
+    readable = false;
+    return [];
   } catch {
+    readable = false;
     return [];
   }
+}
+
+/** true, wenn die gespeicherten Verbindungen beim Start sicher gelesen wurden (leer zählt als gelesen) */
+export function connectionsReadable(): boolean {
+  return readable;
 }
 
 /** Übernahme aus der Zeit mit nur einem Server: altes Token wird zur ersten Verbindung */

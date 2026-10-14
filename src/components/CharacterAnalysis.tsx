@@ -8,6 +8,7 @@ import { providerLabel } from './CloudNotice';
 import { ErrorBox } from './Screen';
 import { MAX_MB } from '../pages/DocumentsPage';
 import { t, tk } from '../i18n';
+import { analysisReader } from '../characters/analysisReader';
 
 /*
  * Charakterbögen und Hintergründe auswerten (Schnittstelle 0.4.18): Die SL schaltet es je Kampagne ein, die Spielerin
@@ -20,11 +21,11 @@ const ACCEPT = '.pdf,.docx,.txt,.md,application/pdf,text/plain,text/markdown,app
 
 /** Wer liest mit: Cloud-Anbieter (nur mit Freigabe der SL für die Kampagne) oder das lokale Modell des Servers */
 function reader(info: ServerInfo | null, campaign: Campaign, usesCloud?: boolean): string {
-  const cloud = usesCloud ?? (!!campaign.allowCloudSummary && !!info?.cloudSummary);
-  const provider = cloud ? providerLabel(info?.cloudSummary, info?.cloudSummaryInfo) : null;
-  return provider
-    ? t('Ausgewertet wird in der Cloud über {provider}.', { provider })
-    : t('Ausgewertet wird mit dem Modell eures Servers, nichts geht in die Cloud.');
+  const who = analysisReader({ usesCloud, allowCloudSummary: !!campaign.allowCloudSummary, infoKnown: !!info, serverHasCloud: !!info?.cloudSummary });
+  if (who === 'maybe_cloud') return t('Für diese Kampagne ist die Cloud erlaubt, ausgewertet wird also möglicherweise dort.');
+  if (who === 'local') return t('Ausgewertet wird mit dem Modell eures Servers, nichts geht in die Cloud.');
+  const provider = providerLabel(info?.cloudSummary, info?.cloudSummaryInfo);
+  return provider ? t('Ausgewertet wird in der Cloud über {provider}.', { provider }) : t('Ausgewertet wird in der Cloud.');
 }
 
 const STATE: Record<CharacterAnalysis['state'], string> = {

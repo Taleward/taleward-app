@@ -671,7 +671,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
         </>
       )}
-      {gm && <span className="overline" style={{ marginTop: 6 }}>{t('Weitergeben')}</span>}
+      {gm && <span className="overline" style={(externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? { marginTop: 6 } : undefined}>{t('Weitergeben')}</span>}
       {gm && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/spielleitung`)}>{t('Spielleitung übergeben')}</Link>
       )}

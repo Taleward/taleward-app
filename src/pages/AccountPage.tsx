@@ -80,14 +80,15 @@ function ConnectionCard({ conn }: { conn: Connection }) {
   };
 
   // Noch nicht hochgeladene Aufnahmen dieses Servers im Browser nicht still liegen lassen: vorher fragen, dann löschen
-  const recordingsCleared = async (confirmLabel: string): Promise<boolean> => {
+  // deleteNow false: nur fragen, gelöscht wird erst, wenn der folgende Schritt geklappt hat
+  const recordingsCleared = async (confirmLabel: string, deleteNow = true): Promise<boolean> => {
     const left = await recordingsOf(conn.id).catch(() => []);
     if (!left.length) return true;
     const ok = await confirmDialog(tn(left.length,
       'Auf diesem Gerät liegt noch eine Aufnahme von „{name}“, die nicht hochgeladen ist. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst wird sie jetzt gelöscht.',
       'Auf diesem Gerät liegen noch {n} Aufnahmen von „{name}“, die nicht hochgeladen sind. Zum Hochladen brich hier ab und öffne die Aufnahme-Seite der Kampagne. Sonst werden sie jetzt gelöscht.',
       { name: conn.name }), { confirmLabel, danger: true });
-    if (ok) await removeRecordingsOf(conn.id).catch(() => undefined);
+    if (ok && deleteNow) await removeRecordingsOf(conn.id).catch(() => undefined);
     return ok;
   };
 
@@ -98,11 +99,13 @@ function ConnectionCard({ conn }: { conn: Connection }) {
   };
 
   const deleteAccount = async () => {
-    if (!(await recordingsCleared(t('Aufnahmen löschen')))) return;
+    if (!(await recordingsCleared(t('Aufnahmen löschen'), false))) return;
     setBusy(true);
     setError(null);
     try {
       await apiFor(conn).deleteMe(conn.user?.hasPassword === false ? { confirmUsername: password } : { password });
+      // Erst jetzt, da das Konto gelöscht ist, die Aufnahmen im Browser löschen (scheitert es, bleiben sie zum Hochladen)
+      await removeRecordingsOf(conn.id).catch(() => undefined);
       removeConnection(conn.id);
       navigate('/', { replace: true });
     } catch (e) {
