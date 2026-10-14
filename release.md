@@ -1,0 +1,3 @@
+- Spielerinnen können ihren Hintergrund und Charakterbögen der Spielleitung zur Auswertung geben. Daraus werden Vorschläge für die Bibel, über die die Spielleitung entscheidet. Sie schaltet das je Kampagne unter „Kampagne verwalten“ ein und stimmt jeder Auswertung einzeln zu. Braucht einen Server ab 0.4.88.
+- Unter „Mitgebrachte Welt“ steht bei jedem Vorschlag, woher er stammt.
+- Kleinere Fehler behoben.
