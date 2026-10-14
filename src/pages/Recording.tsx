@@ -467,9 +467,9 @@ export function Recording() {
                 {/* Mikrofon als Linien, die sich „wegzeichnen“ und wieder erscheinen */}
                 <svg className="rec-mic" viewBox="0 0 24 24" width="112" height="112" fill="none" stroke="currentColor"
                   strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
-                  <path pathLength={1} d="M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z" />
-                  <path pathLength={1} d="M5 11a7 7 0 0 0 14 0" />
-                  <path pathLength={1} d="M12 18v3" />
+                  <path pathLength={1} d="M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0z" />
+                  <path pathLength={1} d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <path pathLength={1} d="M12 19v3" />
                 </svg>
                 {/* Zeichen: erst die Umrisse als Linien, dann füllt es sich – wie das Mikrofon, nur umgekehrt */}
                 {!paused && MARK && (
