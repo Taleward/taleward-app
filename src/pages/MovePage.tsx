@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { currentConnection } from '../api/connections';
-import { isDeletedMember, type Campaign, type CampaignExport } from '../api/types';
+import { currentConnection, p } from '../api/connections';
+import { isDeletedMember, type Campaign, type CampaignExport, type SessionSummary } from '../api/types';
 import { formatDateFull } from '../components/format';
 import { Avatar } from '../components/Avatar';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
@@ -22,12 +22,15 @@ export function MovePage() {
   const { campaignId = '' } = useParams();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [exp, setExp] = useState<CampaignExport | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
     api.campaign(campaignId).then((c) => { rememberCampaign(c); setCampaign(c); }).catch(setError);
+    // Kapitel in Arbeit bleiben beim Umzug hier – vorher zählen und sagen (Wunsch 14.10.)
+    api.sessions(campaignId).then(setSessions).catch(() => undefined);
     return () => { if (timer.current) window.clearTimeout(timer.current); };
   }, [campaignId]);
 
@@ -57,6 +60,8 @@ export function MovePage() {
     }
   };
 
+  // Ohne Aufnahme (created) gibt es nichts, das verloren ginge
+  const unpublished = sessions?.filter((s) => s.state !== 'published' && s.state !== 'created').length ?? 0;
   const players = campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? [];
   const consented = players.filter((m) => m.moveConsentAt).length;
   const running = exp && (exp.state === 'queued' || exp.state === 'processing');
@@ -77,7 +82,16 @@ export function MovePage() {
               <li>{t('Alle bekommen dort einen freien Platz. Wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst darauf.')}</li>
             </ol>
             <span className="muted small">{t('Hier auf „{server}“ bleibt alles, wie es ist. Löschen kannst du die Kampagne später selbst.', { server: currentConnection().name })}</span>
+            <span className="muted small">{t('Auf dem neuen Server fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme dort neu zu. Cloud-Freigaben und Stimmprofile richtet ihr dort neu ein. Das ist Absicht: Zustimmungen und Freigaben gelten immer nur für einen Server.')}</span>
           </section>
+
+          {unpublished > 0 && (
+            <div className="card task">
+              <strong>{tn(unpublished, '{n} Kapitel ist noch nicht veröffentlicht und bleibt hier.', '{n} Kapitel sind noch nicht veröffentlicht und bleiben hier.')}</strong>
+              <span className="muted small">{t('Mit umziehen nur veröffentlichte Kapitel. Wenn du sie mitnehmen willst, veröffentliche sie vorher.')}</span>
+              <Link className="btn small outline" style={{ alignSelf: 'flex-start' }} to={p(`/k/${campaignId}/chronik`)}>{t('Zur Chronik')}</Link>
+            </div>
+          )}
 
           <section className="card">
             <h2>{t('Wer seine Daten mitgibt')}</h2>

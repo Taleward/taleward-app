@@ -63,7 +63,7 @@ export function ImportCampaign({ servers, onCancel }: { servers: Connection[]; o
         const key = st.message ?? '';
         throw new Error(IMPORT_MESSAGES[key] ? t(IMPORT_MESSAGES[key]) : key || t('Das hat nicht geklappt.'));
       }
-      navigate(`/v/${conn.id}/k/${st.campaignId}`);
+      navigate(`/v/${conn.id}/k/${st.campaignId}`, { state: { imported: true } });
     } catch (e) {
       setError(e);
       setPhase('pick');

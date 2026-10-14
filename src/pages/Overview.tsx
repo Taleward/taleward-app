@@ -16,7 +16,7 @@ import { hasCover } from '../covers/CampaignCover';
 import { CoverPicker } from '../covers/CoverPicker';
 import { getLang, t, tn } from '../i18n';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -60,6 +60,8 @@ export function Overview() {
   const me = campaign?.members.find((m) => m.userId === user?.id);
   const serverInfo = useServerInfo();
   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
+  // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht (Wunsch 14.10.)
+  const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
   const latest = sessions?.find((s) => s.state === 'published');
 
   return (
@@ -97,6 +99,12 @@ export function Overview() {
           <div className="split">
           <div className="a">
           {/* Zuerst, was jetzt zu tun ist: Zustimmung (nur wenn sie fehlt), Charakter, offenes Kapitel, Termin, neuer Recap */}
+          {gm && imported && (
+            <div className="notice" role="status" style={{ flexDirection: 'column', gap: 4 }}>
+              <strong>{t('Die Kampagne ist umgezogen.')}</strong>
+              <span className="small">{t('Hier fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme neu zu. Lade alle über „Mitspielende einladen“ ein; wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst auf ihren Platz. Cloud-Freigaben und Stimmprofile richtet ihr hier neu ein.')}</span>
+            </div>
+          )}
           {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
           {characterIncomplete(me) && (
