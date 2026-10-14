@@ -1,0 +1,34 @@
+From 266438a23437f3e4a4ef8bb8413a7ea168695219 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 17:22:40 +0200
+Subject: [PATCH 114/114] Version 0.25.0
+
+---
+ package-lock.json | 4 ++--
+ package.json      | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index 54973b4..0553d04 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -2,3 +2,3 @@
+   "name": "taleward-app",
+-  "version": "0.24.0",
++  "version": "0.25.0",
+   "lockfileVersion": 3,
+@@ -8,3 +8,3 @@
+       "name": "taleward-app",
+-      "version": "0.24.0",
++      "version": "0.25.0",
+       "dependencies": {
+diff --git a/package.json b/package.json
+index c4228ff..691f152 100644
+--- a/package.json
++++ b/package.json
+@@ -3,3 +3,3 @@
+   "private": true,
+-  "version": "0.24.0",
++  "version": "0.25.0",
+   "type": "module",
