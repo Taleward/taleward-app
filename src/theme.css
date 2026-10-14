@@ -277,6 +277,15 @@ h2 {
 .card.task {
   box-shadow: inset 4px 0 0 var(--tinte), var(--shadow-card);
 }
+/* Im Spielabend ist Tinte auf der dunklen Karte kaum zu sehen: dort der kräftige Linienton */
+[data-theme="dark"] .card.task {
+  box-shadow: inset 4px 0 0 var(--line-strong), var(--shadow-card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card.task {
+    box-shadow: inset 4px 0 0 var(--line-strong), var(--shadow-card);
+  }
+}
 
 /* Geheimes (nur SL): siegel-soft, Text in ink */
 .card.secret {
@@ -364,7 +373,8 @@ h2 {
 .btn.ghost,
 .btn.quiet {
   background: var(--paper-sunken);
-  border-color: var(--line);
+  /* Rand ≥ 3:1, damit leise Knöpfe als Knöpfe erkennbar bleiben (Design-Prüfung 08.10.) */
+  border-color: var(--line-strong);
   color: var(--ink);
   box-shadow: none;
   text-decoration: none;
@@ -957,7 +967,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 .revision-input textarea::placeholder { color: var(--ink-muted); font-style: italic; }
 .revision-input textarea:focus,
-.revision-input textarea:focus-visible { outline: none; border-bottom: 2px solid var(--tinte); }
+.revision-input textarea:focus-visible { outline: none; border-bottom: 2px solid var(--ink); }
 .revision-send {
   position: absolute;
   right: 0;
@@ -1703,6 +1713,9 @@ details.card[open] { padding-bottom: var(--space-4); }
   color: var(--ink);
   font-weight: 600;
   gap: 6px;
+  /* Wie „Titelbild ändern“ als Knopf erkennbar (Design-Prüfung 10.10.) */
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .btn.subtle {
@@ -1983,4 +1996,11 @@ button.table-group-face {
   .review-publish { flex-direction: row; align-items: center; justify-content: space-between; }
   .proposal-actions > .btn { flex: 0 1 auto; min-width: 112px; }
   .proposal-links { flex-basis: auto; margin-left: auto; }
+}
+
+/* Textlinks mit voller Tippfläche (48 px), ohne wie ein Knopf auszusehen */
+.tap-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
 }

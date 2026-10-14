@@ -10,7 +10,7 @@ import { ProposalCard } from '../components/ProposalCard';
 import { IconLock } from '../components/Icons';
 import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
 import { fromEditText, toEditText } from '../review/parts';
-import { RecapReviewView, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
+import { RecapReviewView, jumpToFirstFlagged, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
 import { namesSkipped, serverHasNameCheck } from './NamesPage';
 import { ParagraphHint, RevisionBox, RevisionDraft, paragraphRef, revisionOpen } from '../review/Revision';
 import { mentions } from '../review/mentions';
@@ -77,7 +77,7 @@ export function Review() {
   const canRewrite = apiAtLeast('0.4.10');
   const rewrite = async () => {
     const ok = await confirmDialog(
-      t('Kapitel {n} neu schreiben? Taleward schreibt Recap und Vorschläge aus der vorhandenen Abschrift noch einmal. Deine Änderungen am Recap und deine Entscheidungen zu den Vorschlägen gehen dabei verloren. Die SL-Notiz bleibt.', { n: session?.number ?? '' }),
+      t('Kapitel {n} neu schreiben? Taleward schreibt Kapitel und Vorschläge aus der vorhandenen Abschrift noch einmal. Deine Änderungen am Kapitel und deine Entscheidungen zu den Vorschlägen gehen dabei verloren. Die SL-Notiz bleibt.', { n: session?.number ?? '' }),
       { confirmLabel: t('Neu schreiben'), danger: true }
     );
     if (!ok) return;
@@ -121,11 +121,6 @@ export function Review() {
       <button key="voices" type="button" className="btn small subtle" onClick={() => navigate(p(`/s/${sessionId}/stimmen`))}>
         {t('Stimmen prüfen')}
       </button>
-    ),
-    canRewrite && proposals && (
-      <button key="rewrite" type="button" className="btn small subtle" disabled={busy} onClick={rewrite}>
-        {t('Kapitel neu schreiben')}
-      </button>
     )
   ].filter(Boolean);
 
@@ -134,7 +129,7 @@ export function Review() {
       back
       wide
       overline={<span className="row" style={{ gap: 6 }}><IconLock size={14} /> {session ? t('Kapitel {n}', { n: session.number }) + ' · ' + t('nur für dich') : t('Nur für dich')}</span>}
-      title={t('Vorschläge prüfen')}
+      title={t('Kapitel prüfen')}
     >
       <ErrorBox error={error} />
 
@@ -144,6 +139,12 @@ export function Review() {
       {tools.length > 0 && <div className="review-tools">{tools}</div>}
       {recap && <RecapEditor sessionId={sessionId} recap={recap} members={members} onSaved={setRecap} onError={setError}
         alwaysOpen={wide} highlight={hoverTitle} />}
+      {/* Verwirft alle Änderungen – darum leise am Ende, nicht oben bei den Prüfwerkzeugen (Design-Prüfung 11.10.) */}
+      {canRewrite && proposals && (
+        <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start', marginTop: 8 }} disabled={busy} onClick={rewrite}>
+          {t('Kapitel neu schreiben')}
+        </button>
+      )}
       </div>
 
       <div className="b">
@@ -195,14 +196,14 @@ export function Review() {
               onBlur={saveNote}
               style={{ background: 'var(--paper-raised)' }}
             />
-            <div className="muted small">{t('Erscheint nie im Recap oder in der Spieleransicht.')}{noteSaved ? '' : ' ' + t('Wird beim Verlassen des Feldes gespeichert.')}</div>
+            <div className="muted small">{t('Erscheint nie im Kapitel oder in der Spieleransicht.')}{noteSaved ? '' : ' ' + t('Wird beim Verlassen des Feldes gespeichert.')}</div>
           </details>
           <div className="review-publish">
             <span className="muted">
               {t('{done} von {total} Vorschlägen geprüft', { done: proposals.length - openCount, total: proposals.length })}
             </span>
             <button type="button" className="btn" disabled={busy} onClick={publish}>
-              {busy ? t('Wird veröffentlicht …') : t('Recap veröffentlichen')}
+              {busy ? t('Wird veröffentlicht …') : t('Kapitel veröffentlichen')}
             </button>
           </div>
         </div>
@@ -269,7 +270,7 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
   if (editing) {
     return (
       <section className="card">
-        <h2>{t('Recap bearbeiten')}</h2>
+        <h2>{t('Kapitel bearbeiten')}</h2>
         <div className="field">
           <label htmlFor="rc-title">{t('Titel')}</label>
           <input id="rc-title" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -296,8 +297,10 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
 
   const head = (
         <span style={{ flex: 1 }}>
-          <strong>{t('Recap-Entwurf:')}</strong> {recap.title}
-          {recap.review?.state === 'done' && <span className="muted small" style={{ display: 'block' }}>{reportSentence(recap)}</span>}
+          <strong>{t('Entwurf:')}</strong> {recap.title}
+          {recap.review?.state === 'done' && (alwaysOpen && reviewNeedsAttention(recap)
+            ? <button type="button" className="linklike muted small tap-link" onClick={() => jumpToFirstFlagged(recap)}>{reportSentence(recap)}</button>
+            : <span className="muted small" style={{ display: 'block' }}>{reportSentence(recap)}</span>)}
         </span>
   );
   const body = (
@@ -330,7 +333,7 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
       )}
       {!canRevise && (
         <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start', marginTop: 10 }} onClick={selfEdit}>
-          {t('Recap bearbeiten')}
+          {t('Kapitel bearbeiten')}
         </button>
       )}
     </>

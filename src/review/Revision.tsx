@@ -191,7 +191,7 @@ export function RevisionBox({ sessionId, recap, onRecap, note, setNote, collecte
         <ErrorBox error={error} />
         <p className="small" style={{ margin: 0 }}>
           {v.changes.length
-            ? tn(v.changes.length, 'Vorschlag: {n} Absatz geändert. Neues ist unterstrichen, Gestrichenes durchgestrichen.', 'Vorschlag: {n} Absätze geändert. Neues ist unterstrichen, Gestrichenes durchgestrichen.')
+            ? tn(v.changes.length, 'Korrektur: {n} Absatz geändert. Neues ist unterstrichen, Gestrichenes durchgestrichen.', 'Korrektur: {n} Absätze geändert. Neues ist unterstrichen, Gestrichenes durchgestrichen.')
             : t('Es wurde nichts geändert.')}
         </p>
         {missed.map((n, i) => (
@@ -201,7 +201,7 @@ export function RevisionBox({ sessionId, recap, onRecap, note, setNote, collecte
         ))}
         <div className="row wrap" style={{ gap: 8 }}>
           {v.changes.length > 0 && (
-            <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.decideRevision(sessionId, true))}>{t('Übernehmen')}</button>
+            <button type="button" className="btn small moss outline" disabled={busy} onClick={() => run(() => api.decideRevision(sessionId, true))}>{t('Übernehmen')}</button>
           )}
           <button type="button" className="btn small outline" disabled={busy} onClick={() => run(() => api.decideRevision(sessionId, false))}>
             {v.changes.length ? t('Verwerfen') : t('Schließen')}

@@ -7,6 +7,7 @@ import { confirmDialog } from '../components/confirm';
 import { PENDING_LABEL } from './Chronicle';
 import { GameSystemFields, systemLabel } from '../components/GameSystemFields';
 import { apiAtLeast, currentConnection, p } from '../api/connections';
+import { isMusterUrl } from '../api/muster';
 import { MemberJoinedCard, OpenSeatDialog, OrphanNoticeCard, SeatClaimedCard } from '../components/Seats';
 import { characterIncomplete } from '../components/CharacterForm';
 import { Avatar } from '../components/Avatar';
@@ -131,7 +132,11 @@ export function Overview() {
               <span className="muted small">{t('Die Charaktere bringen Einträge für die Bibel mit. Tippen zum Prüfen.')}</span>
             </Link>
           )}
-          {gm && campaign.gmNotices?.map((n) => <GmNoticeCard key={n.id} campaign={campaign} notice={n} info={serverInfo} onDone={load} />)}
+          {gm && campaign.gmNotices && mergeJoinNotices(campaign.gmNotices).map(({ notice, hidden }) => (
+            notice.code === 'member_joined'
+              ? <MemberJoinedCard key={notice.id} campaign={campaign} notice={notice} hidden={hidden} onDone={load} />
+              : <GmNoticeCard key={notice.id} campaign={campaign} notice={notice} info={serverInfo} onDone={load} />
+          ))}
           {/* Nächste Runde */}
           <Link to={p(`/k/${campaignId}/termin`)} className={campaign.datePollNeedsMyVote ? 'card task' : 'card'}>
             <div className="row between">
@@ -155,7 +160,7 @@ export function Overview() {
               </div>
               <strong>{latest.title ?? t('Kapitel {n}', { n: latest.number })}</strong>
               <span className="muted small">
-                {t('Recap lesen')}
+                {t('Kapitel lesen')}
                 {!!latest.unreadComments && ` · ${tn(latest.unreadComments, '{n} neuer Kommentar', '{n} neue Kommentare')}`}
               </span>
             </Link>
@@ -238,7 +243,7 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => 
             {s.done ? <IconCheck size={18} /> : '○'}
           </span>
           <span style={{ flex: 1 }}>{s.label}{s.done && <span className="visually-hidden"> – {t('erledigt')}</span>}</span>
-          {!s.done && <button type="button" className="btn small outline" onClick={s.go}>{t('Los')}</button>}
+          {!s.done && <button type="button" className="btn small outline" aria-label={t('Los: {step}', { step: s.label })} onClick={s.go}>{t('Los')}</button>}
         </div>
       ))}
       <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={hide}>{t('Ausblenden')}</button>
@@ -378,7 +383,7 @@ export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved: 
         <GameSystemFields idPrefix="w" system={system} systemName={systemName}
           onChange={(s, n) => { setSystem(s); setSystemName(n); }} />
         <div className="field">
-          <label htmlFor="w-lang">{t('Sprache der Runde (für Recaps)')}</label>
+          <label htmlFor="w-lang">{t('Sprache der Runde (für Kapitel)')}</label>
           <select id="w-lang" value={language} onChange={(e) => setLanguage(e.target.value as 'de' | 'en')}>
             <option value="de">Deutsch</option>
             <option value="en">English</option>
@@ -514,7 +519,7 @@ function Members({ campaign, onChanged }: { campaign: Campaign; onChanged: () =>
         </details>
       )}
       {/* Eigener Charakter und Umzugs-Haken: über die eigene Zeile oben (Charakterseite) */}
-      {me && <VoiceProfileHint />}
+      {me && !isMusterUrl(currentConnection().baseUrl) && <VoiceProfileHint />}
       {seat && <OpenSeatDialog campaign={campaign} seat={seat} onClose={() => setSeat(null)} onDone={() => { setSeat(null); onChanged(); }} />}
     </section>
   );
@@ -564,7 +569,7 @@ function UsageLine({ campaignId }: { campaignId: string }) {
   return (
     <div className="muted small" style={{ textAlign: 'center' }}>
       {t('Verarbeitet diesen Monat: {sessions} · {hours} h Aufnahme', { sessions: tn(usage.sessions, '{n} Kapitel', '{n} Kapitel'), hours })}
-      {usage.costEstimateCents != null && ' · ' + t('ca. {eur} € API-Kosten', { eur: (usage.costEstimateCents / 100).toFixed(2).replace('.', getLang() === 'de' ? ',' : '.') })}
+      {usage.costEstimateCents != null && !isMusterUrl(currentConnection().baseUrl) && ' · ' + t('ca. {eur} € API-Kosten', { eur: (usage.costEstimateCents / 100).toFixed(2).replace('.', getLang() === 'de' ? ',' : '.') })}
     </div>
   );
 }
@@ -581,6 +586,8 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
   const navigate = useNavigate();
   const gm = me.role === 'gm';
   const otherGms = campaign.members.filter((m) => m.role === 'gm' && m.id !== me.id && !isDeletedMember(m)).length;
+  // Musterkampagne: Übergeben und Umziehen gibt es dort nicht sinnvoll (alles nur im Gerät)
+  const muster = isMusterUrl(currentConnection().baseUrl);
   const [deleting, setDeleting] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState('');
   const [busy, setBusy] = useState(false);
@@ -616,7 +623,9 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
   const setCloud = async (field: 'allowExternalTranscription' | 'allowCloudSummary', value: boolean, provider: string) => {
     if (value) {
       const q = field === 'allowExternalTranscription'
-        ? t('Transkription über {provider} für „{campaign}“ auf „{server}“ erlauben? Die Stimmen der Runde verlassen dann den Verein. Sag es vorher allen am Tisch.', { provider, campaign: campaign.title, server })
+        ? (primary
+          ? t('Transkription über {provider} für „{campaign}“ auf „{server}“ erlauben? Die Stimmen der Runde verlassen dann euren Server. Sag es vorher allen am Tisch.', { provider, campaign: campaign.title, server })
+          : t('Transkription über {provider} für „{campaign}“ auf „{server}“ als Ausweichlösung erlauben? Nur wenn 24 Stunden lang kein Worker erreichbar ist, verlassen die Stimmen der Runde dann euren Server (wenige Cent pro Stunde Aufnahme). Sag es vorher allen am Tisch.', { provider, campaign: campaign.title, server }))
         : t('Zusammenfassung über {provider} für „{campaign}“ auf „{server}“ erlauben? Text der Runde und Unterlagen gehen dann dorthin, keine Stimmen. Sag es vorher allen am Tisch.', { provider, campaign: campaign.title, server });
       if (!(await confirmDialog(q, { confirmLabel: t('Erlauben') }))) return;
     }
@@ -646,8 +655,8 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
               </label>
               <span className="muted small">
                 {primary
-                  ? t('Dieser Server transkribiert Aufnahmen direkt über {provider}. Die Stimmen verlassen dann den Verein – sag es vorher allen am Tisch.', { provider: externalProvider })
-                  : t('Ist 24 Stunden lang kein Worker erreichbar, darf der Server als Ausweichlösung {provider} nutzen (kostet wenige Cent pro Stunde Aufnahme). Die Stimmen verlassen dann den Verein – sag es vorher allen am Tisch.', { provider: externalProvider })}
+                  ? t('Dieser Server transkribiert Aufnahmen direkt über {provider}.', { provider: externalProvider })
+                  : t('Nur wenn 24 Stunden lang kein Worker erreichbar ist, nutzt der Server als Ausweichlösung {provider}.', { provider: externalProvider })}
               </span>
             </div>
           )}
@@ -659,7 +668,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
                 <span>{t('Zusammenfassung und Unterlagen über {provider} erlauben', { provider: summaryProvider })}</span>
               </label>
               <span className="muted small">
-                {t('Für Recap, Vorschläge und das Auswerten von Unterlagen geht Text an {provider} – Namen und Gespräche der Runde bzw. der Inhalt der Unterlage, keine Stimmen. Ohne Erlaubnis wartet beides auf ein lokales Modell.', { provider: summaryProvider })}
+                {t('Für Kapitel, Vorschläge und das Auswerten von Unterlagen geht Text an {provider} – Namen und Gespräche der Runde bzw. der Inhalt der Unterlage, keine Stimmen. Ohne Erlaubnis wartet beides auf ein lokales Modell.', { provider: summaryProvider })}
               </span>
             </div>
           )}
@@ -671,11 +680,11 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
         </>
       )}
-      {gm && <span className="overline" style={(externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? { marginTop: 6 } : undefined}>{t('Weitergeben')}</span>}
-      {gm && (
+      {gm && !muster && <span className="overline" style={(externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? { marginTop: 6 } : undefined}>{t('Weitergeben')}</span>}
+      {gm && !muster && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/spielleitung`)}>{t('Spielleitung übergeben')}</Link>
       )}
-      {gm && apiAtLeast('0.4.8') && (
+      {gm && !muster && apiAtLeast('0.4.8') && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/umziehen`)}>{t('Kampagne umziehen')}</Link>
       )}
       {gm && <span className="overline" style={{ marginTop: 6 }}>{t('Beenden')}</span>}
@@ -691,7 +700,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
       {gm && (deleting ? (
         <div className="card warn" style={{ gap: 8 }}>
           <strong>{t('Kampagne endgültig löschen')}</strong>
-          <span className="small">{t('Gelöscht werden alle Kapitel, Recaps, Aufnahmen, die Bibel, Kommentare und Bilder – für alle. Das lässt sich nicht rückgängig machen.')}</span>
+          <span className="small">{t('Gelöscht werden alle Kapitel, Aufnahmen, die Bibel, Kommentare und Bilder – für alle. Das lässt sich nicht rückgängig machen.')}</span>
           <div className="field">
             <label htmlFor="del-title">{t('Zur Bestätigung den Titel eingeben: {title}', { title: campaign.title })}</label>
             <input id="del-title" type="text" value={confirmTitle} onChange={(e) => setConfirmTitle(e.target.value)} />
@@ -710,6 +719,20 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
       </div>
     </details>
   );
+}
+
+/**
+ * Beitritt und „bleibt verborgen“ zur selben Person in eine Karte (Design-Prüfung 10.10.): Der Hinweis
+ * hidden_entries_for_newcomer wandert in die Karte member_joined derselben Person.
+ */
+function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNotice }[] {
+  const joined = new Set(list.filter((n) => n.code === 'member_joined').map((n) => n.memberId));
+  return list
+    .filter((n) => !(n.code === 'hidden_entries_for_newcomer' && joined.has(n.memberId)))
+    .map((n) => ({
+      notice: n,
+      hidden: n.code === 'member_joined' ? list.find((x) => x.code === 'hidden_entries_for_newcomer' && x.memberId === n.memberId) : undefined
+    }));
 }
 
 /** Hinweis an die SL (ab 0.4.7), z. B. ein Neuzugang ist vor teilweise verborgenen Einträgen verborgen */

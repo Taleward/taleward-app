@@ -13,9 +13,9 @@ import { ErrorBox, Screen } from '../components/Screen';
 function statusText(message: string): string {
   switch (message) {
     case 'summarizing.notes': return t('Szenennotizen werden geschrieben …');
-    case 'summarizing.recap': return t('Der Recap wird geschrieben …');
+    case 'summarizing.recap': return t('Das Kapitel wird geschrieben …');
     case 'summarizing.proposals': return t('Vorschläge für die Bibel werden gesammelt …');
-    case 'summarizing.review': return t('Der Recap wird mit dem Transkript gegengeprüft …');
+    case 'summarizing.review': return t('Das Kapitel wird mit der Abschrift gegengeprüft …');
     case 'summarizing.revision': return t('Unbelegte Stellen werden nachgebessert …');
     default: return message;
   }
@@ -26,7 +26,7 @@ const STEPS: { state: ProcessingState[]; label: string }[] = [
   { state: ['transcribing'], label: tk('Transkription') },
   { state: ['awaiting_speakers'], label: tk('Stimmen zuordnen') },
   { state: ['summarizing'], label: tk('Zusammenfassung') },
-  { state: ['awaiting_review'], label: tk('Vorschläge prüfen') },
+  { state: ['awaiting_review'], label: tk('Kapitel prüfen') },
   { state: ['published'], label: tk('Veröffentlicht') }
 ];
 
@@ -185,13 +185,13 @@ export function Processing() {
       )}
 
       {status?.state === 'awaiting_speakers' && <Link className="btn" to={p(`/s/${sessionId}/stimmen`)}>{t('Stimmen zuordnen')}</Link>}
-      {status?.state === 'awaiting_review' && <Link className="btn" to={p(`/s/${sessionId}/freigabe`)}>{t('Vorschläge prüfen')}</Link>}
+      {status?.state === 'awaiting_review' && <Link className="btn" to={p(`/s/${sessionId}/freigabe`)}>{t('Kapitel prüfen')}</Link>}
       {status?.state === 'published' && session && <Link className="btn" to={p(`/k/${session.campaignId}/chronik`)}>{t('Zur Chronik')}</Link>}
 
       {/* Abgebrochene oder unbrauchbare Aufnahme loswerden – nur vor dem Veröffentlichen (ab 0.4.5) */}
       {role === 'gm' && session && status && status.state !== 'published' && (
         <button type="button" className="btn small danger outline" style={{ alignSelf: 'flex-start', marginTop: 12 }} onClick={async () => {
-          if (!(await confirmDialog(t('Kapitel {n} verwerfen? Aufnahme, Transkript und Vorschläge werden gelöscht. Spätere Kapitel rücken um eins auf.', { n: session.number }), { confirmLabel: t('Verwerfen'), danger: true }))) return;
+          if (!(await confirmDialog(t('Kapitel {n} verwerfen? Aufnahme, Abschrift und Vorschläge werden gelöscht. Spätere Kapitel rücken um eins auf.', { n: session.number }), { confirmLabel: t('Verwerfen'), danger: true }))) return;
           try {
             await api.deleteSession(sessionId);
             navigate(p(`/k/${session.campaignId}`), { replace: true });

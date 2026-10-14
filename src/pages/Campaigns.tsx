@@ -13,6 +13,7 @@ import { getLang, t, tn } from '../i18n';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiFor, fetchServerInfo } from '../api/client';
+import { isMusterUrl } from '../api/muster';
 import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, updateConnection, versionLess, type Connection } from '../api/connections';
 import { IconInfo } from '../components/Icons';
 import { useAuth } from '../auth/AuthContext';
@@ -26,7 +27,7 @@ const newCount = (c: CampaignSummary) => (c.unread ? c.unread.recaps + c.unread.
 function newSummary(c: CampaignSummary): string {
   const u = c.unread!;
   const parts: string[] = [];
-  if (u.recaps) parts.push(tn(u.recaps, '{n} Recap', '{n} Recaps'));
+  if (u.recaps) parts.push(tn(u.recaps, '{n} neues Kapitel', '{n} neue Kapitel'));
   if (u.comments) parts.push(tn(u.comments, '{n} Kommentar', '{n} Kommentare'));
   if (u.bible) parts.push(tn(u.bible, '{n} Bibeleintrag', '{n} Bibeleinträge'));
   return t('Neu: {list}', { list: parts.join(' · ') });
@@ -150,9 +151,11 @@ export function Campaigns() {
 
   const loading = entries === null;
   const names = [...new Set(active.map((c) => c.user?.displayName).filter(Boolean))].join(', ');
+  // Nur die Musterkampagne verbunden: kein echtes Konto – der nächste Schritt ist ein eigener Server (Design-Prüfung 08.10.)
+  const onlyMuster = active.length > 0 && active.every((c) => isMusterUrl(c.baseUrl));
 
   return (
-    <Screen overline={names ? t('Angemeldet als {name}', { name: names }) : ' '} title={t('Deine Kampagnen')} nav={false}>
+    <Screen overline={onlyMuster ? t('Musterkampagne') : names ? t('Angemeldet als {name}', { name: names }) : ' '} title={t('Deine Kampagnen')} nav={false}>
       <UpdateNotices connections={connections} />
       <NotifyPrompt />
       <MusterNotice />
@@ -205,7 +208,7 @@ export function Campaigns() {
           {c.nextSessionAt && Date.parse(c.nextSessionAt) > Date.now() ? (
             <div className="small">{t('Nächste Runde')}: <strong>{formatDateTime(c.nextSessionAt)}</strong></div>
           ) : c.lastPublishedAt ? (
-            <div className="muted small">{t('Letzter Recap')}: {formatDate(c.lastPublishedAt)}</div>
+            <div className="muted small">{t('Letztes Kapitel')}: {formatDate(c.lastPublishedAt)}</div>
           ) : null}
           {(c.pendingReviewCount > 0 || c.datePollNeedsMyVote) && (
             <div className="row wrap" style={{ gap: 8 }}>
@@ -236,9 +239,13 @@ export function Campaigns() {
       <div className="list-actions">
       {mode === 'none' ? (
         <>
-          <button className="btn" type="button" onClick={() => { setMode('new'); setValue(''); }}>
-            {t('Neue Kampagne anlegen')}
-          </button>
+          {onlyMuster ? (
+            <Link className="btn" to="/verbinden">{t('Mit einem Server verbinden')}</Link>
+          ) : (
+            <button className="btn" type="button" onClick={() => { setMode('new'); setValue(''); }}>
+              {t('Neue Kampagne anlegen')}
+            </button>
+          )}
           <button className="btn outline" type="button" onClick={() => { setMode('join'); setValue(''); }}>
             {t('Einladung annehmen')}
           </button>
@@ -265,7 +272,7 @@ export function Campaigns() {
           )}
           {mode === 'new' && (
             <div className="field">
-              <label htmlFor="clang">{t('Sprache der Runde (für Recaps)')}</label>
+              <label htmlFor="clang">{t('Sprache der Runde (für Kapitel)')}</label>
               <select id="clang" value={language} onChange={(e) => setLanguage(e.target.value as 'de' | 'en')}>
                 <option value="de">Deutsch</option>
                 <option value="en">English</option>

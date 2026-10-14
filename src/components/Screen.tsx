@@ -1,8 +1,9 @@
-import { currentConnectionId, p } from '../api/connections';
+import { currentConnectionId, getConnection, p } from '../api/connections';
+import { isMusterUrl } from '../api/muster';
 import { t } from '../i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Unread } from '../api/types';
-import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { IconBack, IconBook, IconMic, IconScroll, IconShield } from './Icons';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
 
@@ -24,8 +25,13 @@ interface Props {
   children: ReactNode;
 }
 
-export function Screen({ overline, title, back, backTo, nav = true, hero, narrow, wide, children }: Props) {
+export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, children }: Props) {
   const navigate = useNavigate();
+  // In der Musterkampagne steht das im Kopf jeder Seite (Design-Prüfung 08.10.), damit niemand sie für echt hält
+  const connId = useLocation().pathname.match(/^\/v\/([^/]+)/)?.[1];
+  const muster = !!connId && isMusterUrl(getConnection(connId)?.baseUrl);
+  const overline = muster && typeof givenOverline === 'string' && givenOverline.trim()
+    ? `${t('Musterkampagne')} · ${givenOverline}` : givenOverline;
   const withHero = !!hero?.campaign && hasCover(hero.campaign);
   // Breite Bildschirme: Navigation links statt unten (siehe theme.css, .screen.with-nav)
   const cls = ['screen', nav ? 'with-nav' : '', narrow ? 'narrow' : '', wide ? 'wide' : ''].filter(Boolean).join(' ');

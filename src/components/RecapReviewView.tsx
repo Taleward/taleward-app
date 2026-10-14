@@ -52,6 +52,15 @@ export function reportSentence(recap: Recap): string | null {
   return n ? tn(n, '{n} Stelle zum Ansehen', '{n} Stellen zum Ansehen') : t('Nichts aufgefallen');
 }
 
+/** Zur ersten markierten Stelle springen (Design-Prüfung 10.10.) */
+export function jumpToFirstFlagged(recap: Recap): void {
+  const first = flagged(recap)[0];
+  const el = first ? document.getElementById(`stelle-${first.index}`) : null;
+  if (!el) return;
+  el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+  el.focus({ preventScroll: true });
+}
+
 /** Braucht der Entwurf Aufmerksamkeit? (dann klappt die Ansicht von selbst auf) */
 export function reviewNeedsAttention(recap: Recap): boolean {
   return flagged(recap).some((p) => p.verdict !== 'off_game');
@@ -124,7 +133,7 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
         }
         const evidence = info.evidence.slice(0, MAX_EVIDENCE);
         return (
-          <Fragment key={i}>{heading(i)}<div className={hl(para, `review-para flagged v-${info.verdict}`)}>
+          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`)}>
             {text(para, i)}
             <p className="review-note small">
               {/* Die Begründung des Prüfers genügt; ohne sie ein kurzes Wort zur Art */}
@@ -148,10 +157,10 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
       })}
 
       {excerptAt !== null && (
-        <Dialog title={t('Transkript um {time}', { time: clock(excerptAt) })} onClose={() => setExcerptAt(null)}>
+        <Dialog title={t('Abschrift um {time}', { time: clock(excerptAt) })} onClose={() => setExcerptAt(null)}>
           <ErrorBox error={error} />
           {!transcript && !error && <p className="muted">{t('Wird geladen …')}</p>}
-          {transcript && excerpt.length === 0 && <p className="muted">{t('An dieser Stelle ist das Transkript leer.')}</p>}
+          {transcript && excerpt.length === 0 && <p className="muted">{t('An dieser Stelle ist die Abschrift leer.')}</p>}
           {excerpt.map((s) => (
             <p key={s.start} className={s === closest ? 'transcript-line hit' : 'transcript-line'}>
               <span className="muted small">{clock(s.start)}{speaker(s.memberId) ? ' · ' + speaker(s.memberId) : ''}</span>

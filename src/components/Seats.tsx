@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { api } from '../api/client';
-import { currentConnection } from '../api/connections';
+import { currentConnection, p } from '../api/connections';
+import { Link } from 'react-router-dom';
 import { isDeletedMember, type Campaign, type GmNotice, type Member } from '../api/types';
-import { t } from '../i18n';
+import { t, tn } from '../i18n';
 import { copyText, inviteLink, shareInvite } from '../invite';
 import { confirmDialog } from './confirm';
 import { Dialog } from './Dialog';
@@ -169,7 +170,12 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
  * Jemand ist der Kampagne beigetreten (member_joined, ab Schnittstelle 0.4.14). Die SL bestätigt oder entfernt die
  * Person wieder.
  */
-export function MemberJoinedCard({ campaign, notice, onDone }: { campaign: Campaign; notice: GmNotice; onDone: () => void }) {
+export function MemberJoinedCard({ campaign, notice, hidden, onDone }: {
+  campaign: Campaign; notice: GmNotice;
+  /** Hinweis „bleibt verborgen“ zur selben Person – steht dann in dieser Karte statt in einer eigenen */
+  hidden?: GmNotice;
+  onDone: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const m = campaign.members.find((x) => x.id === notice.memberId);
@@ -202,9 +208,20 @@ export function MemberJoinedCard({ campaign, notice, onDone }: { campaign: Campa
         {formatDate(notice.createdAt)}{m.characterName ? ' · ' + t('spielt {figure}', { figure: m.characterName }) : ''}
         {' · '}{t('Kennst du die Person? Sonst entferne sie wieder.')}
       </span>
+      {hidden && (
+        <span className="muted small">
+          {tn(hidden.entryIds.length,
+            '{n} Eintrag der Bibel ist nur für einige Spieler sichtbar – für {name} bleibt er verborgen, bis du ihn freigibst.',
+            '{n} Einträge der Bibel sind nur für einige Spieler sichtbar – für {name} bleiben sie verborgen, bis du sie freigibst.', { name: m.displayName })}
+        </span>
+      )}
       <ErrorBox error={error} />
       <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Passt')}</button>
+        <button type="button" className="btn small outline" disabled={busy}
+          onClick={() => run(() => Promise.all([notice, hidden].filter((x): x is GmNotice => !!x).map((x) => api.dismissGmNotice(campaign.id, x.id))))}>
+          {t('Passt so')}
+        </button>
+        {hidden && <Link className="btn small ghost" to={p(`/k/${campaign.id}/bibel`)}>{t('Zur Bibel')}</Link>}
         <button type="button" className="btn small danger outline" disabled={busy} onClick={remove}>{t('Entfernen')}</button>
       </div>
     </div>
