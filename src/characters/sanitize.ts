@@ -18,7 +18,8 @@ export function sanitizeCharacter(raw: unknown): StoredCharacter | null {
   if (!Array.isArray(x.world) || !Array.isArray(x.links) || !obj(x.chronicles)) return null;
   if (!(x.portrait === null || x.portrait === undefined || (text(x.portrait, 8_000_000) && x.portrait.startsWith('data:image/')))) return null;
   const world = x.world.filter((w): w is StoredCharacter['world'][number] => obj(w) && ID.test(String(w.id))
-    && Number.isInteger(w.version) && WORLD_TYPES.includes(String(w.type)) && text(w.name, 200) && text(w.summary, 20_000) && typeof w.secret === 'boolean');
+    && Number.isInteger(w.version) && WORLD_TYPES.includes(String(w.type)) && text(w.name, 200) && text(w.summary, 20_000) && typeof w.secret === 'boolean'
+    && (w.relation === undefined || w.relation === null || text(w.relation, 120)));
   const links = x.links.filter((l): l is StoredCharacter['links'][number] => obj(l) && text(l.connId, 100)
     && ID.test(String(l.campaignId)) && ID.test(String(l.memberId)) && text(l.campaignTitle, 300) && text(l.serverName, 300));
   const chronicles = Object.fromEntries(Object.entries(x.chronicles).filter(([, ch]) => obj(ch) && text(ch.takenAt, 40)));

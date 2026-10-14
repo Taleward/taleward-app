@@ -241,8 +241,8 @@ Chapter 9: Sefa at the Hunger Stone. Chapter 10: the stairs behind the reading r
 The tower mark on the salt sack in the well. Same as on Mother's old maps.
 Brann still owes me an eel.`,
         world: [
-          { key: 'brann', type: 'npc', name: `Uncle Brann`, summary: `Fisherman in Grauwehr, Mara's uncle. Knows every path through the reeds and every eel by its first name.`, secret: false, state: 'pending' },
-          { key: 'kompass', type: 'item', name: `Mother's compass`, summary: `Brass compass that belonged to Mara's mother. Its needle does not point north but always towards the archive of Hohenwacht.`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
+          { key: 'brann', type: 'npc', name: `Uncle Brann`, summary: `Fisherman in Grauwehr, Mara's uncle. Knows every path through the reeds and every eel by its first name.`, relation: `uncle on her mother's side`, secret: false, state: 'pending' },
+          { key: 'kompass', type: 'item', name: `Mother's compass`, summary: `Brass compass that belonged to Mara's mother. Its needle does not point north but always towards the archive of Hohenwacht.`, relation: `heirloom from her mother`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
           { key: 'schilf', type: 'faction', name: `The Reedwalkers`, summary: `Scouts of the Senkmoor who mark safe paths with knotted reeds. Mara spent two years with them.`, secret: false, state: 'accepted', entry: 'schilfgaenger' },
         ] },
       { key: 'ilsa', name: `Ilsa Dorn`, nickname: `Thistle`, system: `Kesselrunde`, status: 'active',
@@ -251,7 +251,7 @@ Brann still owes me an eel.`,
         emblem: { shape: 'mortar', color: '#6f8a6a' },
         notes: `Only cut moonwort at new moon.
 The merchant with the hat owes me two silver.`,
-        world: [{ key: 'garten', type: 'location', name: `Widow Moll's garden`, summary: `Walled herb garden where Ilsa learned her craft.`, secret: false, state: 'pending' }] },
+        world: [{ key: 'garten', type: 'location', name: `Widow Moll's garden`, summary: `Walled herb garden where Ilsa learned her craft.`, relation: `where she learned her craft`, secret: false, state: 'pending' }] },
       { key: 'edda', name: `Edda Krumm`, status: 'retired',
         summary: `Former cook of a mercenary company who now runs her own inn and won't tolerate another brawl in her kitchen.`,
         backstory: `For twelve years Edda cooked for the Red Company, on campaigns, during sieges and once for three weeks on a raft. With her share she bought an inn at a crossroads. Her old comrades drop by now and then and usually pay.`,
@@ -260,7 +260,7 @@ The merchant with the hat owes me two silver.`,
 Never again a raft.`,
         world: [
           { key: 'loeffel', type: 'location', name: `The Crooked Spoon`, summary: `Edda's inn at the crossroads.`, secret: false, state: 'pending' },
-          { key: 'schar', type: 'faction', name: `The Red Company`, summary: `Mercenary company Edda cooked for.`, secret: false, state: 'pending' },
+          { key: 'schar', type: 'faction', name: `The Red Company`, summary: `Mercenary company Edda cooked for.`, relation: `old comrades`, secret: false, state: 'pending' },
         ] },
     ],
     tom: [
@@ -271,7 +271,7 @@ Never again a raft.`,
 Aldo's handwriting: the d with the hook.
 Knocking under the planks, three times. Fish? Not a fish.
 Ask Berit about the toll book again.`,
-        world: [{ key: 'aldo', type: 'npc', name: `Master Aldo Fenn`, summary: `Master scribe at the archive of Hohenwacht and Tavin's teacher. Missing since the spring.`, secret: false, state: 'pending' }] },
+        world: [{ key: 'aldo', type: 'npc', name: `Master Aldo Fenn`, summary: `Master scribe at the archive of Hohenwacht and Tavin's teacher. Missing since the spring.`, relation: `former teacher`, secret: false, state: 'pending' }] },
       { key: 'fenna', name: `Fenna Graufell`, system: `Wegwarten`, status: 'active',
         summary: `Border warden who would rather ask questions than follow orders.`,
         backstory: `Fenna stood guard for six years at a pass that hardly anyone crossed. When her captain ordered her to send a family without papers back into the snow, she asked why. She hasn't been at the pass since, but she is still a border warden, just somewhere else.`,
@@ -279,7 +279,7 @@ Ask Berit about the toll book again.`,
         notes: `Never turn my back on Captain Sterk again.
 The dog at the pass was called Button.`,
         world: [
-          { key: 'sterk', type: 'npc', name: `Captain Ivo Sterk`, summary: `Fenna's former superior, strict and unforgiving.`, secret: false, state: 'pending' },
+          { key: 'sterk', type: 'npc', name: `Captain Ivo Sterk`, summary: `Fenna's former superior, strict and unforgiving.`, relation: `former superior`, secret: false, state: 'pending' },
           { key: 'fuchspass', type: 'location', name: `The border post at Fox Pass`, summary: `Lonely guard post in the mountains.`, secret: false, state: 'pending' },
         ] },
     ],

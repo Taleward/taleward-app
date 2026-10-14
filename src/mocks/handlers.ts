@@ -539,7 +539,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.18', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.19', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -549,7 +549,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.17',
+      apiVersion: nachbar ? '0.3.9' : '0.4.19',
       serverId: nachbar ? undefined : 'testserver',
       registration: 'invite_only',
       authMethods: ['password'],
@@ -771,7 +771,7 @@ export const handlers = [
       members: [{ id: 'm-' + crypto.randomUUID().slice(0, 8), userId: ME.id, displayName: ME.displayName, characterName: null, role: 'gm' }]
     };
     campaigns.push(c);
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) }, { status: 201 });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) }, { status: 201 });
   }),
 
   http.post(`${B}/campaigns/join`, async ({ request }) => {
@@ -807,13 +807,13 @@ export const handlers = [
       (gmNotices[c.id] ??= []).push({ id: 'gn-' + crypto.randomUUID().slice(0, 8), code: 'member_joined', memberId: m.id, entryIds: [], createdAt: new Date().toISOString() });
       seen.chronicle[c.id] = seen.bible[c.id] = new Date().toISOString();
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
   }),
 
   http.get(`${B}/campaigns/:id`, ({ params }) => {
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
   }),
 
   // ---------------- Charaktere (0.4.7)
@@ -859,6 +859,7 @@ export const handlers = [
     const list = body.entries ?? [];
     if (list.length === 0) return err(400, 'invalid_input', 'Keine Einträge.');
     if (list.length > 100) return err(400, 'world_too_many', 'Höchstens 100 Einträge auf einmal.');
+    if (list.some((w) => (w.relation ?? '').length > 120)) return err(400, 'invalid_input', 'Die Beziehung ist zu lang (höchstens 120 Zeichen).');
     const mine = (world[m.id] ??= {});
     const others = c.members.filter((x) => x.id !== m.id && !x.leftAt && !x.deletedAt && x.role === 'player').map((x) => x.id);
     const out: WorldEntryStatus[] = [];
@@ -873,7 +874,7 @@ export const handlers = [
         id: 'cp-' + crypto.randomUUID().slice(0, 8), sessionId: null, documentId: null, source: 'character',
         originCharacterId: m.characterId, originEntryId: w.id, submittedByMemberId: m.id,
         entryType: w.type, action: known?.entryId ? 'update' : 'create', targetEntryId: known?.entryId ?? null,
-        title: w.name, detail: w.summary, gmNotes: null, suggestedVisibility: 'public',
+        title: w.name, detail: w.summary, relation: w.relation?.trim() || null, gmNotes: null, suggestedVisibility: 'public',
         hiddenFromMemberIds: w.secret ? others : [], confidence: 1, flags: [], evidence: [], decision: 'open'
       };
       proposals.push(p);
@@ -1010,7 +1011,7 @@ export const handlers = [
       c.coverPreset = body.coverPreset;
       delete coverImages[c.id]; // Motiv gewählt: eigenes Bild entfällt
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, hotwords: c.hotwords ?? [], members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, hotwords: c.hotwords ?? [], members: membersFor(c) });
   }),
 
   http.patch(`${B}/campaigns/:id/members/:mid`, async ({ params, request }) => {
@@ -1492,7 +1493,7 @@ export const handlers = [
     if (data.byteLength > 5 * 1024 * 1024) return err(413, 'image_too_large', 'Das Bild ist zu groß (höchstens 5 MB).');
     coverImages[c.id] = { data, type, updatedAt: new Date().toISOString() };
     c.coverPreset = null;
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
   }),
 
   http.delete(`${B}/campaigns/:id/cover-image`, ({ params }) => {

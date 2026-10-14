@@ -4,7 +4,7 @@
  */
 import { t } from '../i18n';
 import { apiFor, isApiError } from '../api/client';
-import { getConnection, versionLess, type Connection } from '../api/connections';
+import { apiAtLeast, getConnection, versionLess, type Connection } from '../api/connections';
 import type { Member } from '../api/types';
 import {
   accountKey, addOwners, allStoredCharacters, getCharacter, myAccountKeys, portraitToBlob, removeLink, saveChronicle, saveLink, setVersion, toServerCharacter,
@@ -62,7 +62,9 @@ export async function pushToCampaign(characterId: string, target: { connId: stri
   const submitted = { ...(old?.submitted ?? {}) };
   let world = old?.world;
   if (c.world.length) {
-    await api.submitWorld(target.campaignId, c.world);
+    // Beziehung erst ab Schnittstelle 0.4.19 mitschicken – ältere Server kennen das Feld nicht
+    const withRelation = apiAtLeast('0.4.19', conn);
+    await api.submitWorld(target.campaignId, c.world.map(({ relation, ...w }) => (withRelation && relation?.trim() ? { ...w, relation: relation.trim() } : w)));
     for (const w of c.world) submitted[w.id] = w.version;
     // Die Antwort meldet Bekanntes als „unchanged“ – der echte Stand kommt aus der Liste
     world = (await api.myWorld(target.campaignId)).entries;

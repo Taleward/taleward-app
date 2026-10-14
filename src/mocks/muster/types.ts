@@ -105,6 +105,8 @@ export interface MusterWorldItem {
   name: string;
   summary: string;
   secret: boolean;
+  /** Wie der Eintrag zum Charakter steht (ab 0.4.19) */
+  relation?: string;
   /** pending = Vorschlag offen, accepted = als Bibeleintrag übernommen (Schlüssel) */
   state: 'pending' | 'accepted';
   entry?: string;

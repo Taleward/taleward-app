@@ -31,3 +31,13 @@ test('fremde Welt-Einträge fallen weg', () => {
   const c = sanitizeCharacter({ ...ok, world: [{ ...ok.world[0], type: 'pc' }, { ...ok.world[0], id: 'x y' }] });
   assert.deepEqual(c.world, []);
 });
+
+test('Beziehung zum Charakter (0.4.19): kurzer Text bleibt, zu lang oder kein Text fällt weg', () => {
+  const c = sanitizeCharacter({ ...ok, world: [
+    { ...ok.world[0], relation: 'Bruder von Litha' },
+    { ...ok.world[0], id: 'w2', relation: null },
+    { ...ok.world[0], id: 'w3', relation: 'x'.repeat(121) },
+    { ...ok.world[0], id: 'w4', relation: 42 }
+  ] });
+  assert.deepEqual(c.world.map((w) => w.id), ['w1', 'w2']);
+});

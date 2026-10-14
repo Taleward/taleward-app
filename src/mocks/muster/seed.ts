@@ -234,7 +234,7 @@ export function seedMuster(lang: Lang): void {
       proposals.push({
         id: pid, sessionId: null, documentId: null, source: 'character', originCharacterId: chr(c.key), originEntryId: chr(w.key),
         submittedByMemberId: m(who), entryType: w.type, action: 'create', targetEntryId: accepted ? e(w.entry!) : null, title: w.name,
-        detail: w.summary, gmNotes: null, suggestedVisibility: 'public', hiddenFromMemberIds: hidden(w.hiddenFrom), confidence: 1, flags: [],
+        detail: w.summary, relation: w.relation ?? null, gmNotes: null, suggestedVisibility: 'public', hiddenFromMemberIds: hidden(w.hiddenFrom), confidence: 1, flags: [],
         evidence: [], decision: accepted ? 'accepted' : 'open'
       } as Proposal);
       world[m(who)][chr(w.key)] = { id: chr(w.key), version: 1, proposalId: pid, entryId: accepted ? e(w.entry!) : null, serverVersion: accepted ? 1 : null };
@@ -265,7 +265,7 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
       id: chr(c.key), version: 2, name: c.name, nickname: c.nickname ?? null, summary: c.summary, backstory: c.backstory || null,
       system: c.system ?? null, status: c.status, statusChangedAt: c.status === 'active' ? null : created, notes: c.notes,
       portrait: emblemDataUrl(c.emblem), portraitMeta: null, portraitChangedAt: created,
-      world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret })),
+      world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret, relation: w.relation ?? null })),
       links: c.inCampaign ? [{
         connId, serverName, campaignId: cid, campaignTitle: x.title, memberId: musterMember(lang, who), linkedAt: at(`${JOINED[who]}T18:00:00Z`),
         syncedVersion: 2, portraitSynced: created, submitted: Object.fromEntries(c.world.map((w) => [chr(w.key), 1])),

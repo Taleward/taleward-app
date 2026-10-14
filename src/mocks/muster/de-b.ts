@@ -241,8 +241,8 @@ Kapitel 9: Sefa am Hungerstein. Kapitel 10: die Treppe hinter dem Lesesaal.`,
 Das Turmzeichen auf dem Salzsack im Brunnen. Dasselbe wie auf Mutters alten Karten.
 Brann schuldet mir noch einen Aal.`,
         world: [
-          { key: 'brann', type: 'npc', name: `Onkel Brann`, summary: `Fischer in Grauwehr, Maras Onkel. Kennt jeden Pfad durchs Schilf und jeden Aal beim Vornamen.`, secret: false, state: 'pending' },
-          { key: 'kompass', type: 'item', name: `Kompass der Mutter`, summary: `Messingkompass von Maras Mutter. Seine Nadel zeigt nicht nach Norden, sondern immer zum Archiv von Hohenwacht.`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
+          { key: 'brann', type: 'npc', name: `Onkel Brann`, summary: `Fischer in Grauwehr, Maras Onkel. Kennt jeden Pfad durchs Schilf und jeden Aal beim Vornamen.`, relation: `Onkel mütterlicherseits`, secret: false, state: 'pending' },
+          { key: 'kompass', type: 'item', name: `Kompass der Mutter`, summary: `Messingkompass von Maras Mutter. Seine Nadel zeigt nicht nach Norden, sondern immer zum Archiv von Hohenwacht.`, relation: `Erbstück der Mutter`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
           { key: 'schilf', type: 'faction', name: `Die Schilfgänger`, summary: `Kundschafter des Senkmoors, die sichere Wege mit geknoteten Halmen markieren. Mara war zwei Jahre bei ihnen.`, secret: false, state: 'accepted', entry: 'schilfgaenger' },
         ] },
       { key: 'ilsa', name: `Ilsa Dorn`, nickname: `Distel`, system: `Kesselrunde`, status: 'active',
@@ -251,7 +251,7 @@ Brann schuldet mir noch einen Aal.`,
         emblem: { shape: 'mortar', color: '#6f8a6a' },
         notes: `Mondkraut nur bei Neumond schneiden.
 Der Händler mit dem Hut schuldet mir zwei Silber.`,
-        world: [{ key: 'garten', type: 'location', name: `Der Garten der Witwe Moll`, summary: `Ummauerter Kräutergarten, in dem Ilsa ihr Handwerk lernte.`, secret: false, state: 'pending' }] },
+        world: [{ key: 'garten', type: 'location', name: `Der Garten der Witwe Moll`, summary: `Ummauerter Kräutergarten, in dem Ilsa ihr Handwerk lernte.`, relation: `wo sie ihr Handwerk lernte`, secret: false, state: 'pending' }] },
       { key: 'edda', name: `Edda Krumm`, status: 'retired',
         summary: `Ehemalige Köchin einer Söldnertruppe, die jetzt ihr eigenes Gasthaus führt und keine Schlägerei mehr in ihrer Küche duldet.`,
         backstory: `Zwölf Jahre kochte Edda für die Rote Schar, auf Feldzügen, in Belagerungen und einmal drei Wochen auf einem Floß. Von ihrem Anteil kaufte sie ein Gasthaus an einer Kreuzung. Die alten Kameraden kommen manchmal vorbei und zahlen meistens.`,
@@ -260,7 +260,7 @@ Der Händler mit dem Hut schuldet mir zwei Silber.`,
 Nie wieder Floß.`,
         world: [
           { key: 'loeffel', type: 'location', name: `Zum krummen Löffel`, summary: `Eddas Gasthaus an der Kreuzung.`, secret: false, state: 'pending' },
-          { key: 'schar', type: 'faction', name: `Die Rote Schar`, summary: `Söldnertruppe, für die Edda kochte.`, secret: false, state: 'pending' },
+          { key: 'schar', type: 'faction', name: `Die Rote Schar`, summary: `Söldnertruppe, für die Edda kochte.`, relation: `alte Kameraden`, secret: false, state: 'pending' },
         ] },
     ],
     tom: [
@@ -271,7 +271,7 @@ Nie wieder Floß.`,
 Aldos Schrift: das d mit dem Haken.
 Klopfen unter den Planken, dreimal. Fisch? Kein Fisch.
 Berit wegen des Zollbuchs noch mal fragen.`,
-        world: [{ key: 'aldo', type: 'npc', name: `Meister Aldo Fenn`, summary: `Schreibmeister im Archiv von Hohenwacht und Tavins Lehrmeister. Seit dem Frühjahr verschwunden.`, secret: false, state: 'pending' }] },
+        world: [{ key: 'aldo', type: 'npc', name: `Meister Aldo Fenn`, summary: `Schreibmeister im Archiv von Hohenwacht und Tavins Lehrmeister. Seit dem Frühjahr verschwunden.`, relation: `Lehrmeister`, secret: false, state: 'pending' }] },
       { key: 'fenna', name: `Fenna Graufell`, system: `Wegwarten`, status: 'active',
         summary: `Grenzwächterin, die lieber Fragen stellt als Befehle befolgt.`,
         backstory: `Fenna hielt sechs Jahre Wache an einem Pass, über den kaum jemand kam. Als ihr Hauptmann befahl, eine Familie ohne Papiere in den Schnee zurückzuschicken, fragte sie nach dem Grund. Seitdem ist sie nicht mehr am Pass, aber immer noch Grenzwächterin, nur woanders.`,
@@ -279,7 +279,7 @@ Berit wegen des Zollbuchs noch mal fragen.`,
         notes: `Hauptmann Sterk nie wieder den Rücken zudrehen.
 Der Hund am Pass hieß Knopf.`,
         world: [
-          { key: 'sterk', type: 'npc', name: `Hauptmann Ivo Sterk`, summary: `Fennas früherer Vorgesetzter, streng und nachtragend.`, secret: false, state: 'pending' },
+          { key: 'sterk', type: 'npc', name: `Hauptmann Ivo Sterk`, summary: `Fennas früherer Vorgesetzter, streng und nachtragend.`, relation: `früherer Vorgesetzter`, secret: false, state: 'pending' },
           { key: 'fuchspass', type: 'location', name: `Der Grenzposten am Fuchspass`, summary: `Einsamer Wachposten im Gebirge.`, secret: false, state: 'pending' },
         ] },
     ],

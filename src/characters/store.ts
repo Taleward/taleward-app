@@ -176,7 +176,8 @@ export function saveWorldItem(characterId: string, item: Omit<WorldItem, 'id' | 
   const c = getCharacter(characterId);
   if (!c) throw new Error(t('Charakter nicht gefunden.'));
   const old = item.id ? c.world.find((w) => w.id === item.id) : undefined;
-  const changed = !old || old.name !== item.name || old.summary !== item.summary || old.type !== item.type || old.secret !== item.secret;
+  const changed = !old || old.name !== item.name || old.summary !== item.summary || old.type !== item.type || old.secret !== item.secret
+    || (old.relation ?? '') !== (item.relation ?? '');
   const next: WorldItem = { ...item, id: old?.id ?? newId(), version: old ? old.version + (changed ? 1 : 0) : 1 } as WorldItem;
   const world = old ? c.world.map((w) => (w.id === old.id ? next : w)) : [...c.world, next];
   return updateCharacter(characterId, { world });

@@ -103,6 +103,8 @@ export interface WorldEntryIn {
   name: string;
   summary: string;
   secret: boolean;
+  /** Wie der Eintrag zum Charakter steht, z. B. „Schwester von Litha“ – nur Anzeige (ab 0.4.19) */
+  relation?: string | null;
 }
 
 export interface WorldEntryStatus {
@@ -207,6 +209,8 @@ export interface Campaign extends CampaignSummary {
   allowCloudSummary?: boolean;
   /** Dürfen Mitglieder Charakterbogen und Hintergrund auswerten lassen? Nur SL ändert, alle sehen es (ab 0.4.18) */
   allowCharacterAnalysis?: boolean;
+  /** Geltende Grenzen für Charakterbögen (ab 0.4.19); fehlt = 3 Bögen, 20 Seiten, aber ohne Zahlen anzeigen */
+  characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
   /** Sprache der Runde: Transkription, Recaps, Vorschläge (ab 0.3.2) */
   language?: 'de' | 'en';
   /** Hintergrund der Spielwelt für alle Mitspielenden (ab Schnittstelle 0.3.2) */
@@ -305,6 +309,8 @@ export interface Proposal {
   submittedByMemberId?: string | null;
   /** Aus welcher Auswertung von Bogen oder Hintergrund (ab 0.4.18); null = mitgebrachte Welt */
   analysisId?: string | null;
+  /** Bei mitgebrachter Welt: wie der Eintrag zum Charakter steht (ab 0.4.19) */
+  relation?: string | null;
   entryType: EntryType;
   /** create = neuer Eintrag, update = ergänzt, reveal = geheimer Eintrag ist am Tisch bekannt geworden (ab 0.3.5) */
   action: 'create' | 'update' | 'reveal';
