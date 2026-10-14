@@ -1,0 +1,288 @@
+From 4b0819d038d201da8540897b2156110f90080252 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 07:28:47 +0200
+Subject: [PATCH 108/111] =?UTF-8?q?Schnittstelle=200.4.19:=20Beziehung=20b?=
+ =?UTF-8?q?ei=20der=20mitgebrachten=20Welt,=20Grenzen=20f=C3=BCr=20Charakt?=
+ =?UTF-8?q?erb=C3=B6gen?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ docs/session-chronik-api.yaml             | 30 ++++++++++++++++++++++-
+ scripts/tests/character-sanitize.test.mjs | 10 ++++++++
+ src/api/musterRuntime.ts                  |  2 +-
+ src/api/types.ts                          |  6 +++++
+ src/characters/sanitize.ts                |  3 ++-
+ src/characters/store.ts                   |  3 ++-
+ src/characters/sync.ts                    |  6 +++--
+ src/mocks/handlers.ts                     | 17 +++++++------
+ src/mocks/muster/de-b.ts                  | 12 ++++-----
+ src/mocks/muster/en-b.ts                  | 12 ++++-----
+ src/mocks/muster/seed.ts                  |  4 +--
+ src/mocks/muster/types.ts                 |  2 ++
+ 12 files changed, 79 insertions(+), 28 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 1040d04..e04f0d5 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -3,3 +3,3 @@ info:
+   title: Taleward API
+-  version: 0.4.18
++  version: 0.4.19
+   description: |
+@@ -199,2 +199,8 @@ info:
+     ausgewertet werden höchstens 20 Seiten.
++    Änderungen in 0.4.19 (Beziehung bei der mitgebrachten Welt): WorldEntryIn.relation – wie der Eintrag zum Charakter
++    steht („Schwester von Litha“, „alter Lehrmeister“), optional, nur Anzeige. Der Server übernimmt es unverändert in
++    Proposal.relation; in Bibeleinträge geht es nicht von selbst (die SL kann es in den Text übernehmen). Die App schickt
++    das Feld erst an Server ab 0.4.19; ältere Apps lassen es weg. Außerdem Campaign.characterSheetLimits – die geltenden
++    Grenzen für Charakterbögen (Bögen je Mitglied, ausgewertete Seiten), damit die App keine festen Zahlen nennt; 409
++    `sheet_limit` richtet sich nach maxSheets.
+ 
+@@ -3480,2 +3486,13 @@ components:
+                 älteren Servern (= aus).
++            characterSheetLimits:
++              type: [object, "null"]
++              description: |
++                Ab 0.4.19, für alle Mitglieder: die Grenzen, die für Charakterbögen in dieser Kampagne gelten (Quelle der
++                Wahrheit ist der Server, z. B. von der SL auf der Seite Guthaben eingestellt). maxSheets = Bögen je
++                Mitglied (0 = keine Abgabe), maxPages = ausgewertete Seiten je Bogen. Fehlt das Feld (ältere Server),
++                gelten 3 Bögen und 20 Seiten wie in 0.4.18; die App nennt dann keine Zahlen.
++              required: [maxSheets, maxPages]
++              properties:
++                maxSheets: { type: integer, minimum: 0, maximum: 50 }
++                maxPages: { type: integer, minimum: 1 }
+             allowExternalTranscription:
+@@ -3630,2 +3647,7 @@ components:
+             null = aus der mitgebrachten Welt.
++        relation:
++          type: [string, "null"]
++          description: |
++            Ab 0.4.19, nur bei source character aus der mitgebrachten Welt: WorldEntryIn.relation unverändert, sonst null.
++            Sichtbar wie der Vorschlag selbst (SL); geht nicht von selbst in den Eintrag.
+         entryType: { $ref: "#/components/schemas/EntryType" }
+@@ -3946,2 +3968,8 @@ components:
+         secret: { type: boolean, description: "Nur SL und Urheberin sollen es wissen" }
++        relation:
++          type: [string, "null"]
++          maxLength: 120
++          description: |
++            Ab 0.4.19, optional: wie der Eintrag zum Charakter steht, z. B. „Schwester von Litha“. Nur Anzeige. Leer oder
++            nur Leerzeichen = null. Eine Änderung zählt wie jede andere Änderung (version steigt, Vorschlag update).
+ 
+diff --git a/scripts/tests/character-sanitize.test.mjs b/scripts/tests/character-sanitize.test.mjs
+index 47f2cd4..efefd3b 100644
+--- a/scripts/tests/character-sanitize.test.mjs
++++ b/scripts/tests/character-sanitize.test.mjs
+@@ -33 +33,11 @@ test('fremde Welt-Einträge fallen weg', () => {
+ });
++
++test('Beziehung zum Charakter (0.4.19): kurzer Text bleibt, zu lang oder kein Text fällt weg', () => {
++  const c = sanitizeCharacter({ ...ok, world: [
++    { ...ok.world[0], relation: 'Bruder von Litha' },
++    { ...ok.world[0], id: 'w2', relation: null },
++    { ...ok.world[0], id: 'w3', relation: 'x'.repeat(121) },
++    { ...ok.world[0], id: 'w4', relation: 42 }
++  ] });
++  assert.deepEqual(c.world.map((w) => w.id), ['w1', 'w2']);
++});
+diff --git a/src/api/musterRuntime.ts b/src/api/musterRuntime.ts
+index ed07bbd..bcb69ef 100644
+--- a/src/api/musterRuntime.ts
++++ b/src/api/musterRuntime.ts
+@@ -50,3 +50,3 @@ export async function startMuster(role: MusterRole): Promise<Connection> {
+   await install(lang);
+-  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.18', token: null, expiresAt: null, user: null });
++  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.19', token: null, expiresAt: null, user: null });
+   const res = await apiFor(probe).login(role, 'muster');
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 4b37bd2..e2a2b7a 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -105,2 +105,4 @@ export interface WorldEntryIn {
+   secret: boolean;
++  /** Wie der Eintrag zum Charakter steht, z. B. „Schwester von Litha“ – nur Anzeige (ab 0.4.19) */
++  relation?: string | null;
+ }
+@@ -209,2 +211,4 @@ export interface Campaign extends CampaignSummary {
+   allowCharacterAnalysis?: boolean;
++  /** Geltende Grenzen für Charakterbögen (ab 0.4.19); fehlt = 3 Bögen, 20 Seiten, aber ohne Zahlen anzeigen */
++  characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
+   /** Sprache der Runde: Transkription, Recaps, Vorschläge (ab 0.3.2) */
+@@ -307,2 +311,4 @@ export interface Proposal {
+   analysisId?: string | null;
++  /** Bei mitgebrachter Welt: wie der Eintrag zum Charakter steht (ab 0.4.19) */
++  relation?: string | null;
+   entryType: EntryType;
+diff --git a/src/characters/sanitize.ts b/src/characters/sanitize.ts
+index 49b2c8f..21b70af 100644
+--- a/src/characters/sanitize.ts
++++ b/src/characters/sanitize.ts
+@@ -20,3 +20,4 @@ export function sanitizeCharacter(raw: unknown): StoredCharacter | null {
+   const world = x.world.filter((w): w is StoredCharacter['world'][number] => obj(w) && ID.test(String(w.id))
+-    && Number.isInteger(w.version) && WORLD_TYPES.includes(String(w.type)) && text(w.name, 200) && text(w.summary, 20_000) && typeof w.secret === 'boolean');
++    && Number.isInteger(w.version) && WORLD_TYPES.includes(String(w.type)) && text(w.name, 200) && text(w.summary, 20_000) && typeof w.secret === 'boolean'
++    && (w.relation === undefined || w.relation === null || text(w.relation, 120)));
+   const links = x.links.filter((l): l is StoredCharacter['links'][number] => obj(l) && text(l.connId, 100)
+diff --git a/src/characters/store.ts b/src/characters/store.ts
+index cb2b935..1a3a5e8 100644
+--- a/src/characters/store.ts
++++ b/src/characters/store.ts
+@@ -178,3 +178,4 @@ export function saveWorldItem(characterId: string, item: Omit<WorldItem, 'id' |
+   const old = item.id ? c.world.find((w) => w.id === item.id) : undefined;
+-  const changed = !old || old.name !== item.name || old.summary !== item.summary || old.type !== item.type || old.secret !== item.secret;
++  const changed = !old || old.name !== item.name || old.summary !== item.summary || old.type !== item.type || old.secret !== item.secret
++    || (old.relation ?? '') !== (item.relation ?? '');
+   const next: WorldItem = { ...item, id: old?.id ?? newId(), version: old ? old.version + (changed ? 1 : 0) : 1 } as WorldItem;
+diff --git a/src/characters/sync.ts b/src/characters/sync.ts
+index e1d4e4e..c0467fe 100644
+--- a/src/characters/sync.ts
++++ b/src/characters/sync.ts
+@@ -6,3 +6,3 @@ import { t } from '../i18n';
+ import { apiFor, isApiError } from '../api/client';
+-import { getConnection, versionLess, type Connection } from '../api/connections';
++import { apiAtLeast, getConnection, versionLess, type Connection } from '../api/connections';
+ import type { Member } from '../api/types';
+@@ -64,3 +64,5 @@ export async function pushToCampaign(characterId: string, target: { connId: stri
+   if (c.world.length) {
+-    await api.submitWorld(target.campaignId, c.world);
++    // Beziehung erst ab Schnittstelle 0.4.19 mitschicken – ältere Server kennen das Feld nicht
++    const withRelation = apiAtLeast('0.4.19', conn);
++    await api.submitWorld(target.campaignId, c.world.map(({ relation, ...w }) => (withRelation && relation?.trim() ? { ...w, relation: relation.trim() } : w)));
+     for (const w of c.world) submitted[w.id] = w.version;
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index f4d0a29..69e9152 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -541,3 +541,3 @@ export const handlers = [
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.18', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.19', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+@@ -551,3 +551,3 @@ export const handlers = [
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.17',
++      apiVersion: nachbar ? '0.3.9' : '0.4.19',
+       serverId: nachbar ? undefined : 'testserver',
+@@ -773,3 +773,3 @@ export const handlers = [
+     campaigns.push(c);
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) }, { status: 201 });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) }, { status: 201 });
+   }),
+@@ -809,3 +809,3 @@ export const handlers = [
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
+   }),
+@@ -815,3 +815,3 @@ export const handlers = [
+     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+   }),
+@@ -861,2 +861,3 @@ export const handlers = [
+     if (list.length > 100) return err(400, 'world_too_many', 'Höchstens 100 Einträge auf einmal.');
++    if (list.some((w) => (w.relation ?? '').length > 120)) return err(400, 'invalid_input', 'Die Beziehung ist zu lang (höchstens 120 Zeichen).');
+     const mine = (world[m.id] ??= {});
+@@ -875,3 +876,3 @@ export const handlers = [
+         entryType: w.type, action: known?.entryId ? 'update' : 'create', targetEntryId: known?.entryId ?? null,
+-        title: w.name, detail: w.summary, gmNotes: null, suggestedVisibility: 'public',
++        title: w.name, detail: w.summary, relation: w.relation?.trim() || null, gmNotes: null, suggestedVisibility: 'public',
+         hiddenFromMemberIds: w.secret ? others : [], confidence: 1, flags: [], evidence: [], decision: 'open'
+@@ -1012,3 +1013,3 @@ export const handlers = [
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, hotwords: c.hotwords ?? [], members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, hotwords: c.hotwords ?? [], members: membersFor(c) });
+   }),
+@@ -1494,3 +1495,3 @@ export const handlers = [
+     c.coverPreset = null;
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
+   }),
+diff --git a/src/mocks/muster/de-b.ts b/src/mocks/muster/de-b.ts
+index 0171a1a..d1339a6 100644
+--- a/src/mocks/muster/de-b.ts
++++ b/src/mocks/muster/de-b.ts
+@@ -243,4 +243,4 @@ Brann schuldet mir noch einen Aal.`,
+         world: [
+-          { key: 'brann', type: 'npc', name: `Onkel Brann`, summary: `Fischer in Grauwehr, Maras Onkel. Kennt jeden Pfad durchs Schilf und jeden Aal beim Vornamen.`, secret: false, state: 'pending' },
+-          { key: 'kompass', type: 'item', name: `Kompass der Mutter`, summary: `Messingkompass von Maras Mutter. Seine Nadel zeigt nicht nach Norden, sondern immer zum Archiv von Hohenwacht.`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
++          { key: 'brann', type: 'npc', name: `Onkel Brann`, summary: `Fischer in Grauwehr, Maras Onkel. Kennt jeden Pfad durchs Schilf und jeden Aal beim Vornamen.`, relation: `Onkel mütterlicherseits`, secret: false, state: 'pending' },
++          { key: 'kompass', type: 'item', name: `Kompass der Mutter`, summary: `Messingkompass von Maras Mutter. Seine Nadel zeigt nicht nach Norden, sondern immer zum Archiv von Hohenwacht.`, relation: `Erbstück der Mutter`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
+           { key: 'schilf', type: 'faction', name: `Die Schilfgänger`, summary: `Kundschafter des Senkmoors, die sichere Wege mit geknoteten Halmen markieren. Mara war zwei Jahre bei ihnen.`, secret: false, state: 'accepted', entry: 'schilfgaenger' },
+@@ -253,3 +253,3 @@ Brann schuldet mir noch einen Aal.`,
+ Der Händler mit dem Hut schuldet mir zwei Silber.`,
+-        world: [{ key: 'garten', type: 'location', name: `Der Garten der Witwe Moll`, summary: `Ummauerter Kräutergarten, in dem Ilsa ihr Handwerk lernte.`, secret: false, state: 'pending' }] },
++        world: [{ key: 'garten', type: 'location', name: `Der Garten der Witwe Moll`, summary: `Ummauerter Kräutergarten, in dem Ilsa ihr Handwerk lernte.`, relation: `wo sie ihr Handwerk lernte`, secret: false, state: 'pending' }] },
+       { key: 'edda', name: `Edda Krumm`, status: 'retired',
+@@ -262,3 +262,3 @@ Nie wieder Floß.`,
+           { key: 'loeffel', type: 'location', name: `Zum krummen Löffel`, summary: `Eddas Gasthaus an der Kreuzung.`, secret: false, state: 'pending' },
+-          { key: 'schar', type: 'faction', name: `Die Rote Schar`, summary: `Söldnertruppe, für die Edda kochte.`, secret: false, state: 'pending' },
++          { key: 'schar', type: 'faction', name: `Die Rote Schar`, summary: `Söldnertruppe, für die Edda kochte.`, relation: `alte Kameraden`, secret: false, state: 'pending' },
+         ] },
+@@ -273,3 +273,3 @@ Klopfen unter den Planken, dreimal. Fisch? Kein Fisch.
+ Berit wegen des Zollbuchs noch mal fragen.`,
+-        world: [{ key: 'aldo', type: 'npc', name: `Meister Aldo Fenn`, summary: `Schreibmeister im Archiv von Hohenwacht und Tavins Lehrmeister. Seit dem Frühjahr verschwunden.`, secret: false, state: 'pending' }] },
++        world: [{ key: 'aldo', type: 'npc', name: `Meister Aldo Fenn`, summary: `Schreibmeister im Archiv von Hohenwacht und Tavins Lehrmeister. Seit dem Frühjahr verschwunden.`, relation: `Lehrmeister`, secret: false, state: 'pending' }] },
+       { key: 'fenna', name: `Fenna Graufell`, system: `Wegwarten`, status: 'active',
+@@ -281,3 +281,3 @@ Der Hund am Pass hieß Knopf.`,
+         world: [
+-          { key: 'sterk', type: 'npc', name: `Hauptmann Ivo Sterk`, summary: `Fennas früherer Vorgesetzter, streng und nachtragend.`, secret: false, state: 'pending' },
++          { key: 'sterk', type: 'npc', name: `Hauptmann Ivo Sterk`, summary: `Fennas früherer Vorgesetzter, streng und nachtragend.`, relation: `früherer Vorgesetzter`, secret: false, state: 'pending' },
+           { key: 'fuchspass', type: 'location', name: `Der Grenzposten am Fuchspass`, summary: `Einsamer Wachposten im Gebirge.`, secret: false, state: 'pending' },
+diff --git a/src/mocks/muster/en-b.ts b/src/mocks/muster/en-b.ts
+index 16235e0..11e0f77 100644
+--- a/src/mocks/muster/en-b.ts
++++ b/src/mocks/muster/en-b.ts
+@@ -243,4 +243,4 @@ Brann still owes me an eel.`,
+         world: [
+-          { key: 'brann', type: 'npc', name: `Uncle Brann`, summary: `Fisherman in Grauwehr, Mara's uncle. Knows every path through the reeds and every eel by its first name.`, secret: false, state: 'pending' },
+-          { key: 'kompass', type: 'item', name: `Mother's compass`, summary: `Brass compass that belonged to Mara's mother. Its needle does not point north but always towards the archive of Hohenwacht.`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
++          { key: 'brann', type: 'npc', name: `Uncle Brann`, summary: `Fisherman in Grauwehr, Mara's uncle. Knows every path through the reeds and every eel by its first name.`, relation: `uncle on her mother's side`, secret: false, state: 'pending' },
++          { key: 'kompass', type: 'item', name: `Mother's compass`, summary: `Brass compass that belonged to Mara's mother. Its needle does not point north but always towards the archive of Hohenwacht.`, relation: `heirloom from her mother`, secret: true, state: 'pending', hiddenFrom: ['tom', 'sina'] },
+           { key: 'schilf', type: 'faction', name: `The Reedwalkers`, summary: `Scouts of the Senkmoor who mark safe paths with knotted reeds. Mara spent two years with them.`, secret: false, state: 'accepted', entry: 'schilfgaenger' },
+@@ -253,3 +253,3 @@ Brann still owes me an eel.`,
+ The merchant with the hat owes me two silver.`,
+-        world: [{ key: 'garten', type: 'location', name: `Widow Moll's garden`, summary: `Walled herb garden where Ilsa learned her craft.`, secret: false, state: 'pending' }] },
++        world: [{ key: 'garten', type: 'location', name: `Widow Moll's garden`, summary: `Walled herb garden where Ilsa learned her craft.`, relation: `where she learned her craft`, secret: false, state: 'pending' }] },
+       { key: 'edda', name: `Edda Krumm`, status: 'retired',
+@@ -262,3 +262,3 @@ Never again a raft.`,
+           { key: 'loeffel', type: 'location', name: `The Crooked Spoon`, summary: `Edda's inn at the crossroads.`, secret: false, state: 'pending' },
+-          { key: 'schar', type: 'faction', name: `The Red Company`, summary: `Mercenary company Edda cooked for.`, secret: false, state: 'pending' },
++          { key: 'schar', type: 'faction', name: `The Red Company`, summary: `Mercenary company Edda cooked for.`, relation: `old comrades`, secret: false, state: 'pending' },
+         ] },
+@@ -273,3 +273,3 @@ Knocking under the planks, three times. Fish? Not a fish.
+ Ask Berit about the toll book again.`,
+-        world: [{ key: 'aldo', type: 'npc', name: `Master Aldo Fenn`, summary: `Master scribe at the archive of Hohenwacht and Tavin's teacher. Missing since the spring.`, secret: false, state: 'pending' }] },
++        world: [{ key: 'aldo', type: 'npc', name: `Master Aldo Fenn`, summary: `Master scribe at the archive of Hohenwacht and Tavin's teacher. Missing since the spring.`, relation: `former teacher`, secret: false, state: 'pending' }] },
+       { key: 'fenna', name: `Fenna Graufell`, system: `Wegwarten`, status: 'active',
+@@ -281,3 +281,3 @@ The dog at the pass was called Button.`,
+         world: [
+-          { key: 'sterk', type: 'npc', name: `Captain Ivo Sterk`, summary: `Fenna's former superior, strict and unforgiving.`, secret: false, state: 'pending' },
++          { key: 'sterk', type: 'npc', name: `Captain Ivo Sterk`, summary: `Fenna's former superior, strict and unforgiving.`, relation: `former superior`, secret: false, state: 'pending' },
+           { key: 'fuchspass', type: 'location', name: `The border post at Fox Pass`, summary: `Lonely guard post in the mountains.`, secret: false, state: 'pending' },
+diff --git a/src/mocks/muster/seed.ts b/src/mocks/muster/seed.ts
+index 09345b3..7102ec6 100644
+--- a/src/mocks/muster/seed.ts
++++ b/src/mocks/muster/seed.ts
+@@ -236,3 +236,3 @@ export function seedMuster(lang: Lang): void {
+         submittedByMemberId: m(who), entryType: w.type, action: 'create', targetEntryId: accepted ? e(w.entry!) : null, title: w.name,
+-        detail: w.summary, gmNotes: null, suggestedVisibility: 'public', hiddenFromMemberIds: hidden(w.hiddenFrom), confidence: 1, flags: [],
++        detail: w.summary, relation: w.relation ?? null, gmNotes: null, suggestedVisibility: 'public', hiddenFromMemberIds: hidden(w.hiddenFrom), confidence: 1, flags: [],
+         evidence: [], decision: accepted ? 'accepted' : 'open'
+@@ -267,3 +267,3 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
+       portrait: emblemDataUrl(c.emblem), portraitMeta: null, portraitChangedAt: created,
+-      world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret })),
++      world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret, relation: w.relation ?? null })),
+       links: c.inCampaign ? [{
+diff --git a/src/mocks/muster/types.ts b/src/mocks/muster/types.ts
+index fb53a30..d58b8eb 100644
+--- a/src/mocks/muster/types.ts
++++ b/src/mocks/muster/types.ts
+@@ -107,2 +107,4 @@ export interface MusterWorldItem {
+   secret: boolean;
++  /** Wie der Eintrag zum Charakter steht (ab 0.4.19) */
++  relation?: string;
+   /** pending = Vorschlag offen, accepted = als Bibeleintrag übernommen (Schlüssel) */
