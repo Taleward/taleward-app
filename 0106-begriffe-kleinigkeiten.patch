@@ -354,6 +354,6 @@ index 93eff4e..cf5624b 100644
                  {tn(waiting, '{n} mitgebrachter Eintrag wartet auf dich', '{n} mitgebrachte Einträge warten auf dich')}
 @@ -173,3 +173,3 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry }: {
        {waiting > 0 && (
--        <Link className="small tap-link" to={p(`/k/${campaign.id}/mitgebracht`)}>
+-        <Link className="small" to={p(`/k/${campaign.id}/mitgebracht`)}>
 +        <Link className="small tap-link" to={p(`/k/${campaign.id}/mitgebracht`)}>
            {tn(waiting, '{n} mitgebrachter Eintrag wartet auf dich', '{n} mitgebrachte Einträge warten auf dich')}
