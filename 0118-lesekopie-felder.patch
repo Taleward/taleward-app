@@ -1,0 +1,293 @@
+From dc050bcb364f9b30112b34dcb5d2e27b56719629 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 22:49:24 +0200
+Subject: [PATCH 118/120] =?UTF-8?q?Lesekopie:=20Felder=20je=20Platz,=20Kam?=
+ =?UTF-8?q?pagne=20je=20Eintrag,=20H=C3=B6chstalter?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/home-network.test.mjs |  2 +-
+ scripts/tests/read-copy.test.mjs    | 28 ++++++++++-
+ scripts/tests/safe-link.test.mjs    |  2 +-
+ src/api/client.ts                   | 33 +++++++++---
+ src/api/readCopy.ts                 | 78 ++++++++++++++++++++++++-----
+ src/api/readCopyRules.ts            | 28 +++++++++--
+ src/components/DataSummary.tsx      |  4 +-
+ 7 files changed, 147 insertions(+), 28 deletions(-)
+
+diff --git a/scripts/tests/home-network.test.mjs b/scripts/tests/home-network.test.mjs
+index 6c35d33..28f9dcf 100644
+--- a/scripts/tests/home-network.test.mjs
++++ b/scripts/tests/home-network.test.mjs
+@@ -1,2 +1,2 @@
+-// Unverschlüsselt nur im Heimnetz (Sicherheitspunkt A1) und Einladungscodes in beiden Formaten (A3).
++// Unverschlüsselt nur im Heimnetz und Einladungscodes in beiden Formaten.
+ import { test } from 'node:test';
+diff --git a/scripts/tests/read-copy.test.mjs b/scripts/tests/read-copy.test.mjs
+index 1b7ce89..881e1b0 100644
+--- a/scripts/tests/read-copy.test.mjs
++++ b/scripts/tests/read-copy.test.mjs
+@@ -3,3 +3,3 @@ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+-import { cleanForCopy, copyable } from '../../src/api/readCopyRules.ts';
++import { campaignOfPath, cleanForCopy, copyable, sessionOfPath } from '../../src/api/readCopyRules.ts';
+ 
+@@ -64 +64,27 @@ test('Kommentare: keine privaten Nachrichten', () => {
+ });
++
++test('fremde Plätze nur mit Feldern, die alle sehen; Charakter-Kennung nur am eigenen Platz', () => {
++  const c = cleanForCopy('/campaigns/c-1', {
++    id: 'c-1', myRole: 'gm', members: [
++      { id: 'm1', userId: 'u-sl', displayName: 'Anja', role: 'gm', characterId: 'ch-1', characterVersion: 3, recordingConsentAt: 'x', künftigesSlFeld: 'geheim' },
++      { id: 'm2', userId: '', displayName: 'Offen', role: 'player', openSeat: true, characterId: 'ch-2', characterVersion: 1, recordingConsentAt: 'y', characterSummary: 'kurz' }
++    ]
++  }, 'u-sl');
++  assert.equal(c.members[0].characterId, 'ch-1');
++  assert.equal(c.members[0].recordingConsentAt, 'x');
++  assert.equal(c.members[0].künftigesSlFeld, undefined);
++  assert.equal(c.members[1].characterId, undefined);
++  assert.equal(c.members[1].characterVersion, undefined);
++  assert.equal(c.members[1].recordingConsentAt, undefined);
++  assert.equal(c.members[1].characterSummary, 'kurz');
++  assert.equal(c.members[1].openSeat, true);
++});
++
++test('jede Kopie kennt ihre Kampagne', () => {
++  assert.equal(campaignOfPath('/campaigns/c-1', null), 'c-1');
++  assert.equal(campaignOfPath('/campaigns/c-1/entries?x=1', null), 'c-1');
++  assert.equal(campaignOfPath('/sessions/s-1', { campaignId: 'c-9' }), 'c-9');
++  assert.equal(campaignOfPath('/sessions/s-1/recap', {}), null);
++  assert.equal(sessionOfPath('/sessions/s-1/comments'), 's-1');
++  assert.equal(campaignOfPath('/campaigns', []), null);
++});
+diff --git a/scripts/tests/safe-link.test.mjs b/scripts/tests/safe-link.test.mjs
+index 45961d6..d8fac25 100644
+--- a/scripts/tests/safe-link.test.mjs
++++ b/scripts/tests/safe-link.test.mjs
+@@ -1,2 +1,2 @@
+-// Prüft, dass Adressen vom Server nur als http(s)-Link durchkommen (Sicherheitspunkt A6).
++// Prüft, dass Adressen vom Server nur als http(s)-Link durchkommen.
+ import { test } from 'node:test';
+diff --git a/src/api/client.ts b/src/api/client.ts
+index baa15d2..6edd5ee 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -3,6 +3,6 @@ import { isSafePath } from './pathGuard';
+ import { isMusterUrl } from './muster';
+-import { cleanForCopy, copyable } from './readCopyRules';
+-import { hasCopy, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, saveCopy } from './readCopy';
++import { campaignOfPath, cleanForCopy, copyable } from './readCopyRules';
++import { hasCopy, keepOnlyCampaigns, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, removeCopiesOfCampaign, saveCopy } from './readCopy';
+ import { getLang, t, tk } from '../i18n';
+-import { APP_VERSION, currentConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
++import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
+ import type { InvitePreview, CharacterAnalysis,
+@@ -109,2 +109,4 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+     ? conn.user.id : null;
++  // Nur speichern, solange dieselbe Anmeldung noch besteht (nicht nach Abmelden oder Entfernen des Servers)
++  const stillSignedIn = () => !!token && getConnection(conn.id)?.token === token;
+ 
+@@ -158,4 +160,7 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+     }
+-    // Nicht (mehr) sichtbar, z. B. Kapitel zurückgezogen oder aus der Kampagne entfernt: Kopie verwerfen
+-    if (copyUser && (res.status === 404 || res.status === 403)) saveCopy(conn.id, copyUser, path, null).catch(() => undefined);
++    // Nicht (mehr) sichtbar: die Kampagne selbst → alles zu ihr verwerfen, sonst nur diesen Weg (z. B. Kapitel zurückgezogen)
++    if (copyUser && (res.status === 404 || res.status === 403)) {
++      const campaign = /^\/campaigns\/[^/?]+$/.test(path.split('?')[0]) ? campaignOfPath(path, null) : null;
++      (campaign ? removeCopiesOfCampaign(conn.id, campaign) : saveCopy(conn.id, copyUser, path, null)).catch(() => undefined);
++    }
+     throw new ApiRequestError(res.status, err);
+@@ -166,3 +171,9 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+   const data = await res.json();
+-  if (copyUser) saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser)).catch(() => undefined);
++  if (copyUser && stillSignedIn()) {
++    saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser), campaignOfPath(path, data)).catch(() => undefined);
++    // Kampagnen, die nicht mehr in der Liste stehen (verlassen, entfernt, gelöscht): ihre Kopie verwerfen
++    if (path === '/campaigns' && Array.isArray(data)) {
++      keepOnlyCampaigns(conn.id, data.map((c: { id?: unknown }) => String(c?.id ?? ''))).catch(() => undefined);
++    }
++  }
+   return data as T;
+@@ -176,3 +187,9 @@ export async function fillReadCopy(conn: Connection, sessionIds: string[]): Prom
+   const userId = conn.user?.id;
++  const token = conn.token;
+   if (!userId || !hasValidToken(conn) || isMusterUrl(conn.baseUrl) || offlineSince(conn.id)) return;
++  // Vor jedem Abruf: dieselbe Anmeldung besteht noch (sonst nach dem Abmelden aufhören)
++  const current = () => {
++    const c = getConnection(conn.id);
++    return c && c.token === token && c.user?.id === userId && hasValidToken(c) ? c : null;
++  };
+   let fetched = 0;
+@@ -183,4 +200,6 @@ export async function fillReadCopy(conn: Connection, sessionIds: string[]): Prom
+       if (await hasCopy(conn.id, userId, path).catch(() => true)) continue;
++      const c = current();
++      if (!c) return;
+       fetched++;
+-      await requestOn(conn, 'GET', path).catch(() => undefined);
++      await requestOn(c, 'GET', path).catch(() => undefined);
+     }
+diff --git a/src/api/readCopy.ts b/src/api/readCopy.ts
+index 18015c0..10b46ff 100644
+--- a/src/api/readCopy.ts
++++ b/src/api/readCopy.ts
+@@ -4,5 +4,6 @@
+  * Oberfläche zeigt dann „Stand vom …“ und dass Ändern erst wieder mit dem Server geht.
+- * Gelöscht wird beim Abmelden, beim Entfernen des Servers, bei abgelaufener Anmeldung (401) und beim Start, wenn
+- * Server oder Konto nicht mehr passen.
++ * Gelöscht wird beim Abmelden, beim Entfernen des Servers, bei abgelaufener Anmeldung (401), für eine ganze Kampagne,
++ * sobald sie nicht mehr sichtbar ist, nach MAX_AGE_DAYS und beim Start, wenn Server oder Konto nicht mehr passen.
+  */
++import { sessionOfPath } from './readCopyRules';
+ 
+@@ -10,4 +11,8 @@ const DB = 'taleward-lesekopie';
+ const STORE = 'antworten';
++/** Älter als das wird nicht mehr gezeigt und beim Start gelöscht */
++export const MAX_AGE_DAYS = 90;
+ 
+-interface Row { key: string; connId: string; userId: string; savedAt: string; data: unknown }
++interface Row { key: string; connId: string; userId: string; campaignId: string | null; savedAt: string; data: unknown }
++
++const tooOld = (savedAt: string, now = Date.now()) => !(Date.parse(savedAt) > now - MAX_AGE_DAYS * 864e5);
+ 
+@@ -17,4 +22,10 @@ function open(): Promise<IDBDatabase> | null {
+   dbp ??= new Promise((resolve, reject) => {
+-    const r = indexedDB.open(DB, 1);
+-    r.onupgradeneeded = () => { r.result.createObjectStore(STORE, { keyPath: 'key' }).createIndex('connId', 'connId'); };
++    const r = indexedDB.open(DB, 2);
++    r.onupgradeneeded = () => {
++      // Fassung 2 kennt die Kampagne je Zeile; ältere Kopien ohne diese Angabe fallen weg
++      if (r.result.objectStoreNames.contains(STORE)) r.result.deleteObjectStore(STORE);
++      const store = r.result.createObjectStore(STORE, { keyPath: 'key' });
++      store.createIndex('connId', 'connId');
++      store.createIndex('campaign', ['connId', 'campaignId']);
++    };
+     r.onsuccess = () => resolve(r.result);
+@@ -31,10 +42,28 @@ const keyOf = (connId: string, userId: string, path: string) => `${connId}|${use
+ 
+-export async function saveCopy(connId: string, userId: string, path: string, data: unknown): Promise<void> {
++export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null): Promise<void> {
+   const db = await open();
+   if (!db) return;
+-  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
+   const key = keyOf(connId, userId, path);
+   // null = darf nicht (mehr) in die Kopie, z. B. Kapitel zurückgezogen
+-  if (data === null) await req(store.delete(key));
+-  else await req(store.put({ key, connId, userId, savedAt: new Date().toISOString(), data } satisfies Row));
++  if (data === null) {
++    await req(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key));
++    return;
++  }
++  // Kapitel und Kommentare kennen ihre Kampagne nur über den Kapitel-Kopf
++  let campaign = campaignId;
++  const session = campaign ? null : sessionOfPath(path);
++  if (session) {
++    const head = await req(db.transaction(STORE).objectStore(STORE).get(keyOf(connId, userId, `/sessions/${session}`))) as Row | undefined;
++    campaign = head?.campaignId ?? null;
++  }
++  const row: Row = { key, connId, userId, campaignId: campaign, savedAt: new Date().toISOString(), data };
++  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
++  await req(store.put(row));
++  // Kam der Kapitel-Kopf erst nach Kapitel oder Kommentaren: deren Kampagne jetzt nachtragen
++  if (campaign && path === `/sessions/${sessionOfPath(path)}`) {
++    for (const sub of ['recap', 'comments']) {
++      const other = await req(store.get(keyOf(connId, userId, `${path}/${sub}`))) as Row | undefined;
++      if (other && !other.campaignId) await req(store.put({ ...other, campaignId: campaign }));
++    }
++  }
+ }
+@@ -45,3 +74,8 @@ export async function readCopy(connId: string, userId: string, path: string): Pr
+   const row = await req(db.transaction(STORE).objectStore(STORE).get(keyOf(connId, userId, path))) as Row | undefined;
+-  return row ? { savedAt: row.savedAt, data: row.data } : null;
++  if (!row) return null;
++  if (tooOld(row.savedAt)) {
++    await req(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(row.key));
++    return null;
++  }
++  return { savedAt: row.savedAt, data: row.data };
+ }
+@@ -62,3 +96,22 @@ export async function removeCopiesOf(connId: string): Promise<void> {
+ 
+-/** Beim Start: Kopien von Servern, die es nicht mehr gibt, oder eines anderen Kontos verwerfen */
++/** Alles zu einer Kampagne verwerfen (nicht mehr sichtbar, verlassen, entfernt, gelöscht) */
++export async function removeCopiesOfCampaign(connId: string, campaignId: string): Promise<void> {
++  const db = await open();
++  if (!db) return;
++  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
++  const keys = await req(store.index('campaign').getAllKeys([connId, campaignId]));
++  await Promise.all(keys.map((k) => req(store.delete(k))));
++}
++
++/** Nach einer frischen Kampagnenliste: Kopien von Kampagnen verwerfen, die nicht mehr darin stehen */
++export async function keepOnlyCampaigns(connId: string, campaignIds: string[]): Promise<void> {
++  const db = await open();
++  if (!db) return;
++  const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
++  const keep = new Set(campaignIds);
++  const rows = await req(store.index('connId').getAll(connId)) as Row[];
++  await Promise.all(rows.filter((r) => r.campaignId && !keep.has(r.campaignId)).map((r) => req(store.delete(r.key))));
++}
++
++/** Beim Start: Kopien von Servern, die es nicht mehr gibt, eines anderen Kontos oder zu alte verwerfen */
+ export async function removeOrphanCopies(current: { id: string; userId: string | null }[]): Promise<void> {
+@@ -69,3 +122,4 @@ export async function removeOrphanCopies(current: { id: string; userId: string |
+   const ok = new Set(current.filter((c) => c.userId).map((c) => `${c.id}|${c.userId}`));
+-  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`)).map((r) => req(store.delete(r.key))));
++  const now = Date.now();
++  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`) || tooOld(r.savedAt, now)).map((r) => req(store.delete(r.key))));
+ }
+diff --git a/src/api/readCopyRules.ts b/src/api/readCopyRules.ts
+index dc182b9..10c5830 100644
+--- a/src/api/readCopyRules.ts
++++ b/src/api/readCopyRules.ts
+@@ -29,2 +29,17 @@ export function copyable(path: string): boolean {
+ 
++/** Zu welcher Kampagne gehört die Kopie? Kapitelwege tragen die Kampagne im Kapitel-Kopf; sonst null */
++export function campaignOfPath(path: string, data: unknown): string | null {
++  const p = path.split('?')[0];
++  const m = new RegExp(`^/campaigns/(${ID})(/|$)`).exec(p);
++  if (m) return m[1];
++  if (new RegExp(`^/sessions/${ID}$`).test(p) && isObj(data) && typeof data.campaignId === 'string') return data.campaignId;
++  return null;
++}
++
++/** Kapitel-Kennung eines Kapitelwegs (für die Zuordnung zur Kampagne über den Kapitel-Kopf) */
++export function sessionOfPath(path: string): string | null {
++  const m = new RegExp(`^/sessions/(${ID})(/|$)`).exec(path.split('?')[0]);
++  return m ? m[1] : null;
++}
++
+ /** Aufbereitete Fassung für die Kopie, oder null = nichts speichern (und eine alte Kopie verwerfen) */
+@@ -61,7 +76,12 @@ function campaign(c: Obj, me: string | null): Obj {
+ 
+-/** Hintergrund einer Figur sehen nur SL und Spielerin selbst – in der Kopie nur der eigene */
++/** Felder eines Platzes, die alle am Tisch sehen dürfen */
++const MEMBER_KEYS = ['id', 'userId', 'displayName', 'characterName', 'role', 'characterSummary', 'characterNickname',
++  'characterStatus', 'portraitUpdatedAt', 'deletedAt', 'leftAt', 'moveConsentAt', 'openSeat'];
++/** Nur am eigenen Platz: Hintergrund, eigene Zustimmung und die Kennung des eigenen Charakters */
++const OWN_MEMBER_KEYS = ['characterBackstory', 'recordingConsentAt', 'characterId', 'characterVersion'];
++
++/** Positivliste je Platz: an fremden Plätzen nur, was alle am Tisch sehen */
+ function member(m: Obj, me: string | null): Obj {
+-  const out = { ...m };
+-  if (!me || m.userId !== me) delete out.characterBackstory;
+-  return out;
++  const own = !!me && m.userId === me;
++  return pick(m, own ? [...MEMBER_KEYS, ...OWN_MEMBER_KEYS] : MEMBER_KEYS);
+ }
+diff --git a/src/components/DataSummary.tsx b/src/components/DataSummary.tsx
+index b0642f9..62deeb1 100644
+--- a/src/components/DataSummary.tsx
++++ b/src/components/DataSummary.tsx
+@@ -9,3 +9,3 @@ import { cloudUse } from './CloudNotice';
+  * „Was mit deinen Daten passiert“: alle Einstellungen der Runde, die Spielerinnen betreffen, an einem Ort und nur
+- * lesend (Idee Sicherheits-Chat 13.10., Stufe 1). Quelle der Wahrheit ist der Server: Kampagne und ServerInfo.
++ * lesend. Quelle der Wahrheit ist der Server: Kampagne und ServerInfo.
+  * Ändern kann es nur die SL unter „Kampagne verwalten“.
+@@ -17,3 +17,3 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+       title: t('Aufnahmen'),
+-      // Ohne Angaben des Servers (z. B. ohne Netz) nichts zur Aufbewahrung behaupten (Sicherheit A17)
++      // Ohne Angaben des Servers (z. B. ohne Netz) nichts zur Aufbewahrung behaupten
+       text: t('Aufgenommen wird nur, wenn alle am Tisch selbst zugestimmt haben.') + ' ' + (info
