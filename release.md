@@ -1,0 +1,4 @@
+- Ohne Verbindung weiterlesen: Ist ein Server gerade nicht erreichbar, zeigt die App seine Kampagnen, die Chronik, veröffentlichte Kapitel und die Bibel so, wie du sie zuletzt gesehen hast. Oben steht, von wann der Stand ist. Ändern geht erst wieder, wenn der Server erreichbar ist.
+- Auf dem Gerät liegt dafür nur, was alle am Tisch sehen dürfen, auch bei der Spielleitung. Beim Abmelden wird es gelöscht.
+- „Was mit deinen Daten passiert“ formuliert vorsichtiger, solange die App den Server nicht fragen kann.
+- Die Rückfrage beim Freigeben eines Platzes sagt jetzt, was bei der bisherigen Person bleibt.
