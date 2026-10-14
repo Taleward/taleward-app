@@ -1,0 +1,63 @@
+From 2dd303d4bc54f861ade2b537e4cf19f7a9ec7da0 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 17:22:40 +0200
+Subject: [PATCH 113/114] =?UTF-8?q?Daten=C3=BCbersicht:=20ohne=20Serverang?=
+ =?UTF-8?q?aben=20zur=C3=BCckhaltend=20formulieren?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/DataSummary.tsx | 15 +++++++++++----
+ src/i18n/en.ts                 |  7 +++++--
+ 2 files changed, 16 insertions(+), 6 deletions(-)
+
+diff --git a/src/components/DataSummary.tsx b/src/components/DataSummary.tsx
+index 67c72ad..b0642f9 100644
+--- a/src/components/DataSummary.tsx
++++ b/src/components/DataSummary.tsx
+@@ -17,3 +17,6 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+       title: t('Aufnahmen'),
+-      text: t('Aufgenommen wird nur, wenn alle am Tisch selbst zugestimmt haben.') + ' ' + retentionSentence({ retention: info?.audioRetention })
++      // Ohne Angaben des Servers (z. B. ohne Netz) nichts zur Aufbewahrung behaupten (Sicherheit A17)
++      text: t('Aufgenommen wird nur, wenn alle am Tisch selbst zugestimmt haben.') + ' ' + (info
++        ? retentionSentence({ retention: info.audioRetention })
++        : t('Wie lange die Aufnahme auf dem Server bleibt, steht hier, sobald der Server erreichbar ist.'))
+     },
+@@ -21,3 +24,5 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+       title: t('Abschrift'),
+-      text: !cloud.transcription
++      text: !info && campaign.allowExternalTranscription
++        ? t('Für diese Kampagne ist die Cloud erlaubt, die Abschrift entsteht also möglicherweise dort.')
++        : !cloud.transcription
+         ? t('Die Abschrift entsteht ohne Cloud, auf eurem Server oder einem Worker der Runde.')
+@@ -29,3 +34,5 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+       title: t('Kapitel'),
+-      text: cloud.summary
++      text: !info && campaign.allowCloudSummary
++        ? t('Für diese Kampagne ist die Cloud erlaubt, Kapitel und Vorschläge entstehen also möglicherweise dort. Dorthin geht nur Text, keine Aufnahme.')
++        : cloud.summary
+         ? t('Kapitel und Vorschläge schreibt {provider}. Dorthin geht nur Text, keine Aufnahme.', { provider: cloud.summary.provider })
+@@ -44,3 +51,3 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+     title: t('Geheimes'),
+-    text: t('Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie.')
++    text: t('Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie – außer in Sicherungen, die du selbst speicherst.')
+   });
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index f84c469..59b1b43 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1245,3 +1245,3 @@ export const en: Record<string, string> = {
+   "Geheimes": "Secrets",
+-  "Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie.": "Only the game master sees GM notes, open suggestions and the transcript. Your private notes in the collection never leave your device.",
++  "Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie – außer in Sicherungen, die du selbst speicherst.": "Only the game master sees GM notes, open suggestions and the transcript. Your private notes in the collection never leave your device – except in backups you save yourself.",
+   "Was mit deinen Daten passiert": "What happens to your data",
+@@ -1265,3 +1265,6 @@ export const en: Record<string, string> = {
+   "„{name}“ ist gerade nicht erreichbar. Du siehst den Stand vom {date} und kannst lesen, aber nichts ändern.": "“{name}” can't be reached right now. You see the state as of {date} and can read, but not change anything.",
+-  "Die Kommentare siehst du wieder, wenn der Server erreichbar ist.": "You will see the comments again once the server is reachable."
++  "Die Kommentare siehst du wieder, wenn der Server erreichbar ist.": "You will see the comments again once the server is reachable.",
++  "Wie lange die Aufnahme auf dem Server bleibt, steht hier, sobald der Server erreichbar ist.": "How long the recording stays on the server is shown here once the server is reachable.",
++  "Für diese Kampagne ist die Cloud erlaubt, die Abschrift entsteht also möglicherweise dort.": "The cloud is allowed for this campaign, so the transcript may be made there.",
++  "Für diese Kampagne ist die Cloud erlaubt, Kapitel und Vorschläge entstehen also möglicherweise dort. Dorthin geht nur Text, keine Aufnahme.": "The cloud is allowed for this campaign, so chapters and suggestions may be made there. Only text goes there, no recording."
+ };
