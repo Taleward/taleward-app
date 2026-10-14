@@ -161,7 +161,7 @@ export const recaps: Record<string, Recap> = {
           { start: 5400, end: 5404, quote: 'Die Kapelle steht halb im Wasser.', speakerMemberId: 'm-robin' },
           { start: 6210, end: 6214, quote: 'Das Zeichen ist dasselbe wie auf dem Siegel!', speakerMemberId: null }
         ] },
-        { index: 2, verdict: 'unsupported', note: 'Im Transkript nicht gefunden – vielleicht nach dem Ende der Aufnahme gesagt.', evidence: [] }
+        { index: 2, verdict: 'unsupported', note: 'In der Abschrift nicht gefunden – vielleicht nach dem Ende der Aufnahme gesagt.', evidence: [] }
       ]
     }
   },

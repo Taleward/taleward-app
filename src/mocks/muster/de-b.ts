@@ -75,7 +75,7 @@ Iria ging am Ufer entlang nach Norden zu den Schilfgängern; Mara hatte ihr daf�
         evidence: [['00:01:24', 'anja', `Als du die Tasche greifst, hebt sich eine der vorderen Planken, und eine Frau kriecht darunter hervor.`], ['00:01:50', 'tom', `Ich hab während der Überfahrt dreimal ein Klopfen unter den Planken gehört und nichts gesagt.`]] },
       { verdict: 'partial', note: `Name, Archivarin, Lesesaal, Bezahlung und Bitte sind belegt. Dass sie vor dem Rat geflohen ist, sagt niemand; sie sagt nur, sie sei gegangen, bevor man sie holt.`,
         evidence: [['00:12:30', 'anja', `Ich heiße Iria Sehl. Ich war Archivarin in Hohenwacht.`], ['00:13:15', 'anja', `Ich bin gegangen, bevor sie mich holen.`]] },
-      { verdict: 'unsupported', note: `Im Transkript gibt Iria Tavin nichts. Beim Abschied bekommt sie von Mara einen Schilfknoten, und Tavin macht einen Scherz.`,
+      { verdict: 'unsupported', note: `In der Abschrift gibt Iria Tavin nichts. Beim Abschied bekommt sie von Mara einen Schilfknoten, und Tavin macht einen Scherz.`,
         evidence: [['01:17:11', 'lea', `Und ich gebe ihr einen Schilfknoten, damit sie sie aufnehmen.`], ['01:17:29', 'tom', `Komm einfach nicht wieder unter eine Fähre.`]] },
       { verdict: 'supported', note: `Iria nach Norden, Schilfknoten, Oren zurück, Hungerstein mit frischer Marke: alles belegt.`,
         evidence: [['02:38:22', 'lea', `Das ist der Hungerstein. Die Schilfgänger ritzen dort ein, wie hoch das Wasser steht.`], ['02:38:36', 'anja', `Die oberste Marke ist frisch. Daneben steht die Jahreszahl von diesem Jahr.`]] },

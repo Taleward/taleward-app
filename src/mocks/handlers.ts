@@ -130,7 +130,7 @@ function advance(s: MockSession): ProcessingStatus {
       if (!recaps[s.id]) {
         recaps[s.id] = {
           sessionId: s.id, number: s.number, title: s.title ?? `Kapitel ${s.number}`, publishedAt: null,
-          text: probe?.recap ?? 'Dies ist ein Test-Recap aus dem nachgeahmten Server. Der echte Server schreibt hier die Zusammenfassung der Session.',
+          text: probe?.recap ?? 'Dies ist ein Test-Kapitel aus dem Testmodus. Der echte Server schreibt hier die Zusammenfassung der Runde.',
           openThreads: probe?.threads ?? ['Offener Faden aus der Testsession']
         };
       }
@@ -142,7 +142,7 @@ function advance(s: MockSession): ProcessingStatus {
     progress,
     queuePosition: s.state === 'queued' ? 1 : null,
     message: s.state === 'failed' ? 'Die Transkription ist abgebrochen (Testmodus).'
-      : s.state === 'queued' ? 'Zurzeit ist kein Worker für die Transkription verbunden. Die Session wird verarbeitet, sobald einer da ist. (Testmodus)'
+      : s.state === 'queued' ? 'Zurzeit ist kein Worker für die Transkription verbunden. Die Runde wird verarbeitet, sobald einer da ist. (Testmodus)'
       // Ab 0.4.6: feste Schlüssel für die Schritte der Zusammenfassung, die App übersetzt sie
       : s.state === 'summarizing' ? ((progress ?? 0) < 0.34 ? 'summarizing.recap' : (progress ?? 0) < 0.67 ? 'summarizing.proposals' : 'summarizing.review')
       : null,
@@ -215,24 +215,41 @@ function withRevision(r: Recap): Recap {
 }
 
 /**
- * Testmodus: jeder Satz des Hinweises ist ein eigener Hinweis. Er landet in dem Absatz, mit dem er die meisten Wörter
- * teilt („fehlt …“ im letzten Absatz); ohne gemeinsames Wort bleibt er unumgesetzt. Absatzzahl bleibt gleich.
+ * Testmodus: jeder Satz des Hinweises ist ein eigener Hinweis. Mit Bezug „Zu „…“:“ landet er in diesem Absatz, sonst in
+ * dem, mit dem er die meisten Wörter teilt („fehlt …“ im letzten Absatz); ohne gemeinsames Wort bleibt er unumgesetzt.
  */
 function mockRevision(text: string, note: string): NonNullable<Recap['revision']> {
   const paras = text.split(/\n\s*\n/);
   const after = [...paras];
   const words = (x: string) => new Set(x.toLowerCase().match(/[\p{L}]{4,}/gu) ?? []);
-  const notes = (note.match(/[^.!?]+[.!?]?/g) ?? []).map((x) => x.trim()).filter(Boolean).map((sentence) => {
-    const w = words(sentence);
-    let best = -1, score = 0;
-    paras.forEach((p, i) => {
-      const hit = [...words(p)].filter((x) => w.has(x)).length;
-      if (hit > score) { score = hit; best = i; }
-    });
+  const sentences = (x: string) => (x.match(/[^.!?]+[.!?]?/g) ?? []).map((y) => y.trim()).filter(Boolean);
+  // Erst je Zeile: Bezug „Zu „…“:“ (setzt die App davor) bestimmt den Absatz, erst danach in Sätze teilen
+  const items: { sentence: string; target: number | null }[] = [];
+  for (const line of note.split('\n').map((x) => x.trim()).filter(Boolean)) {
+    const ref = line.match(/^(?:zu|about)\s+[„"“](.*?)[“"”]:\s*/i);
+    let target: number | null = null;
+    let rest = line;
+    if (ref) {
+      const head = ref[1].replace(/\s*…$/, '').trim();
+      const i = paras.findIndex((p) => p.trim().startsWith(head));
+      target = i >= 0 ? i : null;
+      rest = line.slice(ref[0].length);
+    }
+    for (const sentence of sentences(rest)) items.push({ sentence, target });
+  }
+  const notes = items.map(({ sentence, target }) => {
+    let best = target ?? -1;
+    if (best < 0) {
+      const w = words(sentence);
+      let score = 0;
+      paras.forEach((p, i) => {
+        const hit = [...words(p)].filter((x) => w.has(x)).length;
+        if (hit > score) { score = hit; best = i; }
+      });
+    }
     if (best < 0 && /fehlt|missing/i.test(sentence)) best = paras.length - 1;
     if (best < 0) return { text: sentence, applied: false, indexes: [] as number[] };
-    // Bezug „Zu „…“:“ aus der App gehört nicht in den Text
-    const fix = sentence.replace(/^(zu|about)\s+[„"“][^“"”]*[“"”]:\s*/i, '').replace(/^(es )?fehlt[:,]?\s*/i, '').replace(/\s*fehlt\.?$/i, '.');
+    const fix = sentence.replace(/^(es )?fehlt[:,]?\s*/i, '').replace(/\s*fehlt\.?$/i, '.');
     after[best] = `${after[best]} ${fix.charAt(0).toUpperCase()}${fix.slice(1)}`.replace(/\s+/g, ' ');
     return { text: sentence, applied: true, indexes: [best] };
   });
@@ -550,7 +567,7 @@ export const handlers = [
       minAppVersion: nachbar ? null : '0.8.0',
       latestAppVersion: nachbar ? null : '0.10.1',
       appDownloadUrl: nachbar ? null : 'https://example.org/taleward-0.9.1.apk',
-      releaseNotes: nachbar ? null : 'Einladen per Link und QR-Code, Aufnahmeknopf mit Verwandlung, Recap bearbeiten. (Testmodus)',
+      releaseNotes: nachbar ? null : 'Einladen per Link und QR-Code, Aufnahmeknopf mit Verwandlung, Kapitel bearbeiten. (Testmodus)',
       appDownloadSha256: null,
       appDownloadSizeBytes: null
     });
@@ -1771,15 +1788,15 @@ export const handlers = [
   http.get(`${B}/sessions/:id/recap`, ({ params }) => {
     const s = sessions.find((x) => x.id === params.id);
     const r = recaps[params.id as string];
-    if (!s || !r || (!isGm(s.campaignId) && s.state !== 'published')) return err(404, 'not_found', 'Für diese Session gibt es noch keinen Recap.');
+    if (!s || !r || (!isGm(s.campaignId) && s.state !== 'published')) return err(404, 'not_found', 'Für diese Runde gibt es noch kein Kapitel.');
     return HttpResponse.json(recapFor(r, isGm(s.campaignId)));
   }),
 
   http.put(`${B}/sessions/:id/recap`, async ({ params, request }) => {
     const s = sessions.find((x) => x.id === params.id);
     const r = recaps[params.id as string];
-    if (!s || !r) return err(404, 'not_found', 'Für diese Session gibt es noch keinen Recap.');
-    if (!isGm(s.campaignId)) return err(403, 'forbidden', 'Nur die Spielleitung kann den Recap bearbeiten.');
+    if (!s || !r) return err(404, 'not_found', 'Für diese Runde gibt es noch kein Kapitel.');
+    if (!isGm(s.campaignId)) return err(403, 'forbidden', 'Nur die Spielleitung kann das Kapitel bearbeiten.');
     if (s.state === 'published') return err(409, 'session_published', 'Das Kapitel ist schon veröffentlicht.');
     const body = (await request.json()) as { title?: string; text?: string; openThreads?: string[]; parts?: RecapPart[] };
     // Ab 0.4.17: Teile beziehen sich auf den Text aus derselben Anfrage
@@ -1813,7 +1830,7 @@ export const handlers = [
   http.post(`${B}/sessions/:id/recap/revision`, async ({ params, request }) => {
     const s = sessions.find((x) => x.id === params.id);
     const r = recaps[params.id as string];
-    if (!s || !r || !isGm(s.campaignId)) return err(404, 'not_found', 'Für diese Session gibt es noch keinen Recap.');
+    if (!s || !r || !isGm(s.campaignId)) return err(404, 'not_found', 'Für diese Runde gibt es noch kein Kapitel.');
     if (s.state !== 'awaiting_review') return err(409, 'wrong_state', 'Korrigieren geht nur, solange das Kapitel auf deine Prüfung wartet.');
     withRevision(r);
     if (r.revision?.state === 'running') return err(409, 'revision_running', 'Die Korrektur läuft noch.');
@@ -1823,7 +1840,7 @@ export const handlers = [
     if (body.baseText !== r.text) return err(409, 'recap_changed', 'Das Kapitel hat sich inzwischen geändert. Lies es noch einmal und schreib den Hinweis dazu.');
     const now = Date.now();
     const recent = (revisionCount[s.id] ?? []).filter((t0) => now - t0 < 864e5);
-    if (recent.length >= 10) return err(409, 'revision_limit', 'Dieses Kapitel wurde heute schon zehnmal korrigiert. Morgen geht es wieder.');
+    if (recent.length >= 10) return err(409, 'revision_limit', 'Dieses Kapitel wurde in den letzten 24 Stunden schon zehnmal korrigiert. Später geht es wieder – oder ändere den Text selbst.');
     revisionCount[s.id] = [...recent, now];
     revisionJobs[s.id] = { readyAt: now + 2500, result: mockRevision(r.text, note) };
     r.revision = { state: 'running', message: null, createdAt: new Date(now).toISOString(), changes: [], notes: [] };
@@ -1833,7 +1850,7 @@ export const handlers = [
   http.post(`${B}/sessions/:id/recap/revision/decision`, async ({ params, request }) => {
     const s = sessions.find((x) => x.id === params.id);
     const r = recaps[params.id as string];
-    if (!s || !r || !isGm(s.campaignId)) return err(404, 'not_found', 'Für diese Session gibt es noch keinen Recap.');
+    if (!s || !r || !isGm(s.campaignId)) return err(404, 'not_found', 'Für diese Runde gibt es noch kein Kapitel.');
     withRevision(r);
     const v = r.revision;
     if (!v) return err(409, 'no_revision', 'Es gibt keinen offenen Korrektur-Entwurf.');
