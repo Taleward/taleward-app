@@ -1,0 +1,5 @@
+- Neu auf der Übersicht: „Was mit deinen Daten passiert“. Dort steht für alle am Tisch, wie mit Aufnahmen, Abschrift, Kapiteln und Charakterbögen umgegangen wird.
+- Die Spielleitung findet die Schalter der Runde gesammelt unter „Kampagne verwalten“ → „Einstellungen“.
+- In der Sammlung kannst du bei mitgebrachten Einträgen festhalten, wie sie zu deinem Charakter stehen, etwa „Schwester“ oder „alter Lehrmeister“. Die Spielleitung sieht das, sobald ihr Server es kennt.
+- Neue, einheitliche Symbole wie auf der Website.
+- Kleinere Verbesserungen bei der Auswertung von Charakterbögen und bei Rückfragen.
