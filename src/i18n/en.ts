@@ -889,7 +889,7 @@ export const en: Record<string, string> = {
   "Was wird aus {figure}? Die Geschichte der Figur bleibt in der Kampagne, egal wie du dich entscheidest.": "What happens to {figure}? The character’s story stays in the campaign whatever you decide.",
   "Einem Spieler geben": "Give to a player",
   "einen Platz": "a seat",
-  "Platz von {figure} wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung.": "Free up the seat of {figure} again? {person} will no longer be in the campaign and needs a new invitation.",
+  "Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Hintergrund, Charakterbögen und Kommentare von {person} bleiben bei {person} und gehen nicht an die nächste Person. Die Figur bleibt.": "Free up the seat of {figure} in “{campaign}” on “{server}” again? {person} will no longer be in the campaign and needs a new invitation. The backstory, character sheets and comments of {person} stay with {person} and do not pass to the next person. The character stays.",
   "Platz freigeben": "Free up seat",
   "{person} spielt jetzt {figure}": "{person} now plays {figure}",
   "{person} hat den Platz aus der umgezogenen Kampagne eingenommen. Passt das?": "{person} took the seat from the moved campaign. Is that right?",
