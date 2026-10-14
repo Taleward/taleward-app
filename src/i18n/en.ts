@@ -1258,5 +1258,10 @@ export const en: Record<string, string> = {
   "PDF, Word oder Text, höchstens {n} Bögen. Ausgewertet werden die ersten {pages} Seiten.": "PDF, Word or text, at most {n} sheets. The first {pages} pages are analysed.",
   "PDF, Word oder Text. Ausgewertet werden nur die ersten Seiten.": "PDF, Word or text. Only the first pages are analysed.",
   "Mehr Bögen gehen nicht. Lösch einen, um einen neuen abzugeben.": "No more sheets fit. Delete one to hand in a new one.",
-  "In der Musterkampagne gibt es nichts einzustellen.": "There is nothing to set in the sample campaign."
+  "In der Musterkampagne gibt es nichts einzustellen.": "There is nothing to set in the sample campaign.",
+  "„{name}“ ist gerade nicht erreichbar. Ändern geht erst wieder, wenn der Server erreichbar ist.": "“{name}” can't be reached right now. Changes are possible again once the server is reachable.",
+  "Stand vom {date}": "As of {date}",
+  "„{name}“ ist gerade nicht erreichbar. Du kannst lesen, was du zuletzt gesehen hast. Ändern geht erst wieder, wenn der Server erreichbar ist.": "“{name}” can't be reached right now. You can read what you last saw. Changes are possible again once the server is reachable.",
+  "„{name}“ ist gerade nicht erreichbar. Du siehst den Stand vom {date} und kannst lesen, aber nichts ändern.": "“{name}” can't be reached right now. You see the state as of {date} and can read, but not change anything.",
+  "Die Kommentare siehst du wieder, wenn der Server erreichbar ist.": "You will see the comments again once the server is reachable."
 };

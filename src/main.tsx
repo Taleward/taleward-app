@@ -14,6 +14,7 @@ import { applyThemeMode } from './themeMode';
 import { getLang } from './i18n';
 import { connectionsReadable, listConnections } from './api/connections';
 import { removeOrphanRecordings } from './recorder/webStore';
+import { removeOrphanCopies } from './api/readCopy';
 
 async function start() {
   applyThemeMode();
@@ -35,6 +36,8 @@ async function start() {
   // Aufnahmen im Browser, deren Verbindung es nicht mehr gibt, kann niemand mehr hochladen: nicht liegen lassen
   // Nur, wenn die Liste der Verbindungen sicher gelesen wurde – sonst gälte jede Aufnahme als verwaist
   if (connectionsReadable()) removeOrphanRecordings(listConnections().map((c) => c.id)).catch(() => undefined);
+  // Lesekopien nur für Server und Konten, die noch da sind
+  if (connectionsReadable()) removeOrphanCopies(listConnections().map((c) => ({ id: c.id, userId: c.user?.id ?? null }))).catch(() => undefined);
   // Web-Fassung: installierbar auf dem Startbildschirm (Service Worker nur für die eigenen Dateien)
   if (import.meta.env.VITE_DIST === 'web' && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined);

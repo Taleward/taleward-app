@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiFor, fetchServerInfo } from '../api/client';
 import { isMusterUrl } from '../api/muster';
+import { offlineSince } from '../api/readCopy';
 import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, updateConnection, versionLess, type Connection } from '../api/connections';
 import { IconInfo } from '../components/Icons';
 import { useAuth } from '../auth/AuthContext';
@@ -43,6 +44,7 @@ export function Campaigns() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [failed, setFailed] = useState<Connection[]>([]);
+  const [offline, setOffline] = useState<{ conn: Connection; since: string }[]>([]);
   const [mode, setMode] = useState<'none' | 'new' | 'join'>('none');
   const [value, setValue] = useState('');
   const [serverId, setServerId] = useState<string>('');
@@ -94,7 +96,8 @@ export function Campaigns() {
       }
       try {
         const list = await apiFor(conn).campaigns();
-        return { conn, list, ok: true };
+        // Nicht erreichbar, aber Lesekopie vorhanden: Kampagnen zeigen, mit Hinweis auf den Stand
+        return { conn, list, ok: true, offline: offlineSince(conn.id) };
       } catch {
         return { conn, list: [] as CampaignSummary[], ok: false };
       }
@@ -102,6 +105,7 @@ export function Campaigns() {
       if (!alive) return;
       setEntries(results.flatMap((r) => r.list.map((c) => ({ conn: r.conn, c }))));
       setFailed(results.filter((r) => !r.ok).map((r) => r.conn));
+      setOffline(results.flatMap((r) => ('offline' in r && r.offline ? [{ conn: r.conn, since: r.offline }] : [])));
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,6 +168,12 @@ export function Campaigns() {
           <strong>{t('Anmeldung bei „{name}“ abgelaufen', { name: c.name })}</strong>
           <span className="muted small">{t('Tippen, um dich neu anzumelden.')}</span>
         </Link>
+      ))}
+      {offline.map(({ conn: c, since }) => (
+        <div key={c.id} className="notice" role="status">
+          <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
+          <span>{t('„{name}“ ist gerade nicht erreichbar. Du siehst den Stand vom {date} und kannst lesen, aber nichts ändern.', { name: c.name, date: formatDateTime(since) })}</span>
+        </div>
       ))}
       {failed.map((c) => (
         <div key={c.id} className="notice">

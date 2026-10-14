@@ -3,7 +3,7 @@ import { confirmDialog } from './confirm';
 import { Avatar } from './Avatar';
 import { t } from '../i18n';
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
+import { api, isApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Campaign, Comment } from '../api/types';
 import { IconLock } from './Icons';
@@ -25,9 +25,11 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
   const [editText, setEditText] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
 
   useEffect(() => {
-    api.comments(sessionId).then(setList).catch(setError);
+    // Ohne Netz und ohne Kopie: still leer statt Fehler – der Hinweis oben sagt schon, dass der Server fehlt
+    api.comments(sessionId).then(setList).catch((e) => (isApiError(e, 'network') ? setUnreachable(true) : setError(e)));
   }, [sessionId]);
 
   const name = (id: string | null) => campaign.members.find((m) => m.id === id)?.displayName ?? t('Unbekannt');
@@ -72,6 +74,7 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <h2>{t('Kommentare')}</h2>
       <ErrorBox error={error} />
+      {unreachable && <span className="muted small">{t('Die Kommentare siehst du wieder, wenn der Server erreichbar ist.')}</span>}
       {list?.length === 0 && <div className="muted small">{t('Noch keine Kommentare.')}</div>}
 
       {list?.map((k) => {

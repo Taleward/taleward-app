@@ -1,5 +1,8 @@
 import { withSafeLinks } from './safeUrl';
 import { isSafePath } from './pathGuard';
+import { isMusterUrl } from './muster';
+import { cleanForCopy, copyable } from './readCopyRules';
+import { hasCopy, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, saveCopy } from './readCopy';
 import { getLang, t, tk } from '../i18n';
 import { APP_VERSION, currentConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
 import type { InvitePreview, CharacterAnalysis,
@@ -101,6 +104,10 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.raw !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/octet-stream';
 
+  // Lesekopie für unterwegs: nur Lesewege aus readCopyRules, nur mit Anmeldung, nie für die Musterkampagne
+  const copyUser = method === 'GET' && token && conn.user?.id && conn.id !== '_probe' && !isMusterUrl(conn.baseUrl) && copyable(path)
+    ? conn.user.id : null;
+
   let res: Response;
   try {
     res = await fetch(conn.baseUrl + path, {
@@ -113,11 +120,21 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
       cache: 'no-store'
     });
   } catch {
+    if (copyUser) {
+      const copy = await readCopy(conn.id, copyUser, path).catch(() => null);
+      if (copy) {
+        markOffline(conn.id, copy.savedAt);
+        return copy.data as T;
+      }
+    }
     throw new ApiRequestError(0, {
       code: 'network',
-      message: t('Server nicht erreichbar. Prüfe WLAN und die Serveradresse.')
+      message: method === 'GET'
+        ? t('Server nicht erreichbar. Prüfe WLAN und die Serveradresse.')
+        : t('„{name}“ ist gerade nicht erreichbar. Ändern geht erst wieder, wenn der Server erreichbar ist.', { name: conn.name })
     });
   }
+  if (conn.id !== '_probe') markOnline(conn.id);
 
   if (!res.ok) {
     let err: ApiError = { code: 'http_' + res.status, message: fallbackMessage(res.status) };
@@ -136,12 +153,38 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
     if (res.status === 426 && conn.id !== '_probe') updateConnection(conn.id, { appOutdated: true });
     if (res.status === 401 && token && !path.startsWith('/auth/')) {
       updateConnection(conn.id, { token: null, expiresAt: null });
+      // Anmeldung ungültig: auch die Lesekopie dieses Servers gehört niemandem mehr
+      removeCopiesOf(conn.id).catch(() => undefined);
     }
+    // Nicht (mehr) sichtbar, z. B. Kapitel zurückgezogen oder aus der Kampagne entfernt: Kopie verwerfen
+    if (copyUser && (res.status === 404 || res.status === 403)) saveCopy(conn.id, copyUser, path, null).catch(() => undefined);
     throw new ApiRequestError(res.status, err);
   }
   if (res.status === 204) return undefined as T;
   const type = res.headers.get('Content-Type') ?? '';
-  return (type.includes('application/json') ? res.json() : res.blob()) as Promise<T>;
+  if (!type.includes('application/json')) return res.blob() as Promise<T>;
+  const data = await res.json();
+  if (copyUser) saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser)).catch(() => undefined);
+  return data as T;
+}
+
+/**
+ * Lesekopie ergänzen: veröffentlichte Kapitel, die noch nicht auf dem Gerät liegen, leise nachladen (eins nach dem
+ * anderen, höchstens 60 Abrufe je Aufruf). Nur wenn der Server gerade erreichbar ist.
+ */
+export async function fillReadCopy(conn: Connection, sessionIds: string[]): Promise<void> {
+  const userId = conn.user?.id;
+  if (!userId || !hasValidToken(conn) || isMusterUrl(conn.baseUrl) || offlineSince(conn.id)) return;
+  let fetched = 0;
+  for (const id of sessionIds) {
+    if (fetched >= 60 || offlineSince(conn.id)) return;
+    const missing = [`/sessions/${id}`, `/sessions/${id}/recap`, `/sessions/${id}/comments`];
+    for (const path of missing) {
+      if (await hasCopy(conn.id, userId, path).catch(() => true)) continue;
+      fetched++;
+      await requestOn(conn, 'GET', path).catch(() => undefined);
+    }
+  }
 }
 
 /** Ist das ein Fehler mit diesem code (z. B. 'audio_gone')? */

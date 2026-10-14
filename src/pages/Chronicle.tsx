@@ -1,9 +1,9 @@
-import { p } from '../api/connections';
+import { currentConnection, p } from '../api/connections';
 import { formatDate, formatDateFull } from '../components/format';
 import { t, tk } from '../i18n';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, isApiError } from '../api/client';
+import { api, fillReadCopy, isApiError } from '../api/client';
 import type { Campaign, Recap, SessionSummary } from '../api/types';
 import { OpenThreads, RecapView } from '../components/RecapView';
 import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSet } from '../components/Screen';
@@ -39,6 +39,9 @@ export function Chronicle() {
         if (c.unread?.recaps) {
           api.markSeen(campaignId, 'chronicle').then(() => clearStoredUnread(campaignId, 'recaps')).catch(() => undefined);
         }
+        // Für unterwegs: veröffentlichte Kapitel im Hintergrund auf das Gerät holen (nur was noch fehlt)
+        const conn = currentConnection();
+        window.setTimeout(() => fillReadCopy(conn, s.filter((x) => x.state === 'published').map((x) => x.id)).catch(() => undefined), 1500);
         const newest = s.find((x) => x.state === 'published');
         if (newest) {
           // 404: Recap (noch) nicht vorhanden – dann eben ohne hervorgehobenen Recap

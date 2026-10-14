@@ -1,3 +1,4 @@
+import { removeCopiesOf } from './readCopy';
 import type { User } from './types';
 
 /**
@@ -160,6 +161,8 @@ export function updateConnection(id: string, change: Partial<Connection>): void 
 export function removeConnection(id: string): void {
   connections = connections.filter((c) => c.id !== id);
   persist();
+  // Lesekopie dieses Servers mit entfernen (Abmelden, Konto gelöscht, Musterkampagne beendet)
+  removeCopiesOf(id).catch(() => undefined);
 }
 
 /**

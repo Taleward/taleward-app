@@ -4,6 +4,7 @@ import { t } from '../i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Unread } from '../api/types';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { OfflineNotice } from './OfflineNotice';
 import { IconBack, IconBook, IconMic, IconScroll, IconShield } from './Icons';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
 
@@ -51,6 +52,7 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
             </div>
             <span className="ribbon" aria-hidden />
           </div>
+          <OfflineNotice connId={connId} />
           {children}
         </main>
         {nav && <BottomNav />}
@@ -73,7 +75,7 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
         {overline && <div className="overline">{overline}</div>}
         <h1>{title}</h1>
       </header>
-      <main className="screen-main">{children}</main>
+      <main className="screen-main"><OfflineNotice connId={connId} />{children}</main>
       {nav && <BottomNav />}
     </div>
   );
