@@ -103,7 +103,7 @@ export function GroupPanel({ campaign, onEntry, compact }: {
               </div>
             )}
             {waiting > 0 && (
-              <Link className="small" to={p(`/k/${campaign.id}/mitgebracht`)}>
+              <Link className="small tap-link" to={p(`/k/${campaign.id}/mitgebracht`)}>
                 {tn(waiting, '{n} mitgebrachter Eintrag wartet auf dich', '{n} mitgebrachte Einträge warten auf dich')}
               </Link>
             )}
@@ -171,7 +171,7 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry }: {
         </div>
       )}
       {waiting > 0 && (
-        <Link className="small" to={p(`/k/${campaign.id}/mitgebracht`)}>
+        <Link className="small tap-link" to={p(`/k/${campaign.id}/mitgebracht`)}>
           {tn(waiting, '{n} mitgebrachter Eintrag wartet auf dich', '{n} mitgebrachte Einträge warten auf dich')}
         </Link>
       )}

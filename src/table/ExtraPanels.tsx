@@ -64,9 +64,11 @@ interface Evening {
 
 const today = () => new Date().toLocaleDateString('sv');
 const hm = (d: Date) => d.toLocaleTimeString(getLang() === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
+/** Dauer als „1 h 36 min“ bzw. „54 min“ – nicht wie eine Uhrzeit (Design-Prüfung 09.10.) */
 function span(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60000));
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  const h = Math.floor(m / 60);
+  return h ? t('{h} h {m} min', { h, m: m % 60 }) : t('{m} min', { m });
 }
 
 /** Uhr für den Abend: wie spät, wie lange schon gespielt, wie viel Zeit bis zum geplanten Ende. Nur auf diesem Gerät. */
@@ -118,13 +120,13 @@ export function ClockPanel({ campaignId, compact }: { campaignId: string; compac
         {elapsed !== null && (
           <div className="table-clock-stat">
             <span className="overline">{t('Runde läuft seit')}</span>
-            <span className="table-clock-value">{t('{t} h', { t: span(elapsed) })}</span>
+            <span className="table-clock-value">{span(elapsed)}</span>
           </div>
         )}
         {left !== null && (
           <div className={over ? 'table-clock-stat over' : 'table-clock-stat'}>
             <span className="overline">{over ? t('Über der Zeit') : t('Noch bis {end}', { end: ev.end! })}</span>
-            <span className="table-clock-value">{t('{t} h', { t: span(Math.abs(left)) })}</span>
+            <span className="table-clock-value">{span(Math.abs(left))}</span>
           </div>
         )}
       </div>

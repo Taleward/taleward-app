@@ -131,7 +131,7 @@ export function DatePollPage() {
 
                 <div className="small" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {by('yes').length > 0 && <span><strong style={{ color: 'var(--moss)' }}>{t('Passt:')}</strong> {by('yes').join(', ')}</span>}
-                  {by('maybe').length > 0 && <span><strong style={{ color: 'var(--brass)' }}>{t('Vielleicht:')}</strong> {by('maybe').join(', ')}</span>}
+                  {by('maybe').length > 0 && <span><strong style={{ color: 'var(--ink)' }}><span aria-hidden style={{ color: 'var(--brass)' }}>● </span>{t('Vielleicht:')}</strong> {by('maybe').join(', ')}</span>}
                   {by('no').length > 0 && <span><strong style={{ color: 'var(--seal)' }}>{t('Passt nicht:')}</strong> {by('no').join(', ')}</span>}
                   {pending.length > 0 && <span className="muted">{t('Noch offen')}: {pending.join(', ')}</span>}
                 </div>

@@ -349,6 +349,11 @@ export function TablePage() {
               ))}
             </div>
           )}
+          {!wide && (
+            <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
+              {t('Weitere Karten wie Uhr, Notizzettel und Links legst du auf dem Tablet oder im Querformat dazu (Schirm einrichten).')}
+            </p>
+          )}
           {popup && <Popup title={label(popup)} onClose={closePopup}>{panel(popup, false)}</Popup>}
         </>
       )}

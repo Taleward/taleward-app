@@ -103,7 +103,7 @@ export function MovePage() {
           <details className="card">
             <summary style={{ fontWeight: 700 }}>{t('Was mitgeht und was nicht')}</summary>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-              <span className="small"><strong>{t('Geht mit:')}</strong> {t('veröffentlichte Kapitel und Recaps, die Bibel mit allem Geheimen, deine Unterlagen, Titelbild, die Plätze am Tisch und – mit Zustimmung – Charakterdaten und Kommentare.')}</span>
+              <span className="small"><strong>{t('Geht mit:')}</strong> {t('veröffentlichte Kapitel, die Bibel mit allem Geheimen, deine Unterlagen, Titelbild, die Plätze am Tisch und – mit Zustimmung – Charakterdaten und Kommentare.')}</span>
               <span className="small"><strong>{t('Bleibt hier:')}</strong> {t('Konten, Namen und E-Mail-Adressen, Einwilligungen, Stimmprofile, Aufnahmen, Abschriften, Vorschläge, Terminabstimmungen, Kapitel in Arbeit und die Freigaben für Cloud-Dienste.')}</span>
             </div>
           </details>

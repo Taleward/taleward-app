@@ -17,7 +17,7 @@ import { IconInfo } from '../components/Icons';
 import { Divider, ErrorBox } from '../components/Screen';
 import { MusterTry } from '../components/Muster';
 import { Missing } from '../components/Missing';
-import { LanguageSwitch, t } from '../i18n';
+import { LanguageSwitch, getLang, t } from '../i18n';
 
 const DEFAULT_SERVER: string = import.meta.env.VITE_API_BASE ?? '';
 const MOCK = import.meta.env.VITE_API_MODE === 'mock';
@@ -204,7 +204,7 @@ export function ConnectPage() {
                 <p className="muted small" style={{ margin: 0 }}>
                   {t('Jeder Verein und jede Gruppe hat einen eigenen Server. Frag in deinem Verein nach, oder richtet selbst einen ein. Wer ihn betreibt, schickt dir einen Link, danach legst du hier deine Kampagne an.')}
                 </p>
-                <a className="btn outline" href="https://taleward.org/" target="_blank" rel="noopener noreferrer">{t('So richtet ihr einen Server ein')}</a>
+                <a className="btn outline" href={getLang() === 'en' ? 'https://taleward.org/en/self-hosting/' : 'https://taleward.org/selbst-betreiben/'} target="_blank" rel="noopener noreferrer">{t('So richtet ihr einen Server ein')}</a>
               </section>
             )}
             <MusterTry />

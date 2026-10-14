@@ -65,7 +65,7 @@ export function NamesPage() {
 
   const apply = async (retranscribe: boolean) => {
     if (retranscribe && !(await confirmDialog(
-      t('Neu transkribieren? Recap und Vorschläge entstehen danach neu – deine bisherigen Entscheidungen und Änderungen am Recap gehen dabei verloren.'),
+      t('Neu transkribieren? Kapitel und Vorschläge entstehen danach neu – deine bisherigen Entscheidungen und Änderungen am Kapitel gehen dabei verloren.'),
       { confirmLabel: t('Neu transkribieren') }))) return;
     setBusy(true);
     setError(null);
@@ -95,8 +95,8 @@ export function NamesPage() {
       {data && (
         <p className="muted" style={{ margin: 0 }}>
           {tn(data.terms.length,
-            'Bei {n} Namen war sich die Transkription unsicher. Wähle die richtige Schreibweise – sie wird in Transkript, Recap und Vorschlägen ersetzt.',
-            'Bei {n} Namen war sich die Transkription unsicher. Wähle die richtigen Schreibweisen – sie werden in Transkript, Recap und Vorschlägen ersetzt.')}
+            'Bei {n} Namen war sich die Transkription unsicher. Wähle die richtige Schreibweise – sie wird in Abschrift, Kapitel und Vorschlägen ersetzt.',
+            'Bei {n} Namen war sich die Transkription unsicher. Wähle die richtigen Schreibweisen – sie werden in Abschrift, Kapitel und Vorschlägen ersetzt.')}
         </p>
       )}
 

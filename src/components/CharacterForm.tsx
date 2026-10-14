@@ -95,7 +95,7 @@ export function CharacterForm({ campaign, member, onSaved, submitLabel, secondar
             </label>
             <textarea id="c-backstory" rows={5} value={backstory} onChange={(e) => setBackstory(e.target.value)}
               placeholder={t('Geheimnisse, Schulden, alte Feinde … Das sehen nur du und die Spielleitung.')} />
-            <span className="muted small">{t('Nie im Recap, für andere unsichtbar.')}</span>
+            <span className="muted small">{t('Nie im Kapitel, für andere unsichtbar.')}</span>
           </div>
         </>
       )}

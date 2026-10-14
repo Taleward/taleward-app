@@ -26,7 +26,7 @@ export function NotifierSync() {
 }
 
 const KINDS: { key: keyof NotifyKinds; label: string }[] = [
-  { key: 'recaps', label: tk('Neue Recaps') },
+  { key: 'recaps', label: tk('Neue Kapitel') },
   { key: 'comments', label: tk('Neue Kommentare') },
   { key: 'polls', label: tk('Terminabstimmungen') },
   { key: 'gm', label: tk('Für die Spielleitung: Kapitel zum Prüfen, mitgebrachte Welt') }
@@ -88,7 +88,7 @@ export function NotifyPrompt() {
   return (
     <div className="card">
       <strong>{t('Benachrichtigungen einschalten?')}</strong>
-      <span className="muted small">{t('Dann sagt dir Taleward Bescheid, wenn ein neuer Recap da ist, jemand kommentiert oder ein Termin abgestimmt wird.')}</span>
+      <span className="muted small">{t('Dann sagt dir Taleward Bescheid, wenn ein neues Kapitel da ist, jemand kommentiert oder ein Termin abgestimmt wird.')}</span>
       <div className="row wrap" style={{ gap: 8 }}>
         <button type="button" className="btn small" onClick={async () => { await enableNotifications(); setS(notifySettings()); }}>{t('Einschalten')}</button>
         <button type="button" className="btn small ghost" onClick={() => setS(saveNotifySettings({ asked: true }))}>{t('Nicht jetzt')}</button>

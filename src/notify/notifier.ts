@@ -64,8 +64,8 @@ export function saveNotifySettings(change: Partial<NotifySettings>): NotifySetti
 function texts() {
   return {
     channel: t('Neues aus deinen Kampagnen'),
-    recapOne: t('Neuer Recap in „{title}“'),
-    recapMany: t('{n} neue Recaps in „{title}“'),
+    recapOne: t('Neues Kapitel in „{title}“'),
+    recapMany: t('{n} neue Kapitel in „{title}“'),
     recapBody: t('Tippen zum Lesen.'),
     commentOne: t('Neuer Kommentar in „{title}“'),
     commentMany: t('{n} neue Kommentare in „{title}“'),

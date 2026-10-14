@@ -76,7 +76,7 @@ export function Speakers() {
 
   const confirm = async () => {
     if (review && !(await confirmDialog(
-      t('Zuordnung ändern und Kapitel neu schreiben? Taleward schreibt Recap und Vorschläge mit der neuen Zuordnung noch einmal. Deine Änderungen am Recap und deine Entscheidungen zu den Vorschlägen gehen dabei verloren.'),
+      t('Zuordnung ändern und Kapitel neu schreiben? Taleward schreibt Kapitel und Vorschläge mit der neuen Zuordnung noch einmal. Deine Änderungen am Kapitel und deine Entscheidungen zu den Vorschlägen gehen dabei verloren.'),
       { confirmLabel: t('Neu schreiben'), danger: true }
     ))) return;
     setBusy(true);
@@ -99,7 +99,7 @@ export function Speakers() {
 
   return (
     <Screen narrow back title={review ? t('Stimmen prüfen') : t('Stimmen zuordnen')}
-      overline={review && session ? t('Kapitel {n}', { n: session.number }) : t('Transkript fertig')}>
+      overline={review && session ? t('Kapitel {n}', { n: session.number }) : t('Abschrift fertig')}>
       <ErrorBox error={error} />
       {review && (
         <p className="muted small" style={{ margin: 0 }}>

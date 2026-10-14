@@ -148,7 +148,7 @@ export function Recording() {
   if (campaign.myRole !== 'gm') {
     return (
       <Screen narrow overline={campaign.title} title={t('Aufnahme')}>
-        <div className="empty">{t('Aufnahmen startet die SL. Den Recap findest du danach in der Chronik.')}</div>
+        <div className="empty">{t('Aufnahmen startet die SL. Das Kapitel findest du danach in der Chronik.')}</div>
       </Screen>
     );
   }

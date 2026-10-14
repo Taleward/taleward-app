@@ -75,7 +75,7 @@ export function Chronicle() {
       {sessions && sessions.length === 0 && (
         <div className="empty">
           {t('Noch keine Kapitel.')}{' '}
-          {campaign?.myRole === 'gm' ? t('Nimm die erste Runde auf, dann erscheint hier der Recap.') : t('Sobald die Spielleitung einen Recap veröffentlicht, steht er hier.')}
+          {campaign?.myRole === 'gm' ? t('Nimm die erste Runde auf, dann erscheint hier das Kapitel.') : t('Sobald die Spielleitung ein Kapitel veröffentlicht, steht es hier.')}
         </div>
       )}
 

@@ -85,7 +85,7 @@ export function ProposalCard({ proposal: p, players = [], onChange, onError }: {
         </span>
         <span className="row wrap" style={{ gap: 6 }}>
           {p.flags.includes('joke_suspected') && <span className="pill seal">{t('Vermutlich Scherz')}</span>}
-          {!p.flags.includes('joke_suspected') && p.flags.includes('evidence_not_found') && <span className="pill seal">{t('Beleg im Transkript nicht gefunden')}</span>}
+          {!p.flags.includes('joke_suspected') && p.flags.includes('evidence_not_found') && <span className="pill seal">{t('Beleg in der Abschrift nicht gefunden')}</span>}
           {!p.flags.includes('joke_suspected') && !p.flags.includes('evidence_not_found') && p.flags.includes('low_confidence') && <span className="pill seal">{t('Unsicher')}</span>}
           {p.flags.includes('contradicts_bible') && <span className="pill brass">{t('Widerspricht der Bibel')}</span>}
           {p.action === 'reveal'
