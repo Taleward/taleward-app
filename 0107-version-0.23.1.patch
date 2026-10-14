@@ -1,0 +1,34 @@
+From d845ce422689042e35cb16a030a4f63691f9ca80 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 14 Oct 2026 06:33:44 +0200
+Subject: [PATCH 107/107] Version 0.23.1
+
+---
+ package-lock.json | 4 ++--
+ package.json      | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index 8e56ae6..a7d940c 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -2,3 +2,3 @@
+   "name": "taleward-app",
+-  "version": "0.23.0",
++  "version": "0.23.1",
+   "lockfileVersion": 3,
+@@ -8,3 +8,3 @@
+       "name": "taleward-app",
+-      "version": "0.23.0",
++      "version": "0.23.1",
+       "dependencies": {
+diff --git a/package.json b/package.json
+index 3e1e466..604b632 100644
+--- a/package.json
++++ b/package.json
+@@ -3,3 +3,3 @@
+   "private": true,
+-  "version": "0.23.0",
++  "version": "0.23.1",
+   "type": "module",
