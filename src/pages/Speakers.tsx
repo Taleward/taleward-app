@@ -145,7 +145,7 @@ export function Speakers() {
                 <option value={IGNORE}>{guests.length ? t('Ignorieren') : t('Gast / ignorieren')}</option>
               </select>
             </div>
-            {unsure && <strong style={{ color: 'var(--seal)', fontSize: 15 }}>{t('Nicht automatisch erkannt – bitte auswählen.')}</strong>}
+            {unsure && <strong style={{ color: 'var(--seal)', fontSize: 'calc(15px * var(--ts))' }}>{t('Nicht automatisch erkannt – bitte auswählen.')}</strong>}
           </div>
         );
       })}

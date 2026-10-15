@@ -25,9 +25,9 @@ export function ConsentHandover({ name, text, onConsent, onCancel }: {
     >
       <div className="screen-main" style={{ maxWidth: 640, margin: '0 auto', gap: 18, paddingTop: 28 }}>
         <div className="overline">{t('Bitte das Handy weitergeben an')}</div>
-        <h1 id="handover-title" style={{ fontSize: 30 }}>{name}</h1>
+        <h1 id="handover-title" style={{ fontSize: 'calc(30px * var(--ts))' }}>{name}</h1>
         <Divider />
-        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.6 }}>{text}</p>
+        <p style={{ margin: 0, fontSize: 'calc(18px * var(--ts))', lineHeight: 1.6 }}>{text}</p>
         <label className="check card" style={{ flexDirection: 'row' }}>
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
           <span>{t('Ich bin {name} und stimme zu.', { name })}</span>

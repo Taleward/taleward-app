@@ -58,7 +58,7 @@ export function BroughtPage() {
             <div className="row" style={{ gap: 10 }}>
               {m && <Avatar campaignId={campaign.id} member={m} size={40} />}
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <strong style={{ fontFamily: 'var(--display)', fontSize: 18 }}>{m?.characterName ?? m?.displayName ?? t('Unbekannt')}</strong>
+                <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(18px * var(--ts))' }}>{m?.characterName ?? m?.displayName ?? t('Unbekannt')}</strong>
                 <span className="muted small">
                   {m ? t('gespielt von {name}', { name: m.displayName }) + ' · ' : ''}
                   {tn(mine.length, '{n} Vorschlag', '{n} Vorschläge')}

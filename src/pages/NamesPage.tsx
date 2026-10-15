@@ -115,7 +115,7 @@ export function NamesPage() {
         return (
           <section key={term.id} className="card">
             <div className="row between wrap" style={{ gap: 8 }}>
-              <strong style={{ fontFamily: 'var(--display)', fontSize: 20 }}>{term.heard}</strong>
+              <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(20px * var(--ts))' }}>{term.heard}</strong>
               <span className="muted small">{tn(term.occurrences, 'Einmal gehört', '{n}-mal gehört')}</span>
             </div>
             {term.examples.map((ex) => (

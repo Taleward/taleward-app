@@ -196,7 +196,7 @@ export function Campaigns() {
           )}
           {multi && <span className="overline">{c.organization?.name ?? conn.name}</span>}
           <div className="row between" style={{ alignItems: 'flex-start' }}>
-            <h2 style={{ fontSize: 19 }}>{c.title}</h2>
+            <h2 style={{ fontSize: 'calc(19px * var(--ts))' }}>{c.title}</h2>
             {!hasCover(c) && (
               <div className="monogram" style={{ background: SEAL_COLORS[i % SEAL_COLORS.length] }} aria-hidden>
                 {c.title.replace(/^(Die|Der|Das|The|A|An)\s+/i, '').charAt(0)}

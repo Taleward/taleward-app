@@ -27,13 +27,15 @@ if (!CHROME) throw new Error('Chrome/Edge nicht gefunden – bitte CHROME_PATH s
 
 const L = {
   de: { cid: 'c-wasser', next: 'Weiter', askConsent: 'Zustimmen lassen', agree: 'Zustimmen',
-    accept: 'Übernehmen', publish: 'Recap veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
+    accept: 'Übernehmen', publish: 'Kapitel veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
     all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701',
-    played: 'Gespielt', search: 'Sefa Mor', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.' },
+    played: 'Gespielt', search: 'Sefa Mor', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.',
+    analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund' },
   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
-    accept: 'Accept', publish: 'Publish recap', invite: 'Invite players', qr: 'Show QR code',
+    accept: 'Accept', publish: 'Publish chapter', invite: 'Invite players', qr: 'Show QR code',
     all: 'All (', world: 'Brought-along world', mara: '00000000-0000-4000-8000-000000000801',
-    played: 'Played', search: 'Sefa Mor', hint: 'She did not flee. She left before they could come for her.' }
+    played: 'Played', search: 'Sefa Mor', hint: 'She did not flee. She left before they could come for her.',
+    analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory' }
 };
 
 // Welche Aufnahmen in welchem Thema (Stern in der Anfrage = zusätzlich Spielabend)
@@ -44,11 +46,14 @@ const START = [15];
 // 16: SL-Schirm am Tablet quer (eine Szene abgehakt, Bibel-Suche mit Tippfehler), 17: SL-Schirm am Handy (Kurzfassung),
 // 18: Prüfen-Seite mit einem Hinweis an einem Absatz („Stimmt etwas nicht oder fehlt etwas?“, ab Schnittstelle 0.4.15)
 const GM = [16, 17, 18];
+// 19–22: Auswertung von Charakterbögen und Hintergründen (Schnittstelle 0.4.18) – Charakterseite der Spielerin mit Stand,
+// „Jetzt dran“ der SL mit aufgeklappter Bitte, „Mitgebrachte Welt“ mit Herkunft, „Was mit deinen Daten passiert“
+const ANALYSIS = [19, 20, 21, 22];
 const RUNS = [
-  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM] },
-  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM] },
-  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM] },
-  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM] }
+  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM, ...ANALYSIS] },
+  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM, ...ANALYSIS] },
+  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM, ...ANALYSIS] },
+  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM, ...ANALYSIS] }
 ].map((r) => (process.env.SHOTS ? { ...r, shots: r.shots.filter((n) => process.env.SHOTS.split(',').map(Number).includes(n)) } : r));
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -202,6 +207,58 @@ for (const run of RUNS) {
     await go(`${k}/willkommen`); await shot(13);
     await login('anja');
     await go(`${k}/mitgebracht`); await shot(14);
+  }
+
+  if (run.shots.some((n) => ANALYSIS.includes(n))) {
+    // Auswertung vorbereiten (nur im Testmodus, direkt am Musterserver): SL erlaubt sie, Lea gibt ihren Hintergrund ab
+    // (die SL stimmt zu, fertig) und danach einen Bogen (wartet), Tom gibt seinen Hintergrund ab (wartet)
+    await page.evaluate(async (base, cid, sheetName) => {
+      const call = (who, method, path, body) => fetch(`${base}/api/v1${path}`, {
+        method, headers: { Authorization: `Bearer mock-token:u-${who}`, ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}) },
+        body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined
+      }).then((r) => (r.status === 204 ? null : r.json()));
+      await call('anja', 'PATCH', `/campaigns/${cid}`, { allowCharacterAnalysis: true });
+      const lea = await call('lea', 'POST', `/campaigns/${cid}/members/me/backstory-analysis`);
+      await call('anja', 'POST', `/character-analyses/${lea.id}/decision`, { approve: true });
+      await new Promise((r) => setTimeout(r, 7000));
+      await call('anja', 'GET', `/campaigns/${cid}/character-proposals`);
+      const form = new FormData();
+      form.append('file', new File(['%PDF-1.4'], sheetName, { type: 'application/pdf' }));
+      form.append('kind', 'character_sheet');
+      form.append('title', sheetName.replace(/\.pdf$/, ''));
+      await call('lea', 'POST', `/campaigns/${cid}/documents`, form);
+      await call('tom', 'POST', `/campaigns/${cid}/members/me/backstory-analysis`);
+    }, SERVER, t.cid, t.sheet);
+    const toHeading = (text) => page.evaluate((txt) => {
+      [...document.querySelectorAll('h2, summary')].find((h) => h.textContent.trim() === txt)?.closest('section, details')?.scrollIntoView({ block: 'start' });
+      document.querySelector('.screen-main').scrollBy(0, -12);
+    }, text);
+    await login('lea');
+    const leaMember = await page.evaluate(async (base, cid) => {
+      const c = await fetch(`${base}/api/v1/campaigns/${cid}`, { headers: { Authorization: 'Bearer mock-token:u-lea' } }).then((r) => r.json());
+      return c.members.find((m) => m.userId === 'u-lea').id;
+    }, SERVER, t.cid);
+    await go(`${k}/charakter/${leaMember}`); await toHeading(t.analyse); await shot(19);
+    await go(k);
+    await page.evaluate(() => { const d = document.getElementById('data-summary'); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); document.querySelector('.screen-main').scrollBy(0, -12); } });
+    await shot(22);
+    await login('anja');
+    await go(k);
+    await page.evaluate(() => {
+      const s = [...document.querySelectorAll('.now-fold > summary')].find((x) => x.textContent.startsWith('Tom'));
+      s?.click();
+      document.querySelector('.now-list')?.scrollIntoView({ block: 'start' });
+      document.querySelector('.screen-main').scrollBy(0, -12);
+    });
+    await wait(800);
+    await shot(20);
+    // Bis zu den Vorschlägen aus Leas Hintergrund scrollen (Herkunft „Aus dem Hintergrund“)
+    await go(`${k}/mitgebracht`);
+    await page.evaluate((txt) => {
+      [...document.querySelectorAll('span.muted')].find((x) => x.textContent.trim() === txt)?.scrollIntoView({ block: 'start' });
+      document.querySelector('.screen-main').scrollBy(0, -12);
+    }, t.fromBackstory);
+    await shot(21);
   }
 
   if (errors.length) console.log('   Fehler in der Seite:', errors);

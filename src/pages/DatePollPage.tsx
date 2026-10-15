@@ -85,7 +85,7 @@ export function DatePollPage() {
       {campaign?.nextSessionAt && !open && (
         <div className="card">
           <span className="overline">{t('Festgelegt')}</span>
-          <h2 style={{ fontSize: 22 }}>{formatDateTime(campaign.nextSessionAt)}</h2>
+          <h2 style={{ fontSize: 'calc(22px * var(--ts))' }}>{formatDateTime(campaign.nextSessionAt)}</h2>
         </div>
       )}
 
@@ -123,7 +123,7 @@ export function DatePollPage() {
               <div key={o.id} className={mine ? 'card' : 'card task'}>
                 <div className="row between" style={{ alignItems: 'flex-start' }}>
                   <div>
-                    <div className="card-title" style={{ fontFamily: 'var(--display)', fontSize: 19 }}>{formatDateTime(o.startsAt)}</div>
+                    <div className="card-title" style={{ fontFamily: 'var(--display)', fontSize: 'calc(19px * var(--ts))' }}>{formatDateTime(o.startsAt)}</div>
                     <div className="muted small">{t('vorgeschlagen von {name}', { name: name(o.proposedByMemberId) })}</div>
                   </div>
                   {best?.id === o.id && score(o) > 0 && <span className="pill moss">{t('Beste Wahl')}</span>}
@@ -183,7 +183,7 @@ export function DatePollPage() {
             <div className="field">
               <label htmlFor="new-date">{t('Datum und Uhrzeit')}</label>
               <input id="new-date" type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)}
-                style={{ width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule-strong)', background: 'var(--field)', color: 'var(--ink)', fontFamily: 'var(--text)', fontSize: 17 }} />
+                style={{ width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule-strong)', background: 'var(--field)', color: 'var(--ink)', fontFamily: 'var(--text)', fontSize: 'calc(17px * var(--ts))' }} />
             </div>
             <Missing text={newDate ? null : t('Bitte zuerst Datum und Uhrzeit wählen.')} shown={triedDate} />
             <button type="button" className="btn small" disabled={busy}

@@ -353,6 +353,9 @@ function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean):
 }
 
 function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[] {
+  // Musterkampagne (Aufnahmen für die Website): Vorschläge aus den Hintergründen von Mara und Tavin, je Sprache
+  const muster = MUSTER_ANALYSIS[a.campaignId]?.[campaigns.find((c) => c.id === a.campaignId)?.members.find((m) => m.id === a.memberId)?.userId ?? ''];
+  if (muster) return muster;
   if (a.memberId === 'm-jonas') return [
     { entryType: 'faction', title: 'Diebesgilde von Kaltenfurt', detail: 'Thorwald schuldet ihr 300 Silber.', gmNotes: null }
   ];
@@ -361,6 +364,27 @@ function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | '
     { entryType: 'location', title: 'Nebelkamm', detail: 'Hirtenland, in dem die Figur aufwuchs.', gmNotes: null }
   ];
 }
+
+const MUSTER_ANALYSIS: Record<string, Record<string, Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[]>> = {
+  'c-wasser': {
+    'u-lea': [
+      { entryType: 'location', title: 'Kartenkammer des Archivs', detail: 'Hier zeichnete Maras Mutter Liv Venn Karten für das Archiv von Hohenwacht.', gmNotes: null },
+      { entryType: 'quest', title: 'Livs Verschwinden', detail: 'Vor sechs Jahren ging Liv Venn abends ins Archiv und kam nicht zurück. Die Stadt sagt, sie sei fortgezogen.', gmNotes: null }
+    ],
+    'u-tom': [
+      { entryType: 'item', title: 'Abschrift aus dem Grenzregister', detail: 'Eine Seite, die Tavin im Winter zur Übung abschrieb und nicht hätte mitnehmen dürfen.', gmNotes: null }
+    ]
+  },
+  'c-waters': {
+    'u-lea': [
+      { entryType: 'location', title: 'The archive map room', detail: 'Where Mara\'s mother Liv Venn drew maps for the archive of Hohenwacht.', gmNotes: null },
+      { entryType: 'quest', title: 'Liv\'s disappearance', detail: 'Six years ago Liv Venn went into the archive one evening and never came back. The town says she moved away.', gmNotes: null }
+    ],
+    'u-tom': [
+      { entryType: 'item', title: 'Copy from the border register', detail: 'A page Tavin copied as an exercise last winter and should never have taken with him.', gmNotes: null }
+    ]
+  }
+};
 
 /** Neue Auswertung anlegen und der SL Bescheid geben (0.4.18) */
 function newAnalysis(c: MockCampaign, memberId: string, source: 'sheet' | 'backstory', title: string, documentId: string | null, pageCount: number | null) {

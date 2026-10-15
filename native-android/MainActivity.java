@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BackgroundRecorderPlugin.class);
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(NotifierPlugin.class);
+        registerPlugin(TextScalePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

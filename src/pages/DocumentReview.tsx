@@ -74,7 +74,7 @@ export function DocumentReview() {
         <section className="card">
           <h2>{t('Vorschlag für den Welt-Hintergrund')}</h2>
           <div className="recap" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {doc.worldInfoSuggestion.split(/\n\s*\n/).map((para, i) => <p key={i} style={{ fontSize: 16 }}>{para}</p>)}
+            {doc.worldInfoSuggestion.split(/\n\s*\n/).map((para, i) => <p key={i} style={{ fontSize: 'calc(16px * var(--ts))' }}>{para}</p>)}
           </div>
           <label className="check">
             <input type="checkbox" checked={applyWorld} onChange={(e) => setApplyWorld(e.target.checked)} />

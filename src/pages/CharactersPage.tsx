@@ -82,7 +82,7 @@ export function CharactersPage() {
                   <div className="row" style={{ gap: 14, alignItems: 'center' }}>
                     <CharacterPortrait id={c.id} name={c.name} portrait={c.portrait} meta={c.portraitMeta} size={64} faded={c.status !== 'active'} />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                      <h2 style={{ fontSize: 19 }}>{c.name}</h2>
+                      <h2 style={{ fontSize: 'calc(19px * var(--ts))' }}>{c.name}</h2>
                       <span className="muted small">
                         {[c.nickname && t('„{q}“', { q: c.nickname }), c.system, c.status !== 'active' && t(STATUS_LABEL[c.status])].filter(Boolean).join(' · ')}
                       </span>

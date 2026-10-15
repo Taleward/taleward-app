@@ -129,7 +129,7 @@ function CharacterChoice({ campaign, memberId, initialName, onDone, onSkip }: {
           style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit', flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <CharacterPortrait id={c.id} name={c.name} portrait={c.portrait} meta={c.portraitMeta} size={56} />
           <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-            <strong style={{ fontFamily: 'var(--display)', fontSize: 18 }}>{c.name}</strong>
+            <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(18px * var(--ts))' }}>{c.name}</strong>
             <span className="muted small">
               {busy === c.id ? t('Schicke …') : [c.system, c.world.length ? tn(c.world.length, '{n} mitgebrachter Eintrag', '{n} mitgebrachte Einträge') : null].filter(Boolean).join(' · ') || t('Mit diesem Charakter spielen')}
             </span>

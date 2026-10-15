@@ -46,7 +46,7 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
       <div className="overline">
         {t('Kapitel {n}', { n: recap.number })} · {playedAt ? t('Gespielt am {date}', { date: formatDate(playedAt) }) : formatDate(recap.publishedAt)}
       </div>
-      <h2 style={{ fontSize: 21 }}>{recap.title}</h2>
+      <h2 style={{ fontSize: 'calc(21px * var(--ts))' }}>{recap.title}</h2>
       <Divider />
       <div className="recap" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {shown.map((p, i) => (

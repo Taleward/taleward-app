@@ -131,7 +131,7 @@ export function Overview() {
           <Link to={p(`/k/${campaignId}/termin`)} className="card">
             <span className="overline">{t('Nächste Runde')}</span>
             {campaign.nextSessionAt
-              ? <strong style={{ fontFamily: 'var(--display)', fontSize: 19 }}>{formatDateTime(campaign.nextSessionAt)}</strong>
+              ? <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(19px * var(--ts))' }}>{formatDateTime(campaign.nextSessionAt)}</strong>
               : <strong>{campaign.datePollNeedsMyVote ? t('Terminabstimmung läuft') : t('Noch kein Termin')}</strong>}
             <span className="muted small">
               {campaign.datePollNeedsMyVote ? t('Sag, welche Termine dir passen.') : gm ? t('Termin abstimmen oder Stand ansehen') : t('Terminabstimmung ansehen')}

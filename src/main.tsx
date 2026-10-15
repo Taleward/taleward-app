@@ -24,6 +24,9 @@ async function start() {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
     StatusBar.setBackgroundColor({ color: '#17313b' }).catch(() => undefined);
     StatusBar.setStyle({ style: Style.Dark }).catch(() => undefined);
+    // Schriftgröße des Handys übernehmen (Einstellungen → Anzeige)
+    const { followSystemTextScale } = await import('./display/textScale');
+    followSystemTextScale();
   }
   if (import.meta.env.VITE_API_MODE === 'mock') {
     const { installMockFetch } = await import('./mocks/installMockFetch');

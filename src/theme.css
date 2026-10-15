@@ -89,6 +89,8 @@
   }
 }
 :root {
+  /* Schriftgröße des Handys (Android), gesetzt von src/display/textScale.ts; 1 = normal */
+  --ts: 1;
   --font-serif: 'Alegreya', Georgia, 'Times New Roman', serif;
   --font-sans: 'Alegreya Sans', system-ui, 'Segoe UI', sans-serif;
   --space-1: 4px;
@@ -144,8 +146,8 @@ body {
   background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 24px;
+  font-size: calc(16px * var(--ts));
+  line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -212,7 +214,7 @@ textarea:focus-visible {
 
 /* Kleine Zeile über dem Titel: Satzschreibung, keine Versalien, keine Sperrung */
 .overline {
-  font: 500 14px/20px var(--font-sans);
+  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
   color: var(--ink-muted);
 }
 
@@ -225,14 +227,14 @@ h3 {
 }
 
 h1 {
-  font-size: 30px;
-  line-height: 36px;
+  font-size: calc(30px * var(--ts));
+  line-height: 1.2;
   font-weight: 700;
 }
 
 h2 {
-  font-size: 22px;
-  line-height: 28px;
+  font-size: calc(22px * var(--ts));
+  line-height: 1.28;
   font-weight: 700;
 }
 
@@ -244,14 +246,17 @@ h2 {
   flex-direction: column;
   gap: 14px;
 }
+/* Knöpfe in der Spalte nie stauchen (sonst ragt zweizeiliger Text bei großer Schrift heraus) */
+.screen-main > .btn,
+.screen-main > .hero { flex-shrink: 0; }
 
 .muted {
   color: var(--ink-muted);
 }
 
 .small {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: calc(13px * var(--ts));
+  line-height: 1.39;
 }
 
 /* ---------- Karten ---------- */
@@ -300,7 +305,7 @@ h2 {
 }
 
 .card-title {
-  font: 700 20px/26px var(--font-serif);
+  font: 700 calc(20px * var(--ts))/1.3 var(--font-serif);
 }
 
 .row {
@@ -338,7 +343,7 @@ h2 {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0)) var(--tinte);
   color: var(--on-tinte);
   box-shadow: var(--shadow-button);
-  font: 700 16px/24px var(--font-sans);
+  font: 700 calc(16px * var(--ts))/1.5 var(--font-sans);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -410,7 +415,7 @@ h2 {
 }
 
 .btn.small {
-  font-size: 15px;
+  font-size: calc(15px * var(--ts));
   padding: var(--space-2) var(--space-4);
 }
 
@@ -455,7 +460,7 @@ h2 {
   max-width: 100%;
   padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
-  font: 500 13px/18px var(--font-sans);
+  font: 500 calc(13px * var(--ts))/1.385 var(--font-sans);
   border: 1px solid var(--line-strong);
   color: var(--ink);
   flex-shrink: 0;
@@ -495,7 +500,7 @@ h2 {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font: 500 14px/20px var(--font-sans);
+  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
   border-radius: var(--radius-sm);
   padding: 2px var(--space-2);
   flex-shrink: 0;
@@ -517,7 +522,7 @@ h2 {
   background: var(--siegel-soft);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
-  font: 400 15px/22px var(--font-sans);
+  font: 400 calc(15px * var(--ts))/1.467 var(--font-sans);
   color: var(--ink);
 }
 
@@ -555,7 +560,7 @@ h2 {
 
 .field label,
 .field .label {
-  font: 500 14px/20px var(--font-sans);
+  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
   color: var(--ink);
 }
 
@@ -573,7 +578,7 @@ textarea {
   border: 1px solid var(--line-strong);
   background: var(--paper-sunken);
   color: var(--ink);
-  font: 400 16px/24px var(--font-sans);
+  font: 400 calc(16px * var(--ts))/1.5 var(--font-sans);
 }
 
 textarea {
@@ -604,8 +609,8 @@ textarea {
   padding: 14px;
   border-radius: var(--radius-md);
   background: var(--paper-sunken);
-  font-size: 15px;
-  line-height: 22px;
+  font-size: calc(15px * var(--ts));
+  line-height: 1.47;
 }
 
 .error {
@@ -648,7 +653,7 @@ textarea {
   border: 1.5px solid var(--line-strong);
   background: var(--paper-raised);
   color: var(--ink);
-  font: 700 15px/20px var(--font-sans);
+  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
   cursor: pointer;
 }
 
@@ -675,7 +680,7 @@ textarea {
   padding: 10px 0 12px;
   text-decoration: none;
   color: var(--ink-muted);
-  font: 500 14px/20px var(--font-sans);
+  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
 }
 
 .bottom-nav a.active {
@@ -740,8 +745,8 @@ textarea {
 }
 
 .rec-time.big {
-  font-size: 48px;
-  line-height: 52px;
+  font-size: calc(48px * var(--ts));
+  line-height: 1.08;
 }
 
 /* Mikrofon ↔ Zeichen: 8-s-Kreislauf im 2-s-Puls – je ein Puls stehen, ein Puls Überblendung */
@@ -840,21 +845,21 @@ textarea {
 }
 
 .rec-time {
-  font: 700 32px/36px var(--font-serif);
+  font: 700 calc(32px * var(--ts))/1.125 var(--font-serif);
   font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* ---------- Erzähltes (Recap) ---------- */
 .recap p {
   margin: 0;
-  font: 400 19px/31px var(--font-serif);
+  font: 400 calc(19px * var(--ts))/1.632 var(--font-serif);
   max-width: 68ch;
 }
 
 /* Zwischenüberschrift eines Teils im Kapitel (ab Schnittstelle 0.4.17) */
 .recap-part {
   margin: 12px 0 0;
-  font: 700 17px/24px var(--font-serif);
+  font: 700 calc(17px * var(--ts))/1.412 var(--font-serif);
   max-width: 68ch;
 }
 .recap-part:first-child { margin-top: 0; }
@@ -1043,7 +1048,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 .chapter-card .num {
   grid-row: span 3;
-  font: 800 40px/40px var(--font-serif);
+  font: 800 calc(40px * var(--ts))/1 var(--font-serif);
   color: var(--tinte);
   min-width: 48px;
   text-align: center;
@@ -1060,11 +1065,11 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .chapter-card .title {
-  font: 700 22px/28px var(--font-serif);
+  font: 700 calc(22px * var(--ts))/1.273 var(--font-serif);
 }
 
 .chapter-card .meta {
-  font: 400 13px/18px var(--font-sans);
+  font: 400 calc(13px * var(--ts))/1.385 var(--font-sans);
   color: var(--ink-muted);
   display: flex;
   gap: var(--space-3);
@@ -1130,7 +1135,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font: 700 14px/20px var(--font-sans);
+  font: 700 calc(14px * var(--ts))/1.429 var(--font-sans);
   text-decoration: none;
   backdrop-filter: blur(4px);
   cursor: pointer;
@@ -1163,12 +1168,13 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .hero {
-  height: 200px;
+  /* Mit größerer Schrift des Handys wächst der Kopf mit, damit Titel und Zurück-Knopf sich nicht überdecken */
+  height: calc(200px + (var(--ts) - 1) * 150px);
   margin: 0 calc(-1 * var(--pad)) 8px;
 }
 
 .hero:not(.large) {
-  height: 128px;
+  height: calc(128px + (var(--ts) - 1) * 150px);
 }
 
 /* Zweispaltig: a (Hauptsache), b (Seitenspalte), c (Hauptsache, unter a) – auf dem Handy in DOM-Reihenfolge */
@@ -1204,11 +1210,11 @@ details.card[open] { padding-bottom: var(--space-4); }
   }
 
   .hero {
-    height: 240px;
+    height: calc(240px + (var(--ts) - 1) * 150px);
   }
 
   .hero:not(.large) {
-    height: 150px;
+    height: calc(150px + (var(--ts) - 1) * 150px);
   }
 }
 
@@ -1256,7 +1262,7 @@ details.card[open] { padding-bottom: var(--space-4); }
     gap: 12px;
     padding: 12px 14px;
     border-radius: var(--radius-md);
-    font-size: 16px;
+    font-size: calc(16px * var(--ts));
   }
 
   .screen:has(> .bottom-nav) > .bottom-nav a.active {
@@ -1277,11 +1283,11 @@ details.card[open] { padding-bottom: var(--space-4); }
   }
 
   .hero {
-    height: 300px;
+    height: calc(300px + (var(--ts) - 1) * 150px);
   }
 
   .hero:not(.large) {
-    height: 180px;
+    height: calc(180px + (var(--ts) - 1) * 150px);
   }
 
   .split {
@@ -1371,8 +1377,8 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .table-title {
-  font-size: 24px;
-  line-height: 30px;
+  font-size: calc(24px * var(--ts));
+  line-height: 1.25;
 }
 
 .table-rec {
@@ -1384,7 +1390,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--paper-raised);
-  font: 700 15px/20px var(--font-sans);
+  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
 }
 
 .table-rec-dot {
@@ -1434,8 +1440,8 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .table-panel-title {
-  font-size: 19px;
-  line-height: 24px;
+  font-size: calc(19px * var(--ts));
+  line-height: 1.26;
 }
 
 .table-panel-body {
@@ -1613,7 +1619,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .table-edit-name {
-  font: 700 15px/20px var(--font-sans);
+  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
 }
 
 .table-edit-group {
@@ -1737,7 +1743,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .link-host {
-  font: 400 12px/16px var(--font-sans);
+  font: 400 calc(12px * var(--ts))/1.333 var(--font-sans);
   color: var(--ink-muted);
 }
 
@@ -1783,7 +1789,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   border-radius: 10px;
   background: var(--tinte);
   color: var(--on-tinte);
-  font: 700 15px/20px var(--font-sans);
+  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
   text-align: center;
 }
 
@@ -1863,13 +1869,13 @@ button.table-group-face {
 }
 
 .table-clock {
-  font: 700 32px/36px var(--font-serif);
+  font: 700 calc(32px * var(--ts))/1.125 var(--font-serif);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 
 .table-clock-value {
-  font: 700 32px/36px var(--font-serif);
+  font: 700 calc(32px * var(--ts))/1.125 var(--font-serif);
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -2008,10 +2014,10 @@ button.table-group-face {
 /* ---------- Kapitel lesen: „Aa“ (Schriftgröße, Seite) ---------- */
 /* Eigene Seite (data-theme an der Karte): Farben kommen aus demselben Thema wie die App */
 .reading-page { color: var(--ink); background: var(--paper-raised); }
-.reading-page[data-read-size='large'] .recap p { font-size: 22px; line-height: 35px; }
-.reading-page[data-read-size='large'] .recap-part { font-size: 19px; line-height: 27px; }
-.reading-page[data-read-size='larger'] .recap p { font-size: 25px; line-height: 40px; }
-.reading-page[data-read-size='larger'] .recap-part { font-size: 22px; line-height: 30px; }
+.reading-page[data-read-size='large'] .recap p { font-size: calc(22px * var(--ts)); line-height: 1.6; }
+.reading-page[data-read-size='large'] .recap-part { font-size: calc(19px * var(--ts)); line-height: 1.42; }
+.reading-page[data-read-size='larger'] .recap p { font-size: calc(25px * var(--ts)); line-height: 1.6; }
+.reading-page[data-read-size='larger'] .recap-part { font-size: calc(22px * var(--ts)); line-height: 1.36; }
 .read-aa { min-width: 48px; font-family: var(--font-serif); font-weight: 700; }
 .read-settings {
   display: flex;
@@ -2063,5 +2069,5 @@ button.table-group-face {
 
 /* Kurze Liste in Rückfragen: was gelöscht wird, was bleibt */
 .confirm-list { display: flex; flex-direction: column; gap: 6px; margin: 0; }
-.confirm-list dt { font-weight: 700; font-size: 14px; }
+.confirm-list dt { font-weight: 700; font-size: calc(14px * var(--ts)); }
 .confirm-list dd { margin: 0; }
