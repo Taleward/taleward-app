@@ -91,6 +91,11 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+/** Abbruch nach 30 s; ältere WebViews ohne AbortSignal.timeout warten wie bisher */
+function requestTimeout(): AbortSignal | undefined {
+  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(30_000) : undefined;
+}
+
 async function requestOn<T>(conn: Connection, method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   // Pfade nur aus Teilen nach dem Muster der Schnittstelle (0.4.14)
   if (!isSafePath(path)) throw new ApiRequestError(0, { code: 'invalid_id', message: t('Ungültige Kennung. Die Daten passen nicht zu diesem Server.') });
@@ -119,7 +124,10 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
       body: opts.form ?? opts.raw ?? (opts.body !== undefined ? JSON.stringify(opts.body) : undefined),
       // Nie aus einem Zwischenspeicher antworten: Proxys, CDNs oder die WebView könnten sonst veraltete Listen
       // liefern (z. B. neue Kampagne fehlt nach dem Anlegen)
-      cache: 'no-store'
+      cache: 'no-store',
+      // Antwortet der Server gar nicht, nicht endlos warten: nach 30 s wie „nicht erreichbar“ behandeln.
+      // POST (Hochladen, Abschließen, Neu schreiben …) darf länger dauern und bekommt keine Grenze.
+      signal: method === 'POST' || opts.form || opts.raw !== undefined ? undefined : requestTimeout()
     });
   } catch {
     if (copyUser) {
