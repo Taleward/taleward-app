@@ -1,0 +1,766 @@
+From b58e2cd9a1bca390358795053528c292122ef9ee Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 08:54:26 +0200
+Subject: [PATCH] =?UTF-8?q?Schriftgr=C3=B6=C3=9Fe=20des=20Handys=20in=20de?=
+ =?UTF-8?q?r=20Android-App;=20Aufnahmen=2019=E2=80=9322?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Android: TextScalePlugin gibt die Schriftgröße des Systems an die Oberfläche (CSS-Variable --ts, 0,85 bis 1,6), Textzoom der WebView fest auf 100 %. Alle Schriftgrößen in theme.css und an Ort und Stelle rechnen mit --ts, Zeilenhöhen ohne px, Titelbild wächst mit. Testmodus: Vorschläge aus den Hintergründen der Musterkampagne, scripts/screenshots.mjs mit Nr. 19–22.
+---
+ native-android/MainActivity.java    |   1 +
+ native-android/TextScalePlugin.java |  28 +++++++
+ scripts/screenshots.mjs             |  73 ++++++++++++++++--
+ scripts/tests/text-scale.test.mjs   |  17 +++++
+ src/components/ConsentHandover.tsx  |   4 +-
+ src/components/RecapView.tsx        |   2 +-
+ src/display/scale.ts                |  15 ++++
+ src/display/textScale.ts            |  30 ++++++++
+ src/main.tsx                        |   3 +
+ src/mocks/handlers.ts               |  24 ++++++
+ src/pages/BroughtPage.tsx           |   2 +-
+ src/pages/Campaigns.tsx             |   2 +-
+ src/pages/CharactersPage.tsx        |   2 +-
+ src/pages/DatePollPage.tsx          |   6 +-
+ src/pages/DocumentReview.tsx        |   2 +-
+ src/pages/NamesPage.tsx             |   2 +-
+ src/pages/Overview.tsx              |   2 +-
+ src/pages/Speakers.tsx              |   2 +-
+ src/pages/WelcomePage.tsx           |   2 +-
+ src/theme.css                       | 110 +++++++++++++++-------------
+ 20 files changed, 255 insertions(+), 74 deletions(-)
+ create mode 100644 native-android/TextScalePlugin.java
+ create mode 100644 scripts/tests/text-scale.test.mjs
+ create mode 100644 src/display/scale.ts
+ create mode 100644 src/display/textScale.ts
+
+diff --git a/native-android/MainActivity.java b/native-android/MainActivity.java
+index 4221c37..bdbcc82 100644
+--- a/native-android/MainActivity.java
++++ b/native-android/MainActivity.java
+@@ -10,4 +10,5 @@ public class MainActivity extends BridgeActivity {
+         registerPlugin(AppUpdaterPlugin.class);
+         registerPlugin(NotifierPlugin.class);
++        registerPlugin(TextScalePlugin.class);
+         super.onCreate(savedInstanceState);
+     }
+diff --git a/native-android/TextScalePlugin.java b/native-android/TextScalePlugin.java
+new file mode 100644
+index 0000000..ff393ab
+--- /dev/null
++++ b/native-android/TextScalePlugin.java
+@@ -0,0 +1,28 @@
++package app.taleward;
++
++import com.getcapacitor.JSObject;
++import com.getcapacitor.Plugin;
++import com.getcapacitor.PluginCall;
++import com.getcapacitor.PluginMethod;
++import com.getcapacitor.annotation.CapacitorPlugin;
++
++/**
++ * Schriftgröße des Handys (Einstellungen → Anzeige → Schriftgröße) an die App weitergeben.
++ * Die WebView vergrößert sonst nur längere Textblöcke und lässt Knöpfe und Überschriften klein; deshalb hier
++ * Textzoom 100 % und die Oberfläche skaliert selbst alle Schriften gleichmäßig (src/display/textScale.ts).
++ */
++@CapacitorPlugin(name = "TextScale")
++public class TextScalePlugin extends Plugin {
++
++    @Override
++    public void load() {
++        getBridge().executeOnMainThread(() -> getBridge().getWebView().getSettings().setTextZoom(100));
++    }
++
++    @PluginMethod
++    public void get(PluginCall call) {
++        JSObject result = new JSObject();
++        result.put("scale", (double) getContext().getResources().getConfiguration().fontScale);
++        call.resolve(result);
++    }
++}
+diff --git a/scripts/screenshots.mjs b/scripts/screenshots.mjs
+index a864dac..9c9cdf4 100644
+--- a/scripts/screenshots.mjs
++++ b/scripts/screenshots.mjs
+@@ -28,11 +28,13 @@ if (!CHROME) throw new Error('Chrome/Edge nicht gefunden – bitte CHROME_PATH s
+ const L = {
+   de: { cid: 'c-wasser', next: 'Weiter', askConsent: 'Zustimmen lassen', agree: 'Zustimmen',
+-    accept: 'Übernehmen', publish: 'Recap veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
++    accept: 'Übernehmen', publish: 'Kapitel veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
+     all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701',
+-    played: 'Gespielt', search: 'Sefa Mor', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.' },
++    played: 'Gespielt', search: 'Sefa Mor', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.',
++    analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund' },
+   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
+-    accept: 'Accept', publish: 'Publish recap', invite: 'Invite players', qr: 'Show QR code',
++    accept: 'Accept', publish: 'Publish chapter', invite: 'Invite players', qr: 'Show QR code',
+     all: 'All (', world: 'Brought-along world', mara: '00000000-0000-4000-8000-000000000801',
+-    played: 'Played', search: 'Sefa Mor', hint: 'She did not flee. She left before they could come for her.' }
++    played: 'Played', search: 'Sefa Mor', hint: 'She did not flee. She left before they could come for her.',
++    analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory' }
+ };
+ 
+@@ -45,9 +47,12 @@ const START = [15];
+ // 18: Prüfen-Seite mit einem Hinweis an einem Absatz („Stimmt etwas nicht oder fehlt etwas?“, ab Schnittstelle 0.4.15)
+ const GM = [16, 17, 18];
++// 19–22: Auswertung von Charakterbögen und Hintergründen (Schnittstelle 0.4.18) – Charakterseite der Spielerin mit Stand,
++// „Jetzt dran“ der SL mit aufgeklappter Bitte, „Mitgebrachte Welt“ mit Herkunft, „Was mit deinen Daten passiert“
++const ANALYSIS = [19, 20, 21, 22];
+ const RUNS = [
+-  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM] },
+-  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM] },
+-  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM] },
+-  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM] }
++  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM, ...ANALYSIS] },
++  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM, ...ANALYSIS] },
++  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM, ...ANALYSIS] },
++  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM, ...ANALYSIS] }
+ ].map((r) => (process.env.SHOTS ? { ...r, shots: r.shots.filter((n) => process.env.SHOTS.split(',').map(Number).includes(n)) } : r));
+ 
+@@ -205,4 +210,56 @@ for (const run of RUNS) {
+   }
+ 
++  if (run.shots.some((n) => ANALYSIS.includes(n))) {
++    // Auswertung vorbereiten (nur im Testmodus, direkt am Musterserver): SL erlaubt sie, Lea gibt ihren Hintergrund ab
++    // (die SL stimmt zu, fertig) und danach einen Bogen (wartet), Tom gibt seinen Hintergrund ab (wartet)
++    await page.evaluate(async (base, cid, sheetName) => {
++      const call = (who, method, path, body) => fetch(`${base}/api/v1${path}`, {
++        method, headers: { Authorization: `Bearer mock-token:u-${who}`, ...(body && !(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}) },
++        body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined
++      }).then((r) => (r.status === 204 ? null : r.json()));
++      await call('anja', 'PATCH', `/campaigns/${cid}`, { allowCharacterAnalysis: true });
++      const lea = await call('lea', 'POST', `/campaigns/${cid}/members/me/backstory-analysis`);
++      await call('anja', 'POST', `/character-analyses/${lea.id}/decision`, { approve: true });
++      await new Promise((r) => setTimeout(r, 7000));
++      await call('anja', 'GET', `/campaigns/${cid}/character-proposals`);
++      const form = new FormData();
++      form.append('file', new File(['%PDF-1.4'], sheetName, { type: 'application/pdf' }));
++      form.append('kind', 'character_sheet');
++      form.append('title', sheetName.replace(/\.pdf$/, ''));
++      await call('lea', 'POST', `/campaigns/${cid}/documents`, form);
++      await call('tom', 'POST', `/campaigns/${cid}/members/me/backstory-analysis`);
++    }, SERVER, t.cid, t.sheet);
++    const toHeading = (text) => page.evaluate((txt) => {
++      [...document.querySelectorAll('h2, summary')].find((h) => h.textContent.trim() === txt)?.closest('section, details')?.scrollIntoView({ block: 'start' });
++      document.querySelector('.screen-main').scrollBy(0, -12);
++    }, text);
++    await login('lea');
++    const leaMember = await page.evaluate(async (base, cid) => {
++      const c = await fetch(`${base}/api/v1/campaigns/${cid}`, { headers: { Authorization: 'Bearer mock-token:u-lea' } }).then((r) => r.json());
++      return c.members.find((m) => m.userId === 'u-lea').id;
++    }, SERVER, t.cid);
++    await go(`${k}/charakter/${leaMember}`); await toHeading(t.analyse); await shot(19);
++    await go(k);
++    await page.evaluate(() => { const d = document.getElementById('data-summary'); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); document.querySelector('.screen-main').scrollBy(0, -12); } });
++    await shot(22);
++    await login('anja');
++    await go(k);
++    await page.evaluate(() => {
++      const s = [...document.querySelectorAll('.now-fold > summary')].find((x) => x.textContent.startsWith('Tom'));
++      s?.click();
++      document.querySelector('.now-list')?.scrollIntoView({ block: 'start' });
++      document.querySelector('.screen-main').scrollBy(0, -12);
++    });
++    await wait(800);
++    await shot(20);
++    // Bis zu den Vorschlägen aus Leas Hintergrund scrollen (Herkunft „Aus dem Hintergrund“)
++    await go(`${k}/mitgebracht`);
++    await page.evaluate((txt) => {
++      [...document.querySelectorAll('span.muted')].find((x) => x.textContent.trim() === txt)?.scrollIntoView({ block: 'start' });
++      document.querySelector('.screen-main').scrollBy(0, -12);
++    }, t.fromBackstory);
++    await shot(21);
++  }
++
+   if (errors.length) console.log('   Fehler in der Seite:', errors);
+   await page.close();
+diff --git a/scripts/tests/text-scale.test.mjs b/scripts/tests/text-scale.test.mjs
+new file mode 100644
+index 0000000..2f05111
+--- /dev/null
++++ b/scripts/tests/text-scale.test.mjs
+@@ -0,0 +1,17 @@
++// Schriftgröße des Handys: Faktor bleibt in vernünftigen Grenzen, Unsinn ergibt normale Größe.
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { clampScale } from '../../src/display/scale.ts';
++
++test('Schriftgröße des Handys begrenzen', () => {
++  assert.equal(clampScale(1), 1);
++  assert.equal(clampScale(1.3), 1.3);
++  assert.equal(clampScale(1.15), 1.15);
++  assert.equal(clampScale(2), 1.6);
++  assert.equal(clampScale(0.5), 0.85);
++  assert.equal(clampScale(1.299999), 1.3);
++  assert.equal(clampScale(NaN), 1);
++  assert.equal(clampScale(0), 1);
++  assert.equal(clampScale('1.3'), 1.3);
++  assert.equal(clampScale(undefined), 1);
++});
+diff --git a/src/components/ConsentHandover.tsx b/src/components/ConsentHandover.tsx
+index 81e5b83..0ac2831 100644
+--- a/src/components/ConsentHandover.tsx
++++ b/src/components/ConsentHandover.tsx
+@@ -26,7 +26,7 @@ export function ConsentHandover({ name, text, onConsent, onCancel }: {
+       <div className="screen-main" style={{ maxWidth: 640, margin: '0 auto', gap: 18, paddingTop: 28 }}>
+         <div className="overline">{t('Bitte das Handy weitergeben an')}</div>
+-        <h1 id="handover-title" style={{ fontSize: 30 }}>{name}</h1>
++        <h1 id="handover-title" style={{ fontSize: 'calc(30px * var(--ts))' }}>{name}</h1>
+         <Divider />
+-        <p style={{ margin: 0, fontSize: 18, lineHeight: 1.6 }}>{text}</p>
++        <p style={{ margin: 0, fontSize: 'calc(18px * var(--ts))', lineHeight: 1.6 }}>{text}</p>
+         <label className="check card" style={{ flexDirection: 'row' }}>
+           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+diff --git a/src/components/RecapView.tsx b/src/components/RecapView.tsx
+index d888dcf..d70cf55 100644
+--- a/src/components/RecapView.tsx
++++ b/src/components/RecapView.tsx
+@@ -47,5 +47,5 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
+         {t('Kapitel {n}', { n: recap.number })} · {playedAt ? t('Gespielt am {date}', { date: formatDate(playedAt) }) : formatDate(recap.publishedAt)}
+       </div>
+-      <h2 style={{ fontSize: 21 }}>{recap.title}</h2>
++      <h2 style={{ fontSize: 'calc(21px * var(--ts))' }}>{recap.title}</h2>
+       <Divider />
+       <div className="recap" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+diff --git a/src/display/scale.ts b/src/display/scale.ts
+new file mode 100644
+index 0000000..5ae0e01
+--- /dev/null
++++ b/src/display/scale.ts
+@@ -0,0 +1,15 @@
++/**
++ * Schriftgröße des Handys → Faktor für die Oberfläche (CSS-Variable --ts). Ohne Laufzeit-Importe, damit es sich testen
++ * lässt (scripts/tests/text-scale.test.mjs).
++ *
++ * Android bietet je nach Gerät etwa 0,85 bis 2,0. Nach oben bei 1,6 begrenzt: Darüber passen Knöpfe, Kopfzeile und
++ * SL-Schirm auf einem Handy nicht mehr sinnvoll nebeneinander. Kleiner als 0,85 gibt es nicht.
++ */
++export const MIN_SCALE = 0.85;
++export const MAX_SCALE = 1.6;
++
++export function clampScale(value: unknown): number {
++  const n = typeof value === 'number' ? value : Number(value);
++  if (!Number.isFinite(n) || n <= 0) return 1;
++  return Math.round(Math.min(MAX_SCALE, Math.max(MIN_SCALE, n)) * 100) / 100;
++}
+diff --git a/src/display/textScale.ts b/src/display/textScale.ts
+new file mode 100644
+index 0000000..042b0d2
+--- /dev/null
++++ b/src/display/textScale.ts
+@@ -0,0 +1,30 @@
++import { Capacitor, registerPlugin } from '@capacitor/core';
++import { clampScale } from './scale';
++
++/*
++ * Schriftgröße des Handys in der Android-App übernehmen (Benjamin 15.10.). Im Browser regelt der Browser selbst
++ * (Zoom), dort bleibt --ts bei 1. Ältere Android-Fassungen ohne den nativen Teil: ebenfalls 1.
++ */
++interface TextScalePlugin {
++  get(): Promise<{ scale: number }>;
++}
++
++const TextScale = registerPlugin<TextScalePlugin>('TextScale');
++
++async function apply(): Promise<void> {
++  try {
++    const { scale } = await TextScale.get();
++    document.documentElement.style.setProperty('--ts', String(clampScale(scale)));
++  } catch {
++    /* ohne nativen Teil: normale Größe */
++  }
++}
++
++/** Beim Start und jedes Mal, wenn die App wieder sichtbar wird (die Einstellung kann sich dazwischen ändern) */
++export function followSystemTextScale(): void {
++  if (!Capacitor.isNativePlatform()) return;
++  apply();
++  document.addEventListener('visibilitychange', () => {
++    if (document.visibilityState === 'visible') apply();
++  });
++}
+diff --git a/src/main.tsx b/src/main.tsx
+index 1fad534..9ea68d9 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -25,4 +25,7 @@ async function start() {
+     StatusBar.setBackgroundColor({ color: '#17313b' }).catch(() => undefined);
+     StatusBar.setStyle({ style: Style.Dark }).catch(() => undefined);
++    // Schriftgröße des Handys übernehmen (Einstellungen → Anzeige)
++    const { followSystemTextScale } = await import('./display/textScale');
++    followSystemTextScale();
+   }
+   if (import.meta.env.VITE_API_MODE === 'mock') {
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 4ebfcc4..0b6d2c6 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -354,4 +354,7 @@ function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean):
+ 
+ function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[] {
++  // Musterkampagne (Aufnahmen für die Website): Vorschläge aus den Hintergründen von Mara und Tavin, je Sprache
++  const muster = MUSTER_ANALYSIS[a.campaignId]?.[campaigns.find((c) => c.id === a.campaignId)?.members.find((m) => m.id === a.memberId)?.userId ?? ''];
++  if (muster) return muster;
+   if (a.memberId === 'm-jonas') return [
+     { entryType: 'faction', title: 'Diebesgilde von Kaltenfurt', detail: 'Thorwald schuldet ihr 300 Silber.', gmNotes: null }
+@@ -363,4 +366,25 @@ function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | '
+ }
+ 
++const MUSTER_ANALYSIS: Record<string, Record<string, Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[]>> = {
++  'c-wasser': {
++    'u-lea': [
++      { entryType: 'location', title: 'Kartenkammer des Archivs', detail: 'Hier zeichnete Maras Mutter Liv Venn Karten für das Archiv von Hohenwacht.', gmNotes: null },
++      { entryType: 'quest', title: 'Livs Verschwinden', detail: 'Vor sechs Jahren ging Liv Venn abends ins Archiv und kam nicht zurück. Die Stadt sagt, sie sei fortgezogen.', gmNotes: null }
++    ],
++    'u-tom': [
++      { entryType: 'item', title: 'Abschrift aus dem Grenzregister', detail: 'Eine Seite, die Tavin im Winter zur Übung abschrieb und nicht hätte mitnehmen dürfen.', gmNotes: null }
++    ]
++  },
++  'c-waters': {
++    'u-lea': [
++      { entryType: 'location', title: 'The archive map room', detail: 'Where Mara\'s mother Liv Venn drew maps for the archive of Hohenwacht.', gmNotes: null },
++      { entryType: 'quest', title: 'Liv\'s disappearance', detail: 'Six years ago Liv Venn went into the archive one evening and never came back. The town says she moved away.', gmNotes: null }
++    ],
++    'u-tom': [
++      { entryType: 'item', title: 'Copy from the border register', detail: 'A page Tavin copied as an exercise last winter and should never have taken with him.', gmNotes: null }
++    ]
++  }
++};
++
+ /** Neue Auswertung anlegen und der SL Bescheid geben (0.4.18) */
+ function newAnalysis(c: MockCampaign, memberId: string, source: 'sheet' | 'backstory', title: string, documentId: string | null, pageCount: number | null) {
+diff --git a/src/pages/BroughtPage.tsx b/src/pages/BroughtPage.tsx
+index 6a50715..4c7260e 100644
+--- a/src/pages/BroughtPage.tsx
++++ b/src/pages/BroughtPage.tsx
+@@ -59,5 +59,5 @@ export function BroughtPage() {
+               {m && <Avatar campaignId={campaign.id} member={m} size={40} />}
+               <div style={{ display: 'flex', flexDirection: 'column' }}>
+-                <strong style={{ fontFamily: 'var(--display)', fontSize: 18 }}>{m?.characterName ?? m?.displayName ?? t('Unbekannt')}</strong>
++                <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(18px * var(--ts))' }}>{m?.characterName ?? m?.displayName ?? t('Unbekannt')}</strong>
+                 <span className="muted small">
+                   {m ? t('gespielt von {name}', { name: m.displayName }) + ' · ' : ''}
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 02f6071..608e442 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -197,5 +197,5 @@ export function Campaigns() {
+           {multi && <span className="overline">{c.organization?.name ?? conn.name}</span>}
+           <div className="row between" style={{ alignItems: 'flex-start' }}>
+-            <h2 style={{ fontSize: 19 }}>{c.title}</h2>
++            <h2 style={{ fontSize: 'calc(19px * var(--ts))' }}>{c.title}</h2>
+             {!hasCover(c) && (
+               <div className="monogram" style={{ background: SEAL_COLORS[i % SEAL_COLORS.length] }} aria-hidden>
+diff --git a/src/pages/CharactersPage.tsx b/src/pages/CharactersPage.tsx
+index 122c72e..39aea78 100644
+--- a/src/pages/CharactersPage.tsx
++++ b/src/pages/CharactersPage.tsx
+@@ -83,5 +83,5 @@ export function CharactersPage() {
+                     <CharacterPortrait id={c.id} name={c.name} portrait={c.portrait} meta={c.portraitMeta} size={64} faded={c.status !== 'active'} />
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+-                      <h2 style={{ fontSize: 19 }}>{c.name}</h2>
++                      <h2 style={{ fontSize: 'calc(19px * var(--ts))' }}>{c.name}</h2>
+                       <span className="muted small">
+                         {[c.nickname && t('„{q}“', { q: c.nickname }), c.system, c.status !== 'active' && t(STATUS_LABEL[c.status])].filter(Boolean).join(' · ')}
+diff --git a/src/pages/DatePollPage.tsx b/src/pages/DatePollPage.tsx
+index e97c08f..81975c8 100644
+--- a/src/pages/DatePollPage.tsx
++++ b/src/pages/DatePollPage.tsx
+@@ -86,5 +86,5 @@ export function DatePollPage() {
+         <div className="card">
+           <span className="overline">{t('Festgelegt')}</span>
+-          <h2 style={{ fontSize: 22 }}>{formatDateTime(campaign.nextSessionAt)}</h2>
++          <h2 style={{ fontSize: 'calc(22px * var(--ts))' }}>{formatDateTime(campaign.nextSessionAt)}</h2>
+         </div>
+       )}
+@@ -124,5 +124,5 @@ export function DatePollPage() {
+                 <div className="row between" style={{ alignItems: 'flex-start' }}>
+                   <div>
+-                    <div className="card-title" style={{ fontFamily: 'var(--display)', fontSize: 19 }}>{formatDateTime(o.startsAt)}</div>
++                    <div className="card-title" style={{ fontFamily: 'var(--display)', fontSize: 'calc(19px * var(--ts))' }}>{formatDateTime(o.startsAt)}</div>
+                     <div className="muted small">{t('vorgeschlagen von {name}', { name: name(o.proposedByMemberId) })}</div>
+                   </div>
+@@ -184,5 +184,5 @@ export function DatePollPage() {
+               <label htmlFor="new-date">{t('Datum und Uhrzeit')}</label>
+               <input id="new-date" type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)}
+-                style={{ width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule-strong)', background: 'var(--field)', color: 'var(--ink)', fontFamily: 'var(--text)', fontSize: 17 }} />
++                style={{ width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule-strong)', background: 'var(--field)', color: 'var(--ink)', fontFamily: 'var(--text)', fontSize: 'calc(17px * var(--ts))' }} />
+             </div>
+             <Missing text={newDate ? null : t('Bitte zuerst Datum und Uhrzeit wählen.')} shown={triedDate} />
+diff --git a/src/pages/DocumentReview.tsx b/src/pages/DocumentReview.tsx
+index ef38879..bae1986 100644
+--- a/src/pages/DocumentReview.tsx
++++ b/src/pages/DocumentReview.tsx
+@@ -75,5 +75,5 @@ export function DocumentReview() {
+           <h2>{t('Vorschlag für den Welt-Hintergrund')}</h2>
+           <div className="recap" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+-            {doc.worldInfoSuggestion.split(/\n\s*\n/).map((para, i) => <p key={i} style={{ fontSize: 16 }}>{para}</p>)}
++            {doc.worldInfoSuggestion.split(/\n\s*\n/).map((para, i) => <p key={i} style={{ fontSize: 'calc(16px * var(--ts))' }}>{para}</p>)}
+           </div>
+           <label className="check">
+diff --git a/src/pages/NamesPage.tsx b/src/pages/NamesPage.tsx
+index c978426..2bb04d9 100644
+--- a/src/pages/NamesPage.tsx
++++ b/src/pages/NamesPage.tsx
+@@ -116,5 +116,5 @@ export function NamesPage() {
+           <section key={term.id} className="card">
+             <div className="row between wrap" style={{ gap: 8 }}>
+-              <strong style={{ fontFamily: 'var(--display)', fontSize: 20 }}>{term.heard}</strong>
++              <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(20px * var(--ts))' }}>{term.heard}</strong>
+               <span className="muted small">{tn(term.occurrences, 'Einmal gehört', '{n}-mal gehört')}</span>
+             </div>
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 67b814f..c2fde69 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -132,5 +132,5 @@ export function Overview() {
+             <span className="overline">{t('Nächste Runde')}</span>
+             {campaign.nextSessionAt
+-              ? <strong style={{ fontFamily: 'var(--display)', fontSize: 19 }}>{formatDateTime(campaign.nextSessionAt)}</strong>
++              ? <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(19px * var(--ts))' }}>{formatDateTime(campaign.nextSessionAt)}</strong>
+               : <strong>{campaign.datePollNeedsMyVote ? t('Terminabstimmung läuft') : t('Noch kein Termin')}</strong>}
+             <span className="muted small">
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index 0af7fcb..33ffb3a 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -146,5 +146,5 @@ export function Speakers() {
+               </select>
+             </div>
+-            {unsure && <strong style={{ color: 'var(--seal)', fontSize: 15 }}>{t('Nicht automatisch erkannt – bitte auswählen.')}</strong>}
++            {unsure && <strong style={{ color: 'var(--seal)', fontSize: 'calc(15px * var(--ts))' }}>{t('Nicht automatisch erkannt – bitte auswählen.')}</strong>}
+           </div>
+         );
+diff --git a/src/pages/WelcomePage.tsx b/src/pages/WelcomePage.tsx
+index a35f11b..d33aef6 100644
+--- a/src/pages/WelcomePage.tsx
++++ b/src/pages/WelcomePage.tsx
+@@ -130,5 +130,5 @@ function CharacterChoice({ campaign, memberId, initialName, onDone, onSkip }: {
+           <CharacterPortrait id={c.id} name={c.name} portrait={c.portrait} meta={c.portraitMeta} size={56} />
+           <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+-            <strong style={{ fontFamily: 'var(--display)', fontSize: 18 }}>{c.name}</strong>
++            <strong style={{ fontFamily: 'var(--display)', fontSize: 'calc(18px * var(--ts))' }}>{c.name}</strong>
+             <span className="muted small">
+               {busy === c.id ? t('Schicke …') : [c.system, c.world.length ? tn(c.world.length, '{n} mitgebrachter Eintrag', '{n} mitgebrachte Einträge') : null].filter(Boolean).join(' · ') || t('Mit diesem Charakter spielen')}
+diff --git a/src/theme.css b/src/theme.css
+index fd80214..96811a9 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -90,4 +90,6 @@
+ }
+ :root {
++  /* Schriftgröße des Handys (Android), gesetzt von src/display/textScale.ts; 1 = normal */
++  --ts: 1;
+   --font-serif: 'Alegreya', Georgia, 'Times New Roman', serif;
+   --font-sans: 'Alegreya Sans', system-ui, 'Segoe UI', sans-serif;
+@@ -145,6 +147,6 @@ body {
+   color: var(--ink);
+   font-family: var(--font-sans);
+-  font-size: 16px;
+-  line-height: 24px;
++  font-size: calc(16px * var(--ts));
++  line-height: 1.5;
+   -webkit-tap-highlight-color: transparent;
+ }
+@@ -213,5 +215,5 @@ textarea:focus-visible {
+ /* Kleine Zeile über dem Titel: Satzschreibung, keine Versalien, keine Sperrung */
+ .overline {
+-  font: 500 14px/20px var(--font-sans);
++  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
+   color: var(--ink-muted);
+ }
+@@ -226,12 +228,12 @@ h3 {
+ 
+ h1 {
+-  font-size: 30px;
+-  line-height: 36px;
++  font-size: calc(30px * var(--ts));
++  line-height: 1.2;
+   font-weight: 700;
+ }
+ 
+ h2 {
+-  font-size: 22px;
+-  line-height: 28px;
++  font-size: calc(22px * var(--ts));
++  line-height: 1.28;
+   font-weight: 700;
+ }
+@@ -245,4 +247,7 @@ h2 {
+   gap: 14px;
+ }
++/* Knöpfe in der Spalte nie stauchen (sonst ragt zweizeiliger Text bei großer Schrift heraus) */
++.screen-main > .btn,
++.screen-main > .hero { flex-shrink: 0; }
+ 
+ .muted {
+@@ -251,6 +256,6 @@ h2 {
+ 
+ .small {
+-  font-size: 13px;
+-  line-height: 18px;
++  font-size: calc(13px * var(--ts));
++  line-height: 1.39;
+ }
+ 
+@@ -301,5 +306,5 @@ h2 {
+ 
+ .card-title {
+-  font: 700 20px/26px var(--font-serif);
++  font: 700 calc(20px * var(--ts))/1.3 var(--font-serif);
+ }
+ 
+@@ -339,5 +344,5 @@ h2 {
+   color: var(--on-tinte);
+   box-shadow: var(--shadow-button);
+-  font: 700 16px/24px var(--font-sans);
++  font: 700 calc(16px * var(--ts))/1.5 var(--font-sans);
+   cursor: pointer;
+   display: inline-flex;
+@@ -411,5 +416,5 @@ h2 {
+ 
+ .btn.small {
+-  font-size: 15px;
++  font-size: calc(15px * var(--ts));
+   padding: var(--space-2) var(--space-4);
+ }
+@@ -456,5 +461,5 @@ h2 {
+   padding: 2px var(--space-2);
+   border-radius: var(--radius-sm);
+-  font: 500 13px/18px var(--font-sans);
++  font: 500 calc(13px * var(--ts))/1.385 var(--font-sans);
+   border: 1px solid var(--line-strong);
+   color: var(--ink);
+@@ -496,5 +501,5 @@ h2 {
+   align-items: center;
+   gap: var(--space-1);
+-  font: 500 14px/20px var(--font-sans);
++  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
+   border-radius: var(--radius-sm);
+   padding: 2px var(--space-2);
+@@ -518,5 +523,5 @@ h2 {
+   border-radius: var(--radius-sm);
+   padding: var(--space-2) var(--space-3);
+-  font: 400 15px/22px var(--font-sans);
++  font: 400 calc(15px * var(--ts))/1.467 var(--font-sans);
+   color: var(--ink);
+ }
+@@ -556,5 +561,5 @@ h2 {
+ .field label,
+ .field .label {
+-  font: 500 14px/20px var(--font-sans);
++  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
+   color: var(--ink);
+ }
+@@ -574,5 +579,5 @@ textarea {
+   background: var(--paper-sunken);
+   color: var(--ink);
+-  font: 400 16px/24px var(--font-sans);
++  font: 400 calc(16px * var(--ts))/1.5 var(--font-sans);
+ }
+ 
+@@ -605,6 +610,6 @@ textarea {
+   border-radius: var(--radius-md);
+   background: var(--paper-sunken);
+-  font-size: 15px;
+-  line-height: 22px;
++  font-size: calc(15px * var(--ts));
++  line-height: 1.47;
+ }
+ 
+@@ -649,5 +654,5 @@ textarea {
+   background: var(--paper-raised);
+   color: var(--ink);
+-  font: 700 15px/20px var(--font-sans);
++  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
+   cursor: pointer;
+ }
+@@ -676,5 +681,5 @@ textarea {
+   text-decoration: none;
+   color: var(--ink-muted);
+-  font: 500 14px/20px var(--font-sans);
++  font: 500 calc(14px * var(--ts))/1.429 var(--font-sans);
+ }
+ 
+@@ -741,6 +746,6 @@ textarea {
+ 
+ .rec-time.big {
+-  font-size: 48px;
+-  line-height: 52px;
++  font-size: calc(48px * var(--ts));
++  line-height: 1.08;
+ }
+ 
+@@ -841,5 +846,5 @@ textarea {
+ 
+ .rec-time {
+-  font: 700 32px/36px var(--font-serif);
++  font: 700 calc(32px * var(--ts))/1.125 var(--font-serif);
+   font-variant-numeric: tabular-nums lining-nums;
+ }
+@@ -848,5 +853,5 @@ textarea {
+ .recap p {
+   margin: 0;
+-  font: 400 19px/31px var(--font-serif);
++  font: 400 calc(19px * var(--ts))/1.632 var(--font-serif);
+   max-width: 68ch;
+ }
+@@ -855,5 +860,5 @@ textarea {
+ .recap-part {
+   margin: 12px 0 0;
+-  font: 700 17px/24px var(--font-serif);
++  font: 700 calc(17px * var(--ts))/1.412 var(--font-serif);
+   max-width: 68ch;
+ }
+@@ -1044,5 +1049,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+ .chapter-card .num {
+   grid-row: span 3;
+-  font: 800 40px/40px var(--font-serif);
++  font: 800 calc(40px * var(--ts))/1 var(--font-serif);
+   color: var(--tinte);
+   min-width: 48px;
+@@ -1061,9 +1066,9 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .chapter-card .title {
+-  font: 700 22px/28px var(--font-serif);
++  font: 700 calc(22px * var(--ts))/1.273 var(--font-serif);
+ }
+ 
+ .chapter-card .meta {
+-  font: 400 13px/18px var(--font-sans);
++  font: 400 calc(13px * var(--ts))/1.385 var(--font-sans);
+   color: var(--ink-muted);
+   display: flex;
+@@ -1131,5 +1136,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+   align-items: center;
+   gap: 4px;
+-  font: 700 14px/20px var(--font-sans);
++  font: 700 calc(14px * var(--ts))/1.429 var(--font-sans);
+   text-decoration: none;
+   backdrop-filter: blur(4px);
+@@ -1164,10 +1169,11 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .hero {
+-  height: 200px;
++  /* Mit größerer Schrift des Handys wächst der Kopf mit, damit Titel und Zurück-Knopf sich nicht überdecken */
++  height: calc(200px + (var(--ts) - 1) * 150px);
+   margin: 0 calc(-1 * var(--pad)) 8px;
+ }
+ 
+ .hero:not(.large) {
+-  height: 128px;
++  height: calc(128px + (var(--ts) - 1) * 150px);
+ }
+ 
+@@ -1205,9 +1211,9 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+   .hero {
+-    height: 240px;
++    height: calc(240px + (var(--ts) - 1) * 150px);
+   }
+ 
+   .hero:not(.large) {
+-    height: 150px;
++    height: calc(150px + (var(--ts) - 1) * 150px);
+   }
+ }
+@@ -1257,5 +1263,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+     padding: 12px 14px;
+     border-radius: var(--radius-md);
+-    font-size: 16px;
++    font-size: calc(16px * var(--ts));
+   }
+ 
+@@ -1278,9 +1284,9 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+   .hero {
+-    height: 300px;
++    height: calc(300px + (var(--ts) - 1) * 150px);
+   }
+ 
+   .hero:not(.large) {
+-    height: 180px;
++    height: calc(180px + (var(--ts) - 1) * 150px);
+   }
+ 
+@@ -1372,6 +1378,6 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .table-title {
+-  font-size: 24px;
+-  line-height: 30px;
++  font-size: calc(24px * var(--ts));
++  line-height: 1.25;
+ }
+ 
+@@ -1385,5 +1391,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+   border-radius: 12px;
+   background: var(--paper-raised);
+-  font: 700 15px/20px var(--font-sans);
++  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
+ }
+ 
+@@ -1435,6 +1441,6 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .table-panel-title {
+-  font-size: 19px;
+-  line-height: 24px;
++  font-size: calc(19px * var(--ts));
++  line-height: 1.26;
+ }
+ 
+@@ -1614,5 +1620,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .table-edit-name {
+-  font: 700 15px/20px var(--font-sans);
++  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
+ }
+ 
+@@ -1738,5 +1744,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .link-host {
+-  font: 400 12px/16px var(--font-sans);
++  font: 400 calc(12px * var(--ts))/1.333 var(--font-sans);
+   color: var(--ink-muted);
+ }
+@@ -1784,5 +1790,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+   background: var(--tinte);
+   color: var(--on-tinte);
+-  font: 700 15px/20px var(--font-sans);
++  font: 700 calc(15px * var(--ts))/1.333 var(--font-sans);
+   text-align: center;
+ }
+@@ -1864,5 +1870,5 @@ button.table-group-face {
+ 
+ .table-clock {
+-  font: 700 32px/36px var(--font-serif);
++  font: 700 calc(32px * var(--ts))/1.125 var(--font-serif);
+   font-variant-numeric: tabular-nums;
+   color: var(--ink);
+@@ -1870,5 +1876,5 @@ button.table-group-face {
+ 
+ .table-clock-value {
+-  font: 700 32px/36px var(--font-serif);
++  font: 700 calc(32px * var(--ts))/1.125 var(--font-serif);
+   font-variant-numeric: tabular-nums;
+   color: var(--ink);
+@@ -2009,8 +2015,8 @@ button.table-group-face {
+ /* Eigene Seite (data-theme an der Karte): Farben kommen aus demselben Thema wie die App */
+ .reading-page { color: var(--ink); background: var(--paper-raised); }
+-.reading-page[data-read-size='large'] .recap p { font-size: 22px; line-height: 35px; }
+-.reading-page[data-read-size='large'] .recap-part { font-size: 19px; line-height: 27px; }
+-.reading-page[data-read-size='larger'] .recap p { font-size: 25px; line-height: 40px; }
+-.reading-page[data-read-size='larger'] .recap-part { font-size: 22px; line-height: 30px; }
++.reading-page[data-read-size='large'] .recap p { font-size: calc(22px * var(--ts)); line-height: 1.6; }
++.reading-page[data-read-size='large'] .recap-part { font-size: calc(19px * var(--ts)); line-height: 1.42; }
++.reading-page[data-read-size='larger'] .recap p { font-size: calc(25px * var(--ts)); line-height: 1.6; }
++.reading-page[data-read-size='larger'] .recap-part { font-size: calc(22px * var(--ts)); line-height: 1.36; }
+ .read-aa { min-width: 48px; font-family: var(--font-serif); font-weight: 700; }
+ .read-settings {
+@@ -2064,4 +2070,4 @@ button.table-group-face {
+ /* Kurze Liste in Rückfragen: was gelöscht wird, was bleibt */
+ .confirm-list { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+-.confirm-list dt { font-weight: 700; font-size: 14px; }
++.confirm-list dt { font-weight: 700; font-size: calc(14px * var(--ts)); }
+ .confirm-list dd { margin: 0; }
