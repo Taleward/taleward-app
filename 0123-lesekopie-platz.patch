@@ -1,0 +1,165 @@
+From 960106c1f2c92b6d3ffa3ad864f80f9c55c4cf22 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 06:14:46 +0200
+Subject: [PATCH 123/124] =?UTF-8?q?Lesekopie:=20Kommentare=20und=20Eintr?=
+ =?UTF-8?q?=C3=A4ge=20mit=20Positivliste,=20nur=20Zeilen=20mit=20Kampagne;?=
+ =?UTF-8?q?=20R=C3=BCckfrage=20beim=20Freigeben=20eines=20Platzes=20genaue?=
+ =?UTF-8?q?r?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/read-copy.test.mjs | 12 +++++++++++-
+ src/api/client.ts                |  2 +-
+ src/api/readCopy.ts              | 18 +++++++++---------
+ src/api/readCopyRules.ts         | 13 +++++++++----
+ src/components/OfflineNotice.tsx |  2 +-
+ src/components/Seats.tsx         |  2 +-
+ src/i18n/en.ts                   |  2 +-
+ 7 files changed, 33 insertions(+), 18 deletions(-)
+
+diff --git a/scripts/tests/read-copy.test.mjs b/scripts/tests/read-copy.test.mjs
+index 881e1b0..de3f237 100644
+--- a/scripts/tests/read-copy.test.mjs
++++ b/scripts/tests/read-copy.test.mjs
+@@ -1,3 +1,3 @@
+-// Lesekopie ohne Netz: nur, was alle Spielerinnen sehen dürfen (Benjamin 14.10.)
++// Lesekopie ohne Netz: nur, was alle Spielerinnen sehen dürfen
+ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+@@ -89,2 +89,12 @@ test('jede Kopie kennt ihre Kampagne', () => {
+   assert.equal(campaignOfPath('/campaigns', []), null);
+ });
++
++test('Kommentare nur mit bekannten Feldern, Einträge ohne Kapitelnummern', () => {
++  const c = cleanForCopy('/sessions/s-1/comments', [{ id: 'k', sessionId: 's-1', authorMemberId: 'm', recipientMemberId: null, text: 'Hallo', createdAt: 'x', editedAt: null, neuesFeld: 'geheim' }], 'u');
++  assert.equal(c[0].text, 'Hallo');
++  assert.equal(c[0].neuesFeld, undefined);
++  const e = cleanForCopy('/campaigns/c-1/entries', [{ id: 'e', visibility: 'public', name: 'Ort', firstSessionNumber: 3, lastSessionNumber: 9 }], 'u');
++  assert.equal(e[0].name, 'Ort');
++  assert.equal(e[0].firstSessionNumber, undefined);
++  assert.equal(e[0].lastSessionNumber, undefined);
++});
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 6edd5ee..25bd7e1 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -171,5 +171,5 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+   const data = await res.json();
+   if (copyUser && stillSignedIn()) {
+-    saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser), campaignOfPath(path, data)).catch(() => undefined);
++    saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser), campaignOfPath(path, data), stillSignedIn).catch(() => undefined);
+     // Kampagnen, die nicht mehr in der Liste stehen (verlassen, entfernt, gelöscht): ihre Kopie verwerfen
+     if (path === '/campaigns' && Array.isArray(data)) {
+diff --git a/src/api/readCopy.ts b/src/api/readCopy.ts
+index 10b46ff..273828c 100644
+--- a/src/api/readCopy.ts
++++ b/src/api/readCopy.ts
+@@ -41,5 +41,6 @@ function req<T>(r: IDBRequest<T>): Promise<T> {
+ const keyOf = (connId: string, userId: string, path: string) => `${connId}|${userId}|${path}`;
+ 
+-export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null): Promise<void> {
++export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null,
++  stillAllowed: () => boolean = () => true): Promise<void> {
+   const db = await open();
+   if (!db) return;
+@@ -57,14 +58,11 @@ export async function saveCopy(connId: string, userId: string, path: string, dat
+     campaign = head?.campaignId ?? null;
+   }
++  // Ohne bekannte Kampagne nichts ablegen (sonst fiele es beim Aufräumen einer Kampagne nicht mit weg); die Chronik
++  // holt den Kapitel-Kopf zuerst, danach kommt der Rest beim nächsten Nachladen
++  if (!campaign && path !== '/campaigns') return;
++  if (!stillAllowed()) return;
+   const row: Row = { key, connId, userId, campaignId: campaign, savedAt: new Date().toISOString(), data };
+   const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
+   await req(store.put(row));
+-  // Kam der Kapitel-Kopf erst nach Kapitel oder Kommentaren: deren Kampagne jetzt nachtragen
+-  if (campaign && path === `/sessions/${sessionOfPath(path)}`) {
+-    for (const sub of ['recap', 'comments']) {
+-      const other = await req(store.get(keyOf(connId, userId, `${path}/${sub}`))) as Row | undefined;
+-      if (other && !other.campaignId) await req(store.put({ ...other, campaignId: campaign }));
+-    }
+-  }
+ }
+ 
+@@ -122,5 +120,7 @@ export async function removeOrphanCopies(current: { id: string; userId: string |
+   const ok = new Set(current.filter((c) => c.userId).map((c) => `${c.id}|${c.userId}`));
+   const now = Date.now();
+-  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`) || tooOld(r.savedAt, now)).map((r) => req(store.delete(r.key))));
++  const orphan = (r: Row) => !r.campaignId && !r.key.endsWith('|/campaigns');
++  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`) || tooOld(r.savedAt, now) || orphan(r))
++    .map((r) => req(store.delete(r.key))));
+ }
+ 
+diff --git a/src/api/readCopyRules.ts b/src/api/readCopyRules.ts
+index 10c5830..c3c2813 100644
+--- a/src/api/readCopyRules.ts
++++ b/src/api/readCopyRules.ts
+@@ -1,5 +1,5 @@
+ /*
+  * Lesekopie für unterwegs (ohne Netz): Welche Antworten des Servers auf dem Gerät bleiben dürfen und was vorher
+- * herausfällt. Grundsatz (Benjamin 14.10.): Auf dem Gerät liegt nur, was alle Spielerinnen der Kampagne lesen dürfen –
++ * herausfällt. Grundsatz: Auf dem Gerät liegt nur, was alle Spielerinnen der Kampagne lesen dürfen –
+  * auch bei der Spielleitung. Nie: SL-Notizen, Einträge „nur SL“ oder teilweise verborgene Einträge, offene Vorschläge,
+  * Abschriften, ungeprüfte Kapitel, Hinweise an die SL, private Nachrichten, Hintergründe anderer Figuren.
+@@ -18,5 +18,5 @@ const RULES: { pattern: RegExp; clean: (data: unknown, myUserId: string | null)
+   { pattern: new RegExp(`^/sessions/${ID}$`), clean: (d) => (isObj(d) && published(d) ? session(d) : null) },
+   { pattern: new RegExp(`^/sessions/${ID}/recap$`), clean: (d) => (isObj(d) && d.publishedAt ? recap(d) : null) },
+-  { pattern: new RegExp(`^/sessions/${ID}/comments$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter((c) => c.recipientMemberId == null) : null) },
++  { pattern: new RegExp(`^/sessions/${ID}/comments$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter((c) => c.recipientMemberId == null).map(comment) : null) },
+   { pattern: new RegExp(`^/campaigns/${ID}/entries$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter(publicEntry).map(entry) : null) }
+ ];
+@@ -102,4 +102,9 @@ function recap(r: Obj): Obj {
+ }
+ 
++/** Öffentliche Kommentare nur mit den heutigen Feldern */
++function comment(c: Obj): Obj {
++  return pick(c, ['id', 'sessionId', 'authorMemberId', 'recipientMemberId', 'text', 'createdAt', 'editedAt']);
++}
++
+ /** Nur öffentliche Einträge, die alle sehen (teilweise verborgene zählen wie „nur SL“) */
+ function publicEntry(e: Obj): boolean {
+@@ -108,6 +113,6 @@ function publicEntry(e: Obj): boolean {
+ 
+ function entry(e: Obj): Obj {
+-  const out: Obj = pick(e, ['id', 'campaignId', 'type', 'name', 'summary', 'status', 'holderMemberId', 'visibility',
+-    'firstSessionNumber', 'lastSessionNumber', 'updatedAt']);
++  // Ohne Kapitelnummern: bei der SL können sie auf noch nicht veröffentlichte Kapitel zeigen
++  const out: Obj = pick(e, ['id', 'campaignId', 'type', 'name', 'summary', 'status', 'holderMemberId', 'visibility', 'updatedAt']);
+   // Erwähnungen können bei der SL aus noch ungeprüften Kapiteln stammen – in der Kopie leer
+   out.mentions = [];
+diff --git a/src/components/OfflineNotice.tsx b/src/components/OfflineNotice.tsx
+index b6931b7..7e66b94 100644
+--- a/src/components/OfflineNotice.tsx
++++ b/src/components/OfflineNotice.tsx
+@@ -11,5 +11,5 @@ export function useOfflineSince(connId: string | null | undefined): string | nul
+ }
+ 
+-/** Hinweis oben auf jeder Seite einer Kampagne, solange die App aus der Lesekopie liest (Benjamin 14.10.) */
++/** Hinweis oben auf jeder Seite einer Kampagne, solange die App aus der Lesekopie liest */
+ export function OfflineNotice({ connId }: { connId: string | null | undefined }) {
+   const since = useOfflineSince(connId);
+diff --git a/src/components/Seats.tsx b/src/components/Seats.tsx
+index 00b042a..2e2b745 100644
+--- a/src/components/Seats.tsx
++++ b/src/components/Seats.tsx
+@@ -150,5 +150,5 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
+   const release = async () => {
+     // Vor dem Freigeben sagen, was bei der Person bleibt
+-    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, bleibt bei {person} und geht nicht an die nächste Person: Hintergrund, Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.',
++    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, geht nicht an die nächste Person: Der Hintergrund am Platz wird gelöscht. Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare stehen danach bei einem ehemaligen Mitglied. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.',
+       { figure, person: m.displayName, campaign: campaign.title, server: currentConnection().name });
+     if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true })) {
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 0b4a5db..a9c23ca 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -890,5 +890,5 @@ export const en: Record<string, string> = {
+   "Einem Spieler geben": "Give to a player",
+   "einen Platz": "a seat",
+-  "Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, bleibt bei {person} und geht nicht an die nächste Person: Hintergrund, Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.": "Free up the seat of {figure} in “{campaign}” on “{server}” again? {person} will no longer be in the campaign and needs a new invitation. What {person} brought in stays with {person} and does not pass to the next person: backstory, character sheets and their analyses, own suggestions and comments. Pending analyses are dropped. The character stays at the seat with everything it has experienced in the campaign, including its voice in earlier chapters.",
++  "Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, geht nicht an die nächste Person: Der Hintergrund am Platz wird gelöscht. Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare stehen danach bei einem ehemaligen Mitglied. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.": "Free up the seat of {figure} in “{campaign}” on “{server}” again? {person} will no longer be in the campaign and needs a new invitation. What {person} brought in does not pass to the next person: the backstory at the seat is deleted. Character sheets and their analyses, own suggestions and comments then belong to a former member. Pending analyses are dropped. The character stays at the seat with everything it has experienced in the campaign, including its voice in earlier chapters.",
+   "Platz freigeben": "Free up seat",
+   "{person} spielt jetzt {figure}": "{person} now plays {figure}",
