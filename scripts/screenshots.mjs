@@ -7,7 +7,7 @@
  *
  * Ergebnis: screenshots/taleward-<nr>-<sprache>-<thema>.png, 1080 × 2400 px (Pixel-7-Maße, Dichte 2,625).
  * Die Aufnahmen entstehen im Browser in Handy-Größe – ohne Android-Statusleiste, die setzt die Website selbst.
- * Ausnahme Nr. 16 (SL-Schirm am Tablet quer): 2560 × 1600 px (1280 × 800, Dichte 2).
+ * Ausnahme Nr. 16 (SL-Schirm am Tablet quer): 2560 × 1600 px (1600 × 1000, Dichte 1,6).
  */
 import { existsSync, mkdirSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
@@ -29,12 +29,12 @@ const L = {
   de: { cid: 'c-wasser', next: 'Weiter', askConsent: 'Zustimmen lassen', agree: 'Zustimmen',
     accept: 'Übernehmen', publish: 'Kapitel veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
     all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701',
-    played: 'Gespielt', search: 'Sefa Mor', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.',
+    played: 'Gespielt', search: 'Sefa Mor', note: 'Ohm Tessel kennt Maras Mutter. Erst sagen, wenn sie fragt.\nPause nach der Brücke.', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.',
     analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund' },
   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
     accept: 'Accept', publish: 'Publish chapter', invite: 'Invite players', qr: 'Show QR code',
     all: 'All (', world: 'Brought-along world', mara: '00000000-0000-4000-8000-000000000801',
-    played: 'Played', search: 'Sefa Mor', hint: 'She did not flee. She left before they could come for her.',
+    played: 'Played', search: 'Sefa Mor', note: 'Ohm Tessel knew Mara\'s mother. Only say so if she asks.\nBreak after the bridge.', hint: 'She did not flee. She left before they could come for her.',
     analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory' }
 };
 
@@ -43,7 +43,7 @@ const L = {
 // 15: Startbildschirm (drei Wege: Einladung, selbst leiten, ohne Server ausprobieren)
 const CHAR = [10, 11, 12, 13, 14];
 const START = [15];
-// 16: SL-Schirm am Tablet quer (eine Szene abgehakt, Bibel-Suche mit Tippfehler), 17: SL-Schirm am Handy (Kurzfassung),
+// 16: SL-Schirm am Tablet quer (alle Module, eine Szene abgehakt, Bibel-Suche mit Tippfehler, Notiz), 17: SL-Schirm am Handy (Kurzfassung),
 // 18: Prüfen-Seite mit einem Hinweis an einem Absatz („Stimmt etwas nicht oder fehlt etwas?“, ab Schnittstelle 0.4.15)
 const GM = [16, 17, 18];
 // 19–22: Auswertung von Charakterbögen und Hintergründen (Schnittstelle 0.4.18) – Charakterseite der Spielerin mit Stand,
@@ -152,13 +152,31 @@ for (const run of RUNS) {
   await page.evaluate(() => [...document.querySelectorAll('.card')].find((c) => c.querySelector('svg') && c.textContent.includes('/einladung/'))?.scrollIntoView({ block: 'start' }));
   await shot(9);
   if (run.shots.some((n) => n === 16 || n === 17)) {
-    // SL-Schirm: erste Szene abhaken, in der Bibel mit Tippfehler suchen; erst Tablet quer, dann Handy
-    await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 2, hasTouch: true });
+    // SL-Schirm mit allen Modulen: Plan, Bibel, Unterlagen, Gruppe, Uhr, Links, Notizzettel.
+    // Die Runde läuft seit 1 h 36 min, geplantes Ende in 1 h 24 min. Erste Szene abhaken, in der Bibel mit Tippfehler
+    // suchen, eine Notiz schreiben; erst Tablet quer, dann Handy
+    await page.evaluate((cid) => {
+      localStorage.setItem('taleward.slSchirm', JSON.stringify([
+        { id: 'plan', x: 0, y: 0, w: 2, h: 5 },
+        { id: 'bible', x: 2, y: 0, w: 2, h: 3 }, { id: 'docs', x: 2, y: 3, w: 2, h: 2 },
+        { id: 'group', x: 4, y: 0, w: 2, h: 2 }, { id: 'clock', x: 4, y: 2, w: 2, h: 1 },
+        { id: 'links', x: 4, y: 3, w: 2, h: 1 }, { id: 'notes', x: 4, y: 4, w: 2, h: 1 }
+      ]));
+      const conn = JSON.parse(localStorage.getItem('session-chronik.connections'))[0].id;
+      const now = Date.now(), end = new Date(now + 84 * 60000);
+      const pad = (n) => String(n).padStart(2, '0');
+      localStorage.setItem(`taleward.abend.${conn}:${cid}`, JSON.stringify({
+        date: new Date().toLocaleDateString('sv'), start: new Date(now - 96 * 60000).toISOString(), end: `${pad(end.getHours())}:${pad(end.getMinutes())}`
+      }));
+    }, t.cid);
+    await page.setViewport({ width: 1600, height: 1000, deviceScaleFactor: 1.6, hasTouch: true });
     await go(`${k}/tisch`); await wait(800);
+    const notes = await page.$('.table-notes');
+    if (notes) { await notes.type(t.note); await wait(1500); }
     await page.evaluate((txt) => [...document.querySelectorAll('button')].find((b) => b.textContent.includes(txt))?.click(), t.played); await wait(600);
     const search = await page.$('#tb-search');
     if (search) { await search.type(t.search); await wait(600); }
-    await shot(16, { width: 1280, height: 800 });
+    await shot(16, { width: 1600, height: 1000 });
     await phone(); await go(`${k}/tisch`); await wait(800);
     await shot(17);
   }
