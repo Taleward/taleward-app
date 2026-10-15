@@ -1274,5 +1274,15 @@ export const en: Record<string, string> = {
   "Die Kampagne ist umgezogen.": "The campaign has moved.",
   "Hier fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme neu zu. Lade alle über „Mitspielende einladen“ ein; wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst auf ihren Platz. Cloud-Freigaben und Stimmprofile richtet ihr hier neu ein.": "Here everyone starts with their own account and agrees to recordings again. Invite everyone via “Invite players”; whoever joins with the character from their own collection takes their seat automatically. You set up cloud permissions and voice profiles here again.",
   "Zur ersten Stelle": "Go to the first passage",
-  "Schon ein Konto auf diesem Server? Dann tippe auf „Anmelden“. Du trittst mit deinem Konto bei, ein zweites brauchst du nicht.": "Already have an account on this server? Then tap “Sign in”. You join with your account, you don’t need a second one."
+  "Schon ein Konto auf diesem Server? Dann tippe auf „Anmelden“. Du trittst mit deinem Konto bei, ein zweites brauchst du nicht.": "Already have an account on this server? Then tap “Sign in”. You join with your account, you don’t need a second one.",
+  "Lesen anpassen": "Adjust reading",
+  "Schriftgröße": "Text size",
+  "Normal": "Normal",
+  "Groß": "Large",
+  "Sehr groß": "Extra large",
+  "Seite": "Page",
+  "Wie die App": "Like the app",
+  "Pergament": "Parchment",
+  "Spielabend": "Game night",
+  "Gilt nur für den Kapiteltext auf diesem Gerät.": "Applies only to the chapter text on this device."
 };

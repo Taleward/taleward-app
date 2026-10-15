@@ -2004,3 +2004,19 @@ button.table-group-face {
   align-items: center;
   min-height: 48px;
 }
+
+/* ---------- Kapitel lesen: „Aa“ (Schriftgröße, Seite) ---------- */
+/* Eigene Seite (data-theme an der Karte): Farben kommen aus demselben Thema wie die App */
+.reading-page { color: var(--ink); background: var(--paper-raised); }
+.reading-page[data-read-size='large'] .recap p { font-size: 22px; line-height: 35px; }
+.reading-page[data-read-size='large'] .recap-part { font-size: 19px; line-height: 27px; }
+.reading-page[data-read-size='larger'] .recap p { font-size: 25px; line-height: 40px; }
+.reading-page[data-read-size='larger'] .recap-part { font-size: 22px; line-height: 30px; }
+.read-aa { min-width: 48px; font-family: var(--font-serif); font-weight: 700; }
+.read-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}

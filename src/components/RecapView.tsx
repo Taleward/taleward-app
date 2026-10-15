@@ -5,6 +5,7 @@ import { IconSpeaker } from './Icons';
 import { Divider } from './Screen';
 import { PartHeading } from './PartHeading';
 import { partTitles, speechText } from '../review/parts';
+import { ReadSettings, pageAttrs, useReadPrefs } from '../reading/ReadSettings';
 
 function formatDate(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString(locale(), { day: 'numeric', month: 'long' }) : t('Entwurf');
@@ -18,6 +19,9 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
   const titles = partTitles(recap.parts, paragraphs.length, recap.title);
   const [open, setOpen] = useState(!collapsible);
   const [speaking, setSpeaking] = useState(false);
+  const [prefs, setPrefs] = useReadPrefs();
+  const [settings, setSettings] = useState(false);
+  const settingsId = `lesen-${recap.sessionId}`;
 
   useEffect(() => () => { if (canSpeak) window.speechSynthesis.cancel(); }, []);
 
@@ -38,7 +42,7 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
   const shown = open ? paragraphs : paragraphs.slice(0, 1);
 
   return (
-    <article className="card" style={{ gap: 10 }}>
+    <article className="card reading-page" style={{ gap: 10 }} {...pageAttrs(prefs)}>
       <div className="overline">
         {t('Kapitel {n}', { n: recap.number })} · {playedAt ? t('Gespielt am {date}', { date: formatDate(playedAt) }) : formatDate(recap.publishedAt)}
       </div>
@@ -63,7 +67,13 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
             <IconSpeaker /> {speaking ? t('Vorlesen stoppen') : t('Vorlesen')}
           </button>
         )}
+        {/* Wie das „Aa“ in Lese-Apps: Schriftgröße und Seite nur für den Kapiteltext */}
+        <button type="button" className="btn small ghost read-aa" aria-expanded={settings} aria-controls={settingsId}
+          aria-label={t('Lesen anpassen')} onClick={() => setSettings(!settings)}>
+          <span aria-hidden="true">Aa</span>
+        </button>
       </div>
+      {settings && <ReadSettings id={settingsId} prefs={prefs} onChange={setPrefs} />}
     </article>
   );
 }
