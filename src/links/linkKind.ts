@@ -1,5 +1,5 @@
 /**
- * Welcher Dienst steckt hinter einem Link? Nur an der Adresse erkannt, ohne Abruf (Benjamin 15.10.).
+ * Welcher Dienst steckt hinter einem Link? Nur an der Adresse erkannt, ohne Abruf.
  * Ohne Laufzeit-Importe, damit es sich testen lässt (scripts/tests/link-kind.test.mjs).
  *
  * brand: eines der Markenzeichen in brandPaths.ts; sonst nur die Art (kind) mit einem allgemeinen Zeichen.
@@ -31,7 +31,7 @@ const HOSTS: [string, LinkKind, BrandId | null][] = [
   ['tabletopaudio.com', 'music', null], ['syrinscape.com', 'music', null], ['soundcloud.com', 'music', null],
   ['docs.google.com', 'docs', 'googledocs'], ['drive.google.com', 'docs', 'googledrive'],
   ['dropbox.com', 'docs', 'dropbox'], ['db.tt', 'docs', 'dropbox'],
-  ['obsidian.md', 'docs', 'obsidian'], ['notion.so', 'docs', 'notion'], ['notion.site', 'docs', 'notion'],
+  ['nextcloud.com', 'docs', 'nextcloud'], ['obsidian.md', 'docs', 'obsidian'], ['notion.so', 'docs', 'notion'], ['notion.site', 'docs', 'notion'],
   ['onedrive.live.com', 'docs', null], ['1drv.ms', 'docs', null], ['sharepoint.com', 'docs', null],
   ['worldanvil.com', 'docs', null], ['homebrewery.naturalcrit.com', 'docs', null],
   ['roll20.net', 'table', 'roll20'], ['foundryvtt.com', 'table', 'foundry'],
@@ -52,8 +52,8 @@ export function linkInfo(url: string): LinkInfo {
   for (const [h, kind, brand] of HOSTS) {
     if (host === h || host.endsWith('.' + h)) return { kind, brand };
   }
-  // Eigene Nextcloud: Name enthält „nextcloud“
-  if (/(^|[.-])nextcloud([.-]|$)/.test(host)) return { kind: 'docs', brand: 'nextcloud' };
+  // Markenzeichen nur für feste Adressen der Anbieter: Ein selbst gewählter Name wie „nextcloud.verein.de“ könnte auch
+  // eine fremde Seite sein und bekommt deshalb nur das allgemeine Zeichen
   if (/\.(pdf|docx?|odt|txt|md)$/.test(path)) return { kind: 'docs', brand: null };
   if (/\.(mp3|ogg|wav|flac)$/.test(path)) return { kind: 'music', brand: null };
   return { kind: 'web', brand: null };

@@ -1292,5 +1292,6 @@ export const en: Record<string, string> = {
   "Gelöscht": "Deleted",
   "Bleibt beim ehemaligen Mitglied": "Stays with the former member",
   "Hintergrund am Platz, offene Auswertungen": "Backstory in the seat, pending analyses",
-  "Charakterbögen, Vorschläge, Kommentare": "Character sheets, suggestions, comments",
+  "Charakterbögen und ihre Auswertungen, Vorschläge, Kommentare": "Character sheets and their analyses, suggestions, comments",
+  "Der Server hat die Zustimmung nicht gespeichert. Bitte später noch einmal versuchen.": "The server did not save your consent. Please try again later.",
 };

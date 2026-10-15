@@ -2,7 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { clampScale } from './scale';
 
 /*
- * Schriftgröße des Handys in der Android-App übernehmen (Benjamin 15.10.). Im Browser regelt der Browser selbst
+ * Schriftgröße des Handys in der Android-App übernehmen. Im Browser regelt der Browser selbst
  * (Zoom), dort bleibt --ts bei 1. Ältere Android-Fassungen ohne den nativen Teil: ebenfalls 1.
  */
 interface TextScalePlugin {

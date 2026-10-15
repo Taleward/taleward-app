@@ -11,7 +11,7 @@ interface Request {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
-  /** Kurze Liste unter der Erklärung, z. B. was gelöscht wird und was bleibt (Design-Prüfung 15.10.) */
+  /** Kurze Liste unter der Erklärung, z. B. was gelöscht wird und was bleibt */
   list?: { label: string; text: string }[];
   resolve: (ok: boolean) => void;
 }
@@ -42,7 +42,7 @@ export function ConfirmHost() {
   }, []);
   if (!req) return null;
   // Erste Frage als Überschrift, der Rest als Erklärung in normaler Schrift. Ohne Frage: erster Satz als
-  // Überschrift, damit lange Rückfragen nicht als ein fetter Block erscheinen (Design-Prüfung 14.10.)
+  // Überschrift, damit lange Rückfragen nicht als ein fetter Block erscheinen
   const { title, body } = splitMessage(req.message);
   const close = (ok: boolean) => { req.resolve(ok); setReq(null); };
   return (

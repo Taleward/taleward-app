@@ -139,7 +139,7 @@ export function Review() {
       {tools.length > 0 && <div className="review-tools">{tools}</div>}
       {recap && <RecapEditor sessionId={sessionId} recap={recap} members={members} onSaved={setRecap} onError={setError}
         alwaysOpen={wide} highlight={hoverTitle} />}
-      {/* Verwirft alle Änderungen – darum leise am Ende, nicht oben bei den Prüfwerkzeugen (Design-Prüfung 11.10.) */}
+      {/* Verwirft alle Änderungen – darum leise am Ende, nicht oben bei den Prüfwerkzeugen */}
       {canRewrite && proposals && (
         <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start', marginTop: 8 }} disabled={busy} onClick={rewrite}>
           {t('Kapitel neu schreiben')}

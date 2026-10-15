@@ -64,7 +64,7 @@ interface Evening {
 
 const today = () => new Date().toLocaleDateString('sv');
 const hm = (d: Date) => d.toLocaleTimeString(getLang() === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
-/** Dauer als „1 h 36 min“ bzw. „54 min“ – nicht wie eine Uhrzeit (Design-Prüfung 09.10.) */
+/** Dauer als „1 h 36 min“ bzw. „54 min“ – nicht wie eine Uhrzeit */
 function span(ms: number): string {
   const m = Math.max(0, Math.round(ms / 60000));
   const h = Math.floor(m / 60);

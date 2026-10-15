@@ -113,7 +113,7 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
                     {t('Bearbeiten')}
                   </button>
                 )}
-                {/* Leise wie „Bearbeiten“: ein roter Knopf an jedem Kommentar wirkt wie eine Warnung (Design-Prüfung 15.10.); die Rückfrage bleibt */}
+                {/* Leise wie „Bearbeiten“: ein roter Knopf an jedem Kommentar wirkt wie eine Warnung; die Rückfrage bleibt */}
                 <button type="button" className="btn ghost small" onClick={() => remove(k)}>{t('Löschen')}</button>
               </div>
             )}

@@ -29,7 +29,7 @@ export function MovePage() {
 
   useEffect(() => {
     api.campaign(campaignId).then((c) => { rememberCampaign(c); setCampaign(c); }).catch(setError);
-    // Kapitel in Arbeit bleiben beim Umzug hier – vorher zählen und sagen (Wunsch 14.10.)
+    // Kapitel in Arbeit bleiben beim Umzug hier – vorher zählen und sagen
     api.sessions(campaignId).then(setSessions).catch(() => undefined);
     return () => { if (timer.current) window.clearTimeout(timer.current); };
   }, [campaignId]);

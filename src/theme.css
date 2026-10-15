@@ -141,6 +141,13 @@ body,
   margin: 0;
 }
 
+/* Gescrollt wird nur der Inhalt (.screen-main), nie die ganze Seite – sonst zeigen manche Programmfenster
+   (WebView2 unter Windows) bei Rundungen um einen Pixel eine zweite Bildlaufleiste daneben */
+html:has(.screen-main),
+html:has(.screen-main) body {
+  overflow: hidden;
+}
+
 body {
   background: var(--vignette), var(--grain), var(--paper);
   background-attachment: fixed;
@@ -378,7 +385,7 @@ h2 {
 .btn.ghost,
 .btn.quiet {
   background: var(--paper-sunken);
-  /* Rand ≥ 3:1, damit leise Knöpfe als Knöpfe erkennbar bleiben (Design-Prüfung 08.10.) */
+  /* Rand ≥ 3:1, damit leise Knöpfe als Knöpfe erkennbar bleiben */
   border-color: var(--line-strong);
   color: var(--ink);
   box-shadow: none;
@@ -1719,7 +1726,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   color: var(--ink);
   font-weight: 600;
   gap: 6px;
-  /* Wie „Titelbild ändern“ als Knopf erkennbar (Design-Prüfung 10.10.) */
+  /* Wie „Titelbild ändern“ als Knopf erkennbar */
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -2031,7 +2038,7 @@ button.table-group-face {
   border-top: 1px solid var(--line);
 }
 
-/* ---------- „Jetzt dran“ auf der Übersicht (Design-Prüfung 15.10.) ---------- */
+/* ---------- „Jetzt dran“ auf der Übersicht ---------- */
 .now-list {
   gap: 0;
   padding: 10px 14px 6px;
@@ -2076,3 +2083,20 @@ button.table-group-face {
 .confirm-list dt { font-weight: 700; font-size: calc(14px * var(--ts)); }
 .confirm-list dd { margin: 0; }
 .link-edit-row .link-icon { vertical-align: -3px; }
+
+/* Breite Fenster (Programm am PC maximiert, großer Bildschirm): mehr Breite nutzen, Lesetext bleibt bei 68 Zeichen */
+@media (min-width: 1500px) {
+  .screen {
+    --pad: 48px;
+    max-width: 1680px;
+  }
+
+  .grid-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .split {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    column-gap: 48px;
+  }
+}

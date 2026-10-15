@@ -5,7 +5,7 @@ import {
 import type { BrandId } from './linkKind';
 
 /*
- * Markenzeichen für Links, einfarbig in der Schriftfarbe gezeigt (Benjamin 15.10.: Simple Icons statt eigener Zeichnungen).
+ * Markenzeichen für Links, einfarbig in der Schriftfarbe gezeigt.
  * Formen aus dem Paket simple-icons (CC0 1.0, siehe NOTICE.md). Die Marken gehören ihren Inhabern; Taleward nutzt sie nur,
  * um zu zeigen, wohin ein Link führt. Formen nicht verändern.
  */

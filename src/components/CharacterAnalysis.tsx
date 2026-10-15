@@ -44,7 +44,7 @@ export function AnalysisSwitch({ campaign, info, busy, onChange }: {
 }) {
   const toggle = async (value: boolean) => {
     if (value) {
-      // Frage zuerst (wird Überschrift der Rückfrage), Erklärung in normaler Schrift darunter (Design-Prüfung 14.10.)
+      // Frage zuerst (wird Überschrift der Rückfrage), Erklärung in normaler Schrift darunter
       const q = t('Charakterbögen und Hintergründe in „{campaign}“ auf „{server}“ auswerten lassen? Jede Auswertung startet erst, wenn du zustimmst. {reader}', {
         campaign: campaign.title, server: currentConnection().name, reader: reader(info, campaign)
       });

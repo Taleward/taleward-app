@@ -52,7 +52,7 @@ export function reportSentence(recap: Recap): string | null {
   return n ? tn(n, '{n} Stelle zum Ansehen', '{n} Stellen zum Ansehen') : t('Nichts aufgefallen');
 }
 
-/** Zur ersten markierten Stelle springen (Design-Prüfung 10.10.) */
+/** Zur ersten markierten Stelle springen */
 export function jumpToFirstFlagged(recap: Recap): void {
   const first = flagged(recap)[0];
   const el = first ? document.getElementById(`stelle-${first.index}`) : null;

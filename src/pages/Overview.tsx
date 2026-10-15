@@ -63,7 +63,7 @@ export function Overview() {
   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
   const needMe = pending.filter((s) => needsMe(s.state));
   const working = pending.filter((s) => !needsMe(s.state));
-  // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht (Wunsch 14.10.)
+  // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht
   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
   const latest = sessions?.find((s) => s.state === 'published');
 
@@ -258,7 +258,11 @@ export function RecordingConsent({ campaign, onChanged }: { campaign: Campaign; 
     setBusy(true);
     setError(null);
     try {
-      await api.setRecordingConsent(campaign.id, value);
+      const saved = await api.setRecordingConsent(campaign.id, value);
+      // Antwortet der Server ohne die Änderung, nicht still weitermachen, sondern sagen, dass es nicht geklappt hat
+      if (saved && typeof saved === 'object' && !!saved.recordingConsentAt !== value) {
+        throw new Error(t('Der Server hat die Zustimmung nicht gespeichert. Bitte später noch einmal versuchen.'));
+      }
       setOpen(false);
       onChanged();
     } catch (e) {
@@ -668,7 +672,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           )}
         </>
       )}
-      {/* Musterkampagne: kein Server, der auswerten könnte (Design-Prüfung 14.10.) */}
+      {/* Musterkampagne: kein Server, der auswerten könnte */}
       {gm && !muster && apiAtLeast('0.4.18') && (
         <>
           <span className="overline" style={{ marginTop: 6 }}>{t('Charaktere')}</span>
@@ -717,7 +721,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
 }
 
 /**
- * Beitritt und „bleibt verborgen“ zur selben Person in eine Karte (Design-Prüfung 10.10.): Der Hinweis
+ * Beitritt und „bleibt verborgen“ zur selben Person in eine Karte: Der Hinweis
  * hidden_entries_for_newcomer wandert in die Karte member_joined derselben Person.
  */
 function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNotice }[] {
@@ -731,7 +735,7 @@ function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNoti
 }
 
 /**
- * Aufgaben für „Jetzt dran“ (Design-Prüfung 15.10.): Kapitel, die auf die SL warten, mitgebrachte Welt, Hinweise an
+ * Aufgaben für „Jetzt dran“: Kapitel, die auf die SL warten, mitgebrachte Welt, Hinweise an
  * die SL, eigener Charakter, Terminabstimmung. Hinweise klappen ihre Entscheidung auf, alles andere führt zur Seite.
  */
 function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, onDone: () => void): NowItem[] {

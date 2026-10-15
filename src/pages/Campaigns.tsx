@@ -157,7 +157,7 @@ export function Campaigns() {
 
   const loading = entries === null;
   const names = [...new Set(active.map((c) => c.user?.displayName).filter(Boolean))].join(', ');
-  // Nur die Musterkampagne verbunden: kein echtes Konto – der nächste Schritt ist ein eigener Server (Design-Prüfung 08.10.)
+  // Nur die Musterkampagne verbunden: kein echtes Konto – der nächste Schritt ist ein eigener Server
   const onlyMuster = active.length > 0 && active.every((c) => isMusterUrl(c.baseUrl));
 
   return (

@@ -52,7 +52,7 @@ export function cloudUse(info: ServerInfo | null, campaign: Campaign) {
 export function CloudNotice({ info, campaign, onOpen }: { info: ServerInfo | null; campaign: Campaign; onOpen: () => void }) {
   const { transcription, summary } = cloudUse(info, campaign);
   if (!transcription && !summary) return null;
-  // Eine Zeile statt eigener Karte (Design-Prüfung 15.10.): Sichtbar für alle bleibt sie, die Einzelheiten stehen
+  // Eine Zeile statt eigener Karte: Sichtbar für alle bleibt sie, die Einzelheiten stehen
   // unter „Was mit deinen Daten passiert“.
   const providers = [...new Set([transcription?.provider, summary?.provider].filter((x): x is string => !!x))].join(', ');
   return (

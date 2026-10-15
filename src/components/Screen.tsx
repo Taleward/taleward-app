@@ -28,7 +28,7 @@ interface Props {
 
 export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, children }: Props) {
   const navigate = useNavigate();
-  // In der Musterkampagne steht das im Kopf jeder Seite (Design-Prüfung 08.10.), damit niemand sie für echt hält
+  // In der Musterkampagne steht das im Kopf jeder Seite, damit niemand sie für echt hält
   const connId = useLocation().pathname.match(/^\/v\/([^/]+)/)?.[1];
   const muster = !!connId && isMusterUrl(getConnection(connId)?.baseUrl);
   const overline = muster && typeof givenOverline === 'string' && givenOverline.trim()

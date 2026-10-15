@@ -153,7 +153,7 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
       { figure, person: m.displayName, campaign: campaign.title, server: currentConnection().name });
     const list = [
       { label: t('Gelöscht'), text: t('Hintergrund am Platz, offene Auswertungen') },
-      { label: t('Bleibt beim ehemaligen Mitglied'), text: t('Charakterbögen, Vorschläge, Kommentare') }
+      { label: t('Bleibt beim ehemaligen Mitglied'), text: t('Charakterbögen und ihre Auswertungen, Vorschläge, Kommentare') }
     ];
     if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true, list })) {
       run(() => api.releaseSeat(campaign.id, m.id));

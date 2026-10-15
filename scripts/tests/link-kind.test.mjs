@@ -12,7 +12,7 @@ test('Bekannte Dienste', () => {
   assert.deepEqual(linkInfo('https://drive.google.com/drive/folders/x'), { kind: 'docs', brand: 'googledrive' });
   assert.deepEqual(linkInfo('https://app.roll20.net/join/1'), { kind: 'table', brand: 'roll20' });
   assert.deepEqual(linkInfo('https://open.spotify.com/playlist/x'), { kind: 'music', brand: 'spotify' });
-  assert.deepEqual(linkInfo('https://cloud.nextcloud.verein.de/s/abc'), { kind: 'docs', brand: 'nextcloud' });
+  assert.deepEqual(linkInfo('https://nextcloud.com/'), { kind: 'docs', brand: 'nextcloud' });
 });
 
 test('Ohne Markenzeichen: nur die Art', () => {
@@ -28,4 +28,7 @@ test('Nicht täuschen lassen', () => {
   assert.deepEqual(linkInfo('https://notdiscord.com/x'), { kind: 'web', brand: null });
   assert.deepEqual(linkInfo('https://example.com/youtube.com'), { kind: 'web', brand: null });
   assert.deepEqual(linkInfo('kein link'), { kind: 'web', brand: null });
+  // Selbst betriebene Dienste: kein Markenzeichen, nur die Art (Dokumente) oder die allgemeine Webseite
+  assert.deepEqual(linkInfo('https://nextcloud-login.fremd.example/s/x'), { kind: 'web', brand: null });
+  assert.deepEqual(linkInfo('https://cloud.nextcloud.verein.de/s/abc.pdf'), { kind: 'docs', brand: null });
 });

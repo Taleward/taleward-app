@@ -17,7 +17,7 @@ function dismissedFor(connId: string): boolean {
 
 /**
  * Freiwilliger Hinweis auf das Stimmprofil: erscheint nur ohne Stimmprofil auf diesem Server. Einmal wegklicken gilt
- * für alle Kampagnen und Server (Design-Prüfung 15.10.); anlegen geht weiter unter „Konten und Server“. Kein Druck – Aufnahmen funktionieren auch ohne (Vorstellungsrunde oder Zuordnung durch die SL).
+ * für alle Kampagnen und Server; anlegen geht weiter unter „Konten und Server“. Kein Druck – Aufnahmen funktionieren auch ohne (Vorstellungsrunde oder Zuordnung durch die SL).
  */
 export function VoiceProfileHint() {
   const connId = currentConnectionId() ?? '-';

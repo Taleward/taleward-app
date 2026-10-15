@@ -13,7 +13,7 @@ export interface NowItem {
 }
 
 /**
- * „Jetzt dran (n)“ oben auf der Übersicht (Design-Prüfung 15.10.): eine kurze Zeile je Aufgabe statt einer Karte mit
+ * „Jetzt dran (n)“ oben auf der Übersicht: eine kurze Zeile je Aufgabe statt einer Karte mit
  * eigenen Knöpfen. Entschieden wird auf der Zielseite oder im Aufklapper, nicht in der Liste.
  */
 export function NowList({ items }: { items: NowItem[] }) {
