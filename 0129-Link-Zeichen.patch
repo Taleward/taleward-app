@@ -1,0 +1,333 @@
+From 385ca729ed96d59a8a31344a04295a48cc673f76 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 10:58:20 +0200
+Subject: [PATCH] =?UTF-8?q?Links:=20Zeichen=20f=C3=BCr=20den=20Dienst=20vo?=
+ =?UTF-8?q?r=20jedem=20Link?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Die App erkennt den Dienst an der Adresse (src/links/linkKind.ts) und zeigt das Markenzeichen (Paket simple-icons, CC0, einfarbig) oder ein allgemeines Zeichen für Sprache, Video, Musik, Dokumente, Spieltisch bzw. Webseite. Gilt für alle Link-Knöpfe und den Link-Editor. Hinweis in NOTICE.md.
+---
+ NOTICE.md                        |  9 +++++
+ package-lock.json                | 23 +++++++++++-
+ package.json                     |  3 +-
+ scripts/tests/link-kind.test.mjs | 31 +++++++++++++++++
+ src/components/Links.tsx         | 12 ++++---
+ src/links/LinkIcon.tsx           | 41 ++++++++++++++++++++++
+ src/links/brandPaths.ts          | 17 +++++++++
+ src/links/linkKind.ts            | 60 ++++++++++++++++++++++++++++++++
+ src/theme.css                    | 11 ++++--
+ 9 files changed, 198 insertions(+), 9 deletions(-)
+ create mode 100644 scripts/tests/link-kind.test.mjs
+ create mode 100644 src/links/LinkIcon.tsx
+ create mode 100644 src/links/brandPaths.ts
+ create mode 100644 src/links/linkKind.ts
+
+diff --git a/NOTICE.md b/NOTICE.md
+index d039128..d250b64 100644
+--- a/NOTICE.md
++++ b/NOTICE.md
+@@ -39,4 +39,13 @@ Die Linienicons in `src/components/Icons.tsx` übernehmen Formen von Lucide (htt
+ > USE OR PERFORMANCE OF THIS SOFTWARE.
+ 
++Die allgemeinen Zeichen vor Links in `src/links/LinkIcon.tsx` (headphones, file-text, map, music, globe) stammen
++ebenfalls aus Lucide 1.48.0 (ISC-Lizenz, siehe oben).
++
++Die Markenzeichen vor Links (`src/links/brandPaths.ts`) stammen aus dem Paket `simple-icons` (https://simpleicons.org,
++Version 16.35.0), freigegeben unter CC0 1.0. Die Marken selbst gehören ihren jeweiligen Inhabern (Discord, TeamSpeak, Mumble,
++Zoom, Google Meet, WhatsApp, Signal, Telegram, YouTube, Twitch, Spotify, Google Docs, Google Drive, Dropbox, Nextcloud,
++Obsidian, Notion, Roll20, Foundry Virtual Tabletop). Taleward zeigt sie nur, um kenntlich zu machen, wohin ein Link
++führt; es besteht keine Verbindung zu diesen Unternehmen.
++
+ Die Formen von calendar, check, chevron-left, info, search und arrow-up stammen aus dem Projekt Feather:
+ 
+diff --git a/package-lock.json b/package-lock.json
+index 0b8c5bd..28b5bd7 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -8,4 +8,5 @@
+       "name": "taleward-app",
+       "version": "0.27.0",
++      "license": "AGPL-3.0-only",
+       "dependencies": {
+         "@capacitor/android": "^8.5.2",
+@@ -22,5 +23,6 @@
+         "react": "^19.3.0",
+         "react-dom": "^19.3.0",
+-        "react-router-dom": "^7.18.4"
++        "react-router-dom": "^7.18.4",
++        "simple-icons": "16.35.0"
+       },
+       "devDependencies": {
+@@ -3006,4 +3008,23 @@
+       "license": "ISC"
+     },
++    "node_modules/simple-icons": {
++      "version": "16.35.0",
++      "resolved": "https://registry.npmjs.org/simple-icons/-/simple-icons-16.35.0.tgz",
++      "integrity": "sha512-TCfl/2+GTrx0nCo4pEWGvxhOb8c6NsqOU1OpwjtF4lwJAthB8IYVD0fuIMjLMg6JFuG1YBO0t1iETQqJLqkoJA==",
++      "funding": [
++        {
++          "type": "opencollective",
++          "url": "https://opencollective.com/simple-icons"
++        },
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/simple-icons"
++        }
++      ],
++      "license": "CC0-1.0",
++      "engines": {
++        "node": ">=0.12.18"
++      }
++    },
+     "node_modules/simple-plist": {
+       "version": "1.3.1",
+diff --git a/package.json b/package.json
+index 7d620f8..911ad5a 100644
+--- a/package.json
++++ b/package.json
+@@ -34,5 +34,6 @@
+     "react": "^19.3.0",
+     "react-dom": "^19.3.0",
+-    "react-router-dom": "^7.18.4"
++    "react-router-dom": "^7.18.4",
++    "simple-icons": "16.35.0"
+   },
+   "devDependencies": {
+diff --git a/scripts/tests/link-kind.test.mjs b/scripts/tests/link-kind.test.mjs
+new file mode 100644
+index 0000000..ea03db8
+--- /dev/null
++++ b/scripts/tests/link-kind.test.mjs
+@@ -0,0 +1,31 @@
++// Links: Dienst an der Adresse erkennen (Markenzeichen bzw. allgemeines Zeichen).
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { linkInfo } from '../../src/links/linkKind.ts';
++
++test('Bekannte Dienste', () => {
++  assert.deepEqual(linkInfo('https://discord.gg/abc'), { kind: 'chat', brand: 'discord' });
++  assert.deepEqual(linkInfo('https://www.youtube.com/watch?v=1'), { kind: 'video', brand: 'youtube' });
++  assert.deepEqual(linkInfo('https://youtu.be/1'), { kind: 'video', brand: 'youtube' });
++  assert.deepEqual(linkInfo('https://us02web.zoom.us/j/123'), { kind: 'chat', brand: 'zoom' });
++  assert.deepEqual(linkInfo('https://docs.google.com/document/d/x'), { kind: 'docs', brand: 'googledocs' });
++  assert.deepEqual(linkInfo('https://drive.google.com/drive/folders/x'), { kind: 'docs', brand: 'googledrive' });
++  assert.deepEqual(linkInfo('https://app.roll20.net/join/1'), { kind: 'table', brand: 'roll20' });
++  assert.deepEqual(linkInfo('https://open.spotify.com/playlist/x'), { kind: 'music', brand: 'spotify' });
++  assert.deepEqual(linkInfo('https://cloud.nextcloud.verein.de/s/abc'), { kind: 'docs', brand: 'nextcloud' });
++});
++
++test('Ohne Markenzeichen: nur die Art', () => {
++  assert.deepEqual(linkInfo('https://www.owlbear.rodeo/room/x'), { kind: 'table', brand: null });
++  assert.deepEqual(linkInfo('https://onedrive.live.com/x'), { kind: 'docs', brand: null });
++  assert.deepEqual(linkInfo('https://beispiel.example/karte.pdf'), { kind: 'docs', brand: null });
++  assert.deepEqual(linkInfo('https://tabletopaudio.com/'), { kind: 'music', brand: null });
++});
++
++test('Nicht täuschen lassen', () => {
++  // Fremde Namen, die nur so ähnlich aussehen, bekommen kein Markenzeichen
++  assert.deepEqual(linkInfo('https://discord.gg.example.com/x'), { kind: 'web', brand: null });
++  assert.deepEqual(linkInfo('https://notdiscord.com/x'), { kind: 'web', brand: null });
++  assert.deepEqual(linkInfo('https://example.com/youtube.com'), { kind: 'web', brand: null });
++  assert.deepEqual(linkInfo('kein link'), { kind: 'web', brand: null });
++});
+diff --git a/src/components/Links.tsx b/src/components/Links.tsx
+index 8c4132e..ebcdae5 100644
+--- a/src/components/Links.tsx
++++ b/src/components/Links.tsx
+@@ -4,4 +4,5 @@ import type { Link } from '../api/types';
+ import { t } from '../i18n';
+ import { confirmDialog } from './confirm';
++import { LinkIcon } from '../links/LinkIcon';
+ 
+ /*
+@@ -69,5 +70,5 @@ export function LinkButtons({ links: raw, small = true, compact }: { links: Link
+           <button key={l.id} type="button" className="btn small ghost link-chip" onClick={() => openLink(l)}
+             aria-label={t('{label} öffnen ({host})', { label: l.label, host: hostOf(l.url) })}>
+-            {l.label} <span aria-hidden>↗</span>
++            <LinkIcon url={l.url} size={16} />{l.label} <span aria-hidden>↗</span>
+           </button>
+         ))}
+@@ -80,6 +81,9 @@ export function LinkButtons({ links: raw, small = true, compact }: { links: Link
+         <button key={l.id} type="button" className={small ? 'btn small outline link-btn' : 'btn outline link-btn'} onClick={() => openLink(l)}
+           aria-label={t('{label} öffnen ({host})', { label: l.label, host: hostOf(l.url) })}>
+-          <span>{l.label}</span>
+-          <span className="link-host" aria-hidden>{hostOf(l.url)} ↗</span>
++          <LinkIcon url={l.url} size={20} />
++          <span className="link-text">
++            <span>{l.label}</span>
++            <span className="link-host" aria-hidden>{hostOf(l.url)} ↗</span>
++          </span>
+         </button>
+       ))}
+@@ -137,5 +141,5 @@ export function LinkEditor({ links, max, canShare, saveLabel, onSave, onCancel }
+         <div key={l.id} className="link-edit-row">
+           <span style={{ flex: 1, minWidth: 0 }}>
+-            <strong>{l.label}</strong> <span className="muted small">{hostOf(l.url)}</span>
++            <LinkIcon url={l.url} size={16} /> <strong>{l.label}</strong> <span className="muted small">{hostOf(l.url)}</span>
+           </span>
+           {canShare && (
+diff --git a/src/links/LinkIcon.tsx b/src/links/LinkIcon.tsx
+new file mode 100644
+index 0000000..1993748
+--- /dev/null
++++ b/src/links/LinkIcon.tsx
+@@ -0,0 +1,41 @@
++import { IconPlay } from '../components/Icons';
++import { BRAND_PATHS } from './brandPaths';
++import { linkInfo, type LinkKind } from './linkKind';
++
++/*
++ * Zeichen vor einem Link: Markenzeichen, wenn der Dienst bekannt ist, sonst ein allgemeines Zeichen für die Art
++ * (Lucide-Formen wie in Icons.tsx: headphones, file-text, map, music, globe). Rein schmückend, der Screenreader liest
++ * den Namen des Links.
++ */
++const line = (size: number) => ({
++  width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
++  strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true as const
++});
++
++function KindIcon({ kind, size }: { kind: LinkKind; size: number }) {
++  switch (kind) {
++    case 'chat':
++      return <svg {...line(size)}><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" /></svg>;
++    case 'video':
++      return <IconPlay size={size} />;
++    case 'docs':
++      return <svg {...line(size)}><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /><path d="M14 2v5a1 1 0 0 0 1 1h5" /><path d="M10 9H8" /><path d="M16 13H8" /><path d="M16 17H8" /></svg>;
++    case 'table':
++      return <svg {...line(size)}><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z" /><path d="M15 5.764v15" /><path d="M9 3.236v15" /></svg>;
++    case 'music':
++      return <svg {...line(size)}><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>;
++    default:
++      return <svg {...line(size)}><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>;
++  }
++}
++
++export function LinkIcon({ url, size = 18 }: { url: string; size?: number }) {
++  const { kind, brand } = linkInfo(url);
++  return (
++    <span className="link-icon" aria-hidden="true">
++      {brand
++        ? <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={BRAND_PATHS[brand].path} /></svg>
++        : <KindIcon kind={kind} size={size} />}
++    </span>
++  );
++}
+diff --git a/src/links/brandPaths.ts b/src/links/brandPaths.ts
+new file mode 100644
+index 0000000..f390c6c
+--- /dev/null
++++ b/src/links/brandPaths.ts
+@@ -0,0 +1,17 @@
++import {
++  siDiscord, siDropbox, siFoundryvirtualtabletop, siGoogledocs, siGoogledrive, siGooglemeet, siMumble, siNextcloud,
++  siNotion, siObsidian, siRoll20, siSignal, siSpotify, siTeamspeak, siTelegram, siTwitch, siWhatsapp, siYoutube, siZoom
++} from 'simple-icons';
++import type { BrandId } from './linkKind';
++
++/*
++ * Markenzeichen für Links, einfarbig in der Schriftfarbe gezeigt (Benjamin 15.10.: Simple Icons statt eigener Zeichnungen).
++ * Formen aus dem Paket simple-icons (CC0 1.0, siehe NOTICE.md). Die Marken gehören ihren Inhabern; Taleward nutzt sie nur,
++ * um zu zeigen, wohin ein Link führt. Formen nicht verändern.
++ */
++export const BRAND_PATHS: Record<BrandId, { title: string; path: string }> = {
++  discord: siDiscord, teamspeak: siTeamspeak, mumble: siMumble, zoom: siZoom, googlemeet: siGooglemeet,
++  whatsapp: siWhatsapp, signal: siSignal, telegram: siTelegram, youtube: siYoutube, twitch: siTwitch,
++  spotify: siSpotify, googledocs: siGoogledocs, googledrive: siGoogledrive, dropbox: siDropbox,
++  nextcloud: siNextcloud, obsidian: siObsidian, notion: siNotion, roll20: siRoll20, foundry: siFoundryvirtualtabletop
++};
+diff --git a/src/links/linkKind.ts b/src/links/linkKind.ts
+new file mode 100644
+index 0000000..9961c42
+--- /dev/null
++++ b/src/links/linkKind.ts
+@@ -0,0 +1,60 @@
++/**
++ * Welcher Dienst steckt hinter einem Link? Nur an der Adresse erkannt, ohne Abruf (Benjamin 15.10.).
++ * Ohne Laufzeit-Importe, damit es sich testen lässt (scripts/tests/link-kind.test.mjs).
++ *
++ * brand: eines der Markenzeichen in brandPaths.ts; sonst nur die Art (kind) mit einem allgemeinen Zeichen.
++ */
++export type BrandId =
++  | 'discord' | 'teamspeak' | 'mumble' | 'zoom' | 'googlemeet' | 'whatsapp' | 'signal' | 'telegram'
++  | 'youtube' | 'twitch' | 'spotify'
++  | 'googledocs' | 'googledrive' | 'dropbox' | 'nextcloud' | 'obsidian' | 'notion'
++  | 'roll20' | 'foundry';
++
++export type LinkKind = 'chat' | 'video' | 'music' | 'docs' | 'table' | 'web';
++
++export interface LinkInfo {
++  kind: LinkKind;
++  brand: BrandId | null;
++}
++
++/** Hostname (ohne www.) → Dienst. Ein Eintrag gilt für den Namen selbst und alle Unternamen (z. B. us02web.zoom.us). */
++const HOSTS: [string, LinkKind, BrandId | null][] = [
++  ['discord.com', 'chat', 'discord'], ['discord.gg', 'chat', 'discord'], ['discordapp.com', 'chat', 'discord'],
++  ['teamspeak.com', 'chat', 'teamspeak'], ['mumble.info', 'chat', 'mumble'],
++  ['zoom.us', 'chat', 'zoom'], ['meet.google.com', 'chat', 'googlemeet'],
++  ['whatsapp.com', 'chat', 'whatsapp'], ['wa.me', 'chat', 'whatsapp'],
++  ['signal.group', 'chat', 'signal'], ['signal.me', 'chat', 'signal'], ['signal.org', 'chat', 'signal'],
++  ['t.me', 'chat', 'telegram'], ['telegram.me', 'chat', 'telegram'], ['telegram.org', 'chat', 'telegram'],
++  ['teams.microsoft.com', 'chat', null], ['teams.live.com', 'chat', null], ['element.io', 'chat', null], ['matrix.to', 'chat', null],
++  ['youtube.com', 'video', 'youtube'], ['youtu.be', 'video', 'youtube'], ['twitch.tv', 'video', 'twitch'], ['vimeo.com', 'video', null],
++  ['spotify.com', 'music', 'spotify'], ['spotify.link', 'music', 'spotify'],
++  ['tabletopaudio.com', 'music', null], ['syrinscape.com', 'music', null], ['soundcloud.com', 'music', null],
++  ['docs.google.com', 'docs', 'googledocs'], ['drive.google.com', 'docs', 'googledrive'],
++  ['dropbox.com', 'docs', 'dropbox'], ['db.tt', 'docs', 'dropbox'],
++  ['obsidian.md', 'docs', 'obsidian'], ['notion.so', 'docs', 'notion'], ['notion.site', 'docs', 'notion'],
++  ['onedrive.live.com', 'docs', null], ['1drv.ms', 'docs', null], ['sharepoint.com', 'docs', null],
++  ['worldanvil.com', 'docs', null], ['homebrewery.naturalcrit.com', 'docs', null],
++  ['roll20.net', 'table', 'roll20'], ['foundryvtt.com', 'table', 'foundry'],
++  ['forge-vtt.com', 'table', null], ['owlbear.rodeo', 'table', null], ['dndbeyond.com', 'table', null],
++  ['inkarnate.com', 'table', null], ['dungeonscrawl.com', 'table', null], ['app.dungeonscrawl.com', 'table', null]
++];
++
++export function linkInfo(url: string): LinkInfo {
++  let host = '';
++  let path = '';
++  try {
++    const u = new URL(url);
++    host = u.hostname.toLowerCase().replace(/^www\./, '');
++    path = u.pathname.toLowerCase();
++  } catch {
++    return { kind: 'web', brand: null };
++  }
++  for (const [h, kind, brand] of HOSTS) {
++    if (host === h || host.endsWith('.' + h)) return { kind, brand };
++  }
++  // Eigene Nextcloud: Name enthält „nextcloud“
++  if (/(^|[.-])nextcloud([.-]|$)/.test(host)) return { kind: 'docs', brand: 'nextcloud' };
++  if (/\.(pdf|docx?|odt|txt|md)$/.test(path)) return { kind: 'docs', brand: null };
++  if (/\.(mp3|ogg|wav|flac)$/.test(path)) return { kind: 'music', brand: null };
++  return { kind: 'web', brand: null };
++}
+diff --git a/src/theme.css b/src/theme.css
+index 96811a9..6af7f3d 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -1737,9 +1737,13 @@ details.card[open] { padding-bottom: var(--space-4); }
+ /* Links zu anderen Programmen */
+ .btn.link-btn {
+-  flex-direction: column;
+-  align-items: flex-start;
+-  gap: 0;
++  flex-direction: row;
++  align-items: center;
++  gap: 10px;
+   text-align: left;
+ }
++.link-text { display: flex; flex-direction: column; align-items: flex-start; }
++/* Zeichen vor Links (Marke oder Art des Dienstes), in der Schriftfarbe */
++.link-icon { display: inline-flex; flex-shrink: 0; color: var(--ink-muted); }
++.btn.link-chip .link-icon { margin-right: 2px; }
+ 
+ .link-host {
+@@ -2072,2 +2076,3 @@ button.table-group-face {
+ .confirm-list dt { font-weight: 700; font-size: calc(14px * var(--ts)); }
+ .confirm-list dd { margin: 0; }
++.link-edit-row .link-icon { vertical-align: -3px; }
