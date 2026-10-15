@@ -1,0 +1,567 @@
+From 54615f550e6f8aab0c6ff6da2a0e19941cf532c5 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 07:32:19 +0200
+Subject: [PATCH] =?UTF-8?q?=C3=9Cbersicht:=20=E2=80=9EJetzt=20dran?=
+ =?UTF-8?q?=E2=80=9C=20als=20Liste,=20Cloud=20als=20eine=20Zeile;=20leiser?=
+ =?UTF-8?q?e=20L=C3=B6sch-Kn=C3=B6pfe,=20Version=200.27.0?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Aufgaben der Übersicht stehen als kurze Zeilen in einem Block, entschieden wird auf der Zielseite oder im Aufklapper. Kommentare löschen als leiser Knopf, „Kampagne löschen …“ im Stil der übrigen Lösch-Knöpfe, Stimmprofil-Hinweis einmal für alle wegklicken, Rückfrage „Platz freigeben“ mit kurzer Liste, „Aa“: „Farbe“ statt „Seite“, Einwilligungstext sprachlich angepasst (eurem Server, Prüfung des Kapitels).
+---
+ package-lock.json                    |   4 +-
+ package.json                         |   2 +-
+ src/components/CharacterAnalysis.tsx |   4 +-
+ src/components/CloudNotice.tsx       |  22 +++--
+ src/components/Comments.tsx          |   3 +-
+ src/components/DataSummary.tsx       |  11 ++-
+ src/components/NowList.tsx           |  43 +++++++++
+ src/components/Seats.tsx             |  12 ++-
+ src/components/VoiceProfileHint.tsx  |   9 +-
+ src/components/confirm.tsx           |   9 ++
+ src/consent.ts                       |   4 +-
+ src/i18n/en.ts                       |  16 +++-
+ src/pages/Overview.tsx               | 129 +++++++++++++++++----------
+ src/reading/ReadSettings.tsx         |   4 +-
+ src/theme.css                        |  45 ++++++++++
+ 15 files changed, 236 insertions(+), 81 deletions(-)
+ create mode 100644 src/components/NowList.tsx
+
+diff --git a/package-lock.json b/package-lock.json
+index 88d96d1..0b8c5bd 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,5 +1,5 @@
+ {
+   "name": "taleward-app",
+-  "version": "0.26.0",
++  "version": "0.27.0",
+   "lockfileVersion": 3,
+   "requires": true,
+@@ -7,5 +7,5 @@
+     "": {
+       "name": "taleward-app",
+-      "version": "0.26.0",
++      "version": "0.27.0",
+       "dependencies": {
+         "@capacitor/android": "^8.5.2",
+diff --git a/package.json b/package.json
+index 1377a06..7d620f8 100644
+--- a/package.json
++++ b/package.json
+@@ -2,5 +2,5 @@
+   "name": "taleward-app",
+   "private": true,
+-  "version": "0.26.0",
++  "version": "0.27.0",
+   "type": "module",
+   "scripts": {
+diff --git a/src/components/CharacterAnalysis.tsx b/src/components/CharacterAnalysis.tsx
+index b1ad91e..28c7199 100644
+--- a/src/components/CharacterAnalysis.tsx
++++ b/src/components/CharacterAnalysis.tsx
+@@ -92,5 +92,5 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
+ 
+   return (
+-    <div className="card task">
++    <div className="card">
+       <strong>
+         {analysis.source === 'backstory'
+@@ -107,5 +107,5 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
+       <ErrorBox error={error} />
+       <div className="row wrap" style={{ gap: 8 }}>
+-        <button type="button" className="btn small moss" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
++        <button type="button" className="btn small outline" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
+         <button type="button" className="btn small outline" disabled={busy} onClick={() => decide(false)}>{t('Ablehnen')}</button>
+       </div>
+diff --git a/src/components/CloudNotice.tsx b/src/components/CloudNotice.tsx
+index 16524c4..71a70a9 100644
+--- a/src/components/CloudNotice.tsx
++++ b/src/components/CloudNotice.tsx
+@@ -1,2 +1,3 @@
++import { IconInfo } from './Icons';
+ import { useEffect, useState } from 'react';
+ import { api } from '../api/client';
+@@ -49,19 +50,16 @@ export function cloudUse(info: ServerInfo | null, campaign: Campaign) {
+ 
+ /** Kasten auf der Übersicht: klar zeigen, ob Stimmen oder Text den Verein verlassen */
+-export function CloudNotice({ info, campaign }: { info: ServerInfo | null; campaign: Campaign }) {
++export function CloudNotice({ info, campaign, onOpen }: { info: ServerInfo | null; campaign: Campaign; onOpen: () => void }) {
+   const { transcription, summary } = cloudUse(info, campaign);
+   if (!transcription && !summary) return null;
++  // Eine Zeile statt eigener Karte (Design-Prüfung 15.10.): Sichtbar für alle bleibt sie, die Einzelheiten stehen
++  // unter „Was mit deinen Daten passiert“.
++  const providers = [...new Set([transcription?.provider, summary?.provider].filter((x): x is string => !!x))].join(', ');
+   return (
+-    <div className="notice" style={{ flexDirection: 'column', gap: 4 }}>
+-      <strong>{t('Cloud-Dienste aktiv')}</strong>
+-      {transcription && (
+-        <span className="small">
+-          {transcription.primary
+-            ? t('Aufnahmen werden über {provider} transkribiert.', { provider: transcription.provider })
+-            : t('Ist 24 Stunden lang kein Worker erreichbar, transkribiert {provider}.', { provider: transcription.provider })}
+-        </span>
+-      )}
+-      {summary && <span className="small">{t('Kapitel schreibt: {provider}. Dafür gehen Text der Runde und Unterlagen dorthin, keine Stimmen.', { provider: summary.provider })}</span>}
+-    </div>
++    <button type="button" className="notice cloud-line" onClick={onOpen}>
++      <span aria-hidden="true" style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
++      <span style={{ flex: 1 }}>{t('Cloud aktiv · {provider}', { provider: providers })}</span>
++      <span aria-hidden="true" style={{ color: 'var(--ink-faint)' }}>›</span>
++    </button>
+   );
+ }
+diff --git a/src/components/Comments.tsx b/src/components/Comments.tsx
+index 1b31990..60f1aa5 100644
+--- a/src/components/Comments.tsx
++++ b/src/components/Comments.tsx
+@@ -114,5 +114,6 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+                   </button>
+                 )}
+-                <button type="button" className="btn small danger outline" onClick={() => remove(k)}>{t('Löschen')}</button>
++                {/* Leise wie „Bearbeiten“: ein roter Knopf an jedem Kommentar wirkt wie eine Warnung (Design-Prüfung 15.10.); die Rückfrage bleibt */}
++                <button type="button" className="btn ghost small" onClick={() => remove(k)}>{t('Löschen')}</button>
+               </div>
+             )}
+diff --git a/src/components/DataSummary.tsx b/src/components/DataSummary.tsx
+index 62deeb1..6a116bf 100644
+--- a/src/components/DataSummary.tsx
++++ b/src/components/DataSummary.tsx
+@@ -54,5 +54,5 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+ 
+   return (
+-    <details className="card data-summary" style={{ gap: 10 }}>
++    <details id="data-summary" className="card data-summary" style={{ gap: 10 }}>
+       <summary style={{ fontWeight: 700 }}>{t('Was mit deinen Daten passiert')}</summary>
+       <dl style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '8px 0 0' }}>
+@@ -74,2 +74,11 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info:
+   );
+ }
++
++/** Aufklappen und hinscrollen, z. B. von der Zeile „Cloud aktiv“ */
++export function openDataSummary() {
++  const d = document.getElementById('data-summary') as HTMLDetailsElement | null;
++  if (!d) return;
++  d.open = true;
++  d.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
++  d.querySelector('summary')?.focus();
++}
+diff --git a/src/components/NowList.tsx b/src/components/NowList.tsx
+new file mode 100644
+index 0000000..4dc3d36
+--- /dev/null
++++ b/src/components/NowList.tsx
+@@ -0,0 +1,43 @@
++import type { ReactNode } from 'react';
++import { Link } from 'react-router-dom';
++import { t } from '../i18n';
++
++/** Eine Aufgabe im Block „Jetzt dran“: führt auf eine Seite (to) oder klappt die Entscheidung auf (detail) */
++export interface NowItem {
++  key: string;
++  label: string;
++  to?: string;
++  detail?: ReactNode;
++  /** Die Karte im Aufklapper wiederholt die Zeile als Überschrift – dann ausblenden */
++  hideDetailTitle?: boolean;
++}
++
++/**
++ * „Jetzt dran (n)“ oben auf der Übersicht (Design-Prüfung 15.10.): eine kurze Zeile je Aufgabe statt einer Karte mit
++ * eigenen Knöpfen. Entschieden wird auf der Zielseite oder im Aufklapper, nicht in der Liste.
++ */
++export function NowList({ items }: { items: NowItem[] }) {
++  if (items.length === 0) return null;
++  return (
++    <section className="card now-list" aria-labelledby="now-title">
++      <h2 id="now-title" className="overline">{t('Jetzt dran ({n})', { n: items.length })}</h2>
++      <ul>
++        {items.map((i) => (
++          <li key={i.key}>
++            {i.to ? (
++              <Link className="now-row" to={i.to}>
++                <span>{i.label}</span>
++                <span aria-hidden="true" className="now-go">›</span>
++              </Link>
++            ) : (
++              <details className="now-fold">
++                <summary>{i.label}</summary>
++                <div className={i.hideDetailTitle ? 'now-detail no-title' : 'now-detail'}>{i.detail}</div>
++              </details>
++            )}
++          </li>
++        ))}
++      </ul>
++    </section>
++  );
++}
+diff --git a/src/components/Seats.tsx b/src/components/Seats.tsx
+index 2e2b745..127dc82 100644
+--- a/src/components/Seats.tsx
++++ b/src/components/Seats.tsx
+@@ -116,5 +116,5 @@ export function OrphanNoticeCard({ campaign, notice, onDone }: { campaign: Campa
+       <ErrorBox error={error} />
+       <div className="row wrap" style={{ gap: 8 }}>
+-        <button type="button" className="btn small" disabled={busy} onClick={toNpc}>{t('Als NSC weiterführen')}</button>
++        <button type="button" className="btn small outline" disabled={busy} onClick={toNpc}>{t('Als NSC weiterführen')}</button>
+         <button type="button" className="btn small outline" disabled={busy} onClick={() => setAssigning(true)}>{t('Einem Spieler geben')}</button>
+         <button type="button" className="btn small ghost" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Später')}</button>
+@@ -150,7 +150,11 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
+   const release = async () => {
+     // Vor dem Freigeben sagen, was bei der Person bleibt
+-    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, geht nicht an die nächste Person: Der Hintergrund am Platz wird gelöscht. Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare stehen danach bei einem ehemaligen Mitglied. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.',
++    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} braucht danach eine neue Einladung. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat.',
+       { figure, person: m.displayName, campaign: campaign.title, server: currentConnection().name });
+-    if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true })) {
++    const list = [
++      { label: t('Gelöscht'), text: t('Hintergrund am Platz, offene Auswertungen') },
++      { label: t('Bleibt beim ehemaligen Mitglied'), text: t('Charakterbögen, Vorschläge, Kommentare') }
++    ];
++    if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true, list })) {
+       run(() => api.releaseSeat(campaign.id, m.id));
+     }
+@@ -163,5 +167,5 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
+       <ErrorBox error={error} />
+       <div className="row wrap" style={{ gap: 8 }}>
+-        <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Passt')}</button>
++        <button type="button" className="btn small outline" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Passt')}</button>
+         <button type="button" className="btn small danger outline" disabled={busy} onClick={release}>{t('Platz freigeben')}</button>
+       </div>
+diff --git a/src/components/VoiceProfileHint.tsx b/src/components/VoiceProfileHint.tsx
+index fbba5bd..16b2877 100644
+--- a/src/components/VoiceProfileHint.tsx
++++ b/src/components/VoiceProfileHint.tsx
+@@ -9,5 +9,6 @@ const KEY = 'taleward.voiceHintDismissed';
+ function dismissedFor(connId: string): boolean {
+   try {
+-    return (JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[]).includes(connId);
++    const list = JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[];
++    return list.includes('*') || list.includes(connId);
+   } catch {
+     return false;
+@@ -16,6 +17,6 @@ function dismissedFor(connId: string): boolean {
+ 
+ /**
+- * Freiwilliger Hinweis auf das Stimmprofil: erscheint nur ohne Stimmprofil auf diesem Server und lässt sich je Server
+- * wegklicken. Kein Druck – Aufnahmen funktionieren auch ohne (Vorstellungsrunde oder Zuordnung durch die SL).
++ * Freiwilliger Hinweis auf das Stimmprofil: erscheint nur ohne Stimmprofil auf diesem Server. Einmal wegklicken gilt
++ * für alle Kampagnen und Server (Design-Prüfung 15.10.); anlegen geht weiter unter „Konten und Server“. Kein Druck – Aufnahmen funktionieren auch ohne (Vorstellungsrunde oder Zuordnung durch die SL).
+  */
+ export function VoiceProfileHint() {
+@@ -35,5 +36,5 @@ export function VoiceProfileHint() {
+     try {
+       const list = JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[];
+-      localStorage.setItem(KEY, JSON.stringify([...new Set([...list, connId])]));
++      localStorage.setItem(KEY, JSON.stringify([...new Set([...list, '*'])]));
+     } catch { /* egal */ }
+     setShow(false);
+diff --git a/src/components/confirm.tsx b/src/components/confirm.tsx
+index bac3556..0f26262 100644
+--- a/src/components/confirm.tsx
++++ b/src/components/confirm.tsx
+@@ -12,4 +12,6 @@ interface Request {
+   cancelLabel?: string;
+   danger?: boolean;
++  /** Kurze Liste unter der Erklärung, z. B. was gelöscht wird und was bleibt (Design-Prüfung 15.10.) */
++  list?: { label: string; text: string }[];
+   resolve: (ok: boolean) => void;
+ }
+@@ -47,4 +49,11 @@ export function ConfirmHost() {
+     <Dialog title={title} onClose={() => close(false)}>
+       {body && <p style={{ margin: 0 }}>{body}</p>}
++      {req.list && (
++        <dl className="confirm-list">
++          {req.list.map((r) => (
++            <div key={r.label}><dt>{r.label}</dt><dd>{r.text}</dd></div>
++          ))}
++        </dl>
++      )}
+       {/* Untereinander und volle Breite: auch lange Beschriftungen passen, Daumen erreicht beide */}
+       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+diff --git a/src/consent.ts b/src/consent.ts
+index 1e17bc8..2c8bbb4 100644
+--- a/src/consent.ts
++++ b/src/consent.ts
+@@ -20,7 +20,7 @@ export function retentionSentence(ctx: ConsentContext): string {
+   const r = ctx.retention;
+   if (r?.mode === 'until_release') {
+-    return t('Die Aufnahme wird auf dem Server des Vereins in Text umgewandelt. Zur Prüfung der Zusammenfassung bleibt sie dort, bis die Spielleitung das Kapitel freigibt, höchstens {days} Tage, und wird dann gelöscht.', { days: r.maxDays ?? 7 });
++    return t('Die Aufnahme wird auf eurem Server in Text umgewandelt. Zur Prüfung des Kapitels bleibt sie dort, bis die Spielleitung das Kapitel freigibt, höchstens {days} Tage, und wird dann gelöscht.', { days: r.maxDays ?? 7 });
+   }
+-  return t('Die Aufnahme wird auf dem Server des Vereins in Text umgewandelt und danach gelöscht.');
++  return t('Die Aufnahme wird auf eurem Server in Text umgewandelt und danach gelöscht.');
+ }
+ 
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index df30bda..6b67752 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -654,6 +654,6 @@ export const en: Record<string, string> = {
+   "Herrenhaus": "Manor",
+   "Flussufer-Mysterium": "Riverside mystery",
+-  "Die Aufnahme wird auf dem Server des Vereins in Text umgewandelt. Zur Prüfung der Zusammenfassung bleibt sie dort, bis die Spielleitung das Kapitel freigibt, höchstens {days} Tage, und wird dann gelöscht.": "The recording is turned into text on the club's server. To check the summary, it stays there until the game master releases the chapter, for at most {days} days, and is then deleted.",
+-  "Die Aufnahme wird auf dem Server des Vereins in Text umgewandelt und danach gelöscht.": "The recording is turned into text on the club's server and then deleted.",
++  "Die Aufnahme wird auf eurem Server in Text umgewandelt. Zur Prüfung des Kapitels bleibt sie dort, bis die Spielleitung das Kapitel freigibt, höchstens {days} Tage, und wird dann gelöscht.": "The recording is turned into text on your server. To check the chapter, it stays there until the game master releases it, for at most {days} days, and is then deleted.",
++  "Die Aufnahme wird auf eurem Server in Text umgewandelt und danach gelöscht.": "The recording is turned into text on your server and then deleted.",
+   "Für die Transkription kann die Aufnahme an {provider} übermittelt werden.": "For transcription, the recording may be sent to {provider}.",
+   "Aus dem Text entstehen Zusammenfassungen, die alle Mitglieder der Kampagne lesen können. Ich kann diese Zustimmung jederzeit in der App widerrufen. Sie gilt dann ab sofort nicht mehr für künftige Aufnahmen; bereits veröffentlichte Zusammenfassungen bleiben bestehen.": "Summaries are created from the text, which all members of the campaign can read. I can withdraw this consent at any time in the app. It then no longer applies to future recordings; summaries already published remain.",
+@@ -890,5 +890,5 @@ export const en: Record<string, string> = {
+   "Einem Spieler geben": "Give to a player",
+   "einen Platz": "a seat",
+-  "Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, geht nicht an die nächste Person: Der Hintergrund am Platz wird gelöscht. Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare stehen danach bei einem ehemaligen Mitglied. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.": "Free up the seat of {figure} in “{campaign}” on “{server}” again? {person} will no longer be in the campaign and needs a new invitation. What {person} brought in does not pass to the next person: the backstory at the seat is deleted. Character sheets and their analyses, own suggestions and comments then belong to a former member. Pending analyses are dropped. The character stays at the seat with everything it has experienced in the campaign, including its voice in earlier chapters.",
++  "Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} braucht danach eine neue Einladung. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat.": "Free up the seat of {figure} in “{campaign}” on “{server}” again? {person} will then need a new invitation. The character stays in the seat, with everything they have experienced in the campaign.",
+   "Platz freigeben": "Free up seat",
+   "{person} spielt jetzt {figure}": "{person} now plays {figure}",
+@@ -1285,4 +1285,12 @@ export const en: Record<string, string> = {
+   "Pergament": "Parchment",
+   "Spielabend": "Game night",
+-  "Gilt nur für den Kapiteltext auf diesem Gerät.": "Applies only to the chapter text on this device."
++  "Gilt nur für den Kapiteltext auf diesem Gerät.": "Applies only to the chapter text on this device.",
++  "Jetzt dran ({n})": "Your turn ({n})",
++  "{person} bittet um eine Auswertung": "{person} asks for an analysis",
++  "Cloud aktiv · {provider}": "Cloud active · {provider}",
++  "Farbe": "Colour",
++  "Gelöscht": "Deleted",
++  "Bleibt beim ehemaligen Mitglied": "Stays with the former member",
++  "Hintergrund am Platz, offene Auswertungen": "Backstory in the seat, pending analyses",
++  "Charakterbögen, Vorschläge, Kommentare": "Character sheets, suggestions, comments",
+ };
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 2c45c5f..67b814f 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -2,5 +2,6 @@ import { VoiceProfileHint } from '../components/VoiceProfileHint';
+ import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
+ import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
+-import { DataSummary } from '../components/DataSummary';
++import { DataSummary, openDataSummary } from '../components/DataSummary';
++import { NowList, type NowItem } from '../components/NowList';
+ import { isDeletedMember } from '../api/types';
+ import { InviteBox } from '../components/InviteBox';
+@@ -61,4 +62,6 @@ export function Overview() {
+   const serverInfo = useServerInfo();
+   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
++  const needMe = pending.filter((s) => needsMe(s.state));
++  const working = pending.filter((s) => !needsMe(s.state));
+   // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht (Wunsch 14.10.)
+   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
+@@ -108,49 +111,24 @@ export function Overview() {
+           {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
+           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
+-          {characterIncomplete(me) && (
+-            <Link to={p(`/k/${campaignId}/charakter/${me!.id}`)} className="card task">
+-              <strong>{t('Dein Charakter ist noch unvollständig')}</strong>
+-              <span className="muted small">{t('Name, Bild und Kurzbeschreibung helfen allen am Tisch.')}</span>
+-            </Link>
+-          )}
++          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, load)} />
+ 
+-          {/* Stand der Kampagne */}
+-          {gm && pending.length > 0 && (
+-            <Link to={p(`/s/${pending[0].id}`)} className={needsMe(pending[0].state) ? 'card task' : 'card'}>
++          {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
++          {gm && working.length > 0 && needMe.length === 0 && (
++            <Link to={p(`/s/${working[0].id}`)} className="card">
+               <div className="row between">
+-                <strong>{t('Kapitel {n}', { n: pending[0].number })}</strong>
+-                {/* Hervorgehoben, wenn die SL etwas tun muss; sonst arbeitet gerade der Server. Rot bleibt für Achtung. */}
+-                <span className={needsMe(pending[0].state) ? 'pill brass' : 'pill'}>
+-                  {PENDING_LABEL[pending[0].state] ? t(PENDING_LABEL[pending[0].state]!) : pending[0].state}
++                <strong>{t('Kapitel {n}', { n: working[0].number })}</strong>
++                <span className="pill">
++                  {PENDING_LABEL[working[0].state] ? t(PENDING_LABEL[working[0].state]!) : working[0].state}
+                 </span>
+               </div>
+               <span className="muted small">
+-                {needsMe(pending[0].state)
+-                  ? t('Tippen, um weiterzumachen.')
+-                  : t('Der Server arbeitet. Tippen für den Fortschritt.')}
+-                {pending.length > 1 ? ' ' + t('Insgesamt {n} Kapitel in Arbeit.', { n: pending.length }) : ''}
++                {t('Der Server arbeitet. Tippen für den Fortschritt.')}
++                {working.length > 1 ? ' ' + t('Insgesamt {n} Kapitel in Arbeit.', { n: working.length }) : ''}
+               </span>
+             </Link>
+           )}
+-          {gm && !!campaign.openCharacterProposals && (
+-            <Link to={p(`/k/${campaignId}/mitgebracht`)} className="card task">
+-              <div className="row between">
+-                <strong>{t('Mitgebrachte Welt')}</strong>
+-                <span className="pill brass">{tn(campaign.openCharacterProposals, '{n} offen', '{n} offen')}</span>
+-              </div>
+-              <span className="muted small">{t('Die Charaktere bringen Einträge für die Bibel mit. Tippen zum Prüfen.')}</span>
+-            </Link>
+-          )}
+-          {gm && campaign.gmNotices && mergeJoinNotices(campaign.gmNotices).map(({ notice, hidden }) => (
+-            notice.code === 'member_joined'
+-              ? <MemberJoinedCard key={notice.id} campaign={campaign} notice={notice} hidden={hidden} onDone={load} />
+-              : <GmNoticeCard key={notice.id} campaign={campaign} notice={notice} info={serverInfo} onDone={load} />
+-          ))}
+           {/* Nächste Runde */}
+-          <Link to={p(`/k/${campaignId}/termin`)} className={campaign.datePollNeedsMyVote ? 'card task' : 'card'}>
+-            <div className="row between">
+-              <span className="overline">{t('Nächste Runde')}</span>
+-              {campaign.datePollNeedsMyVote && <span className="pill brass">{t('Abstimmen')}</span>}
+-            </div>
++          <Link to={p(`/k/${campaignId}/termin`)} className="card">
++            <span className="overline">{t('Nächste Runde')}</span>
+             {campaign.nextSessionAt
+               ? <strong style={{ fontFamily: 'var(--display)', fontSize: 19 }}>{formatDateTime(campaign.nextSessionAt)}</strong>
+@@ -182,5 +160,5 @@ export function Overview() {
+           )}
+ 
+-          <CloudNotice info={serverInfo} campaign={campaign} />
++          <CloudNotice info={serverInfo} campaign={campaign} onOpen={openDataSummary} />
+           <Divider />
+           {safeLinks(campaign.links).some((l) => l.shared) && (
+@@ -732,5 +710,5 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+         </div>
+       ) : (
+-        <button type="button" className="btn small quiet" style={{ alignSelf: 'flex-start' }} onClick={() => setDeleting(true)}>{t('Kampagne löschen …')}</button>
++        <button type="button" className="btn danger outline" onClick={() => setDeleting(true)}>{t('Kampagne löschen …')}</button>
+       ))}
+       </div>
+@@ -753,11 +731,70 @@ function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNoti
+ }
+ 
+-/** Hinweis an die SL (ab 0.4.7), z. B. ein Neuzugang ist vor teilweise verborgenen Einträgen verborgen */
+-function GmNoticeCard({ campaign, notice, info, onDone }: { campaign: Campaign; notice: GmNotice; info: ServerInfo | null; onDone: () => void }) {
+-  if (notice.code === 'character_analysis_pending') return apiAtLeast('0.4.18') && <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} />;
+-  if (notice.code === 'seat_claimed') return <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} />;
+-  if (notice.code === 'character_orphaned') return <OrphanNoticeCard campaign={campaign} notice={notice} onDone={onDone} />;
+-  if (notice.code === 'member_joined') return <MemberJoinedCard campaign={campaign} notice={notice} onDone={onDone} />;
+-  return <NewcomerNoticeCard campaign={campaign} notice={notice} onDone={onDone} />;
++/**
++ * Aufgaben für „Jetzt dran“ (Design-Prüfung 15.10.): Kapitel, die auf die SL warten, mitgebrachte Welt, Hinweise an
++ * die SL, eigener Charakter, Terminabstimmung. Hinweise klappen ihre Entscheidung auf, alles andere führt zur Seite.
++ */
++function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, onDone: () => void): NowItem[] {
++  const items: NowItem[] = [];
++  if (gm) {
++    for (const s of needMe) {
++      items.push({
++        key: 's-' + s.id,
++        label: t('Kapitel {n}', { n: s.number }) + ' · ' + (PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state),
++        to: p(`/s/${s.id}`)
++      });
++    }
++    if (campaign.openCharacterProposals) {
++      items.push({
++        key: 'world',
++        label: t('Mitgebrachte Welt') + ' · ' + tn(campaign.openCharacterProposals, '{n} offen', '{n} offen'),
++        to: p(`/k/${campaign.id}/mitgebracht`)
++      });
++    }
++    for (const { notice, hidden } of mergeJoinNotices(campaign.gmNotices ?? [])) {
++      const item = noticeItem(campaign, notice, hidden, info, onDone);
++      if (item) items.push(item);
++    }
++  }
++  if (characterIncomplete(me)) {
++    items.push({ key: 'me', label: t('Dein Charakter ist noch unvollständig'), to: p(`/k/${campaign.id}/charakter/${me!.id}`) });
++  }
++  if (campaign.datePollNeedsMyVote) {
++    items.push({ key: 'poll', label: t('Nächste Runde') + ' · ' + t('Abstimmen'), to: p(`/k/${campaign.id}/termin`) });
++  }
++  return items;
++}
++
++/** Hinweis an die SL (ab 0.4.7) als Zeile; dieselben Bedingungen wie in den Karten, damit keine leere Zeile bleibt */
++function noticeItem(campaign: Campaign, notice: GmNotice, hidden: GmNotice | undefined, info: ServerInfo | null, onDone: () => void): NowItem | null {
++  const m = campaign.members.find((x) => x.id === notice.memberId);
++  const key = 'n-' + notice.id;
++  switch (notice.code) {
++    case 'character_analysis_pending':
++      if (!apiAtLeast('0.4.18') || !m || isDeletedMember(m)) return null;
++      return { key, label: t('{person} bittet um eine Auswertung', { person: m.displayName }),
++        detail: <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} /> };
++    case 'seat_claimed':
++      if (!m) return null;
++      return { key, hideDetailTitle: true, label: t('{person} spielt jetzt {figure}', { person: m.displayName, figure: m.characterName ?? t('einen Platz') }),
++        detail: <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} /> };
++    case 'character_orphaned': {
++      if (!notice.entryIds[0]) return null;
++      const figure = m?.characterName ?? t('die Figur');
++      const deleted = !!m && (!!m.deletedAt || m.userId === '');
++      return { key, hideDetailTitle: true,
++        label: deleted ? t('Das Konto hinter {figure} wurde gelöscht', { figure }) : t('{person} hat die Runde verlassen', { person: m?.displayName || t('Ein Spieler') }),
++        detail: <OrphanNoticeCard campaign={campaign} notice={notice} onDone={onDone} /> };
++    }
++    case 'member_joined':
++      if (!m || isDeletedMember(m)) return null;
++      return { key, hideDetailTitle: true, label: t('{person} ist der Kampagne beigetreten', { person: m.displayName }),
++        detail: <MemberJoinedCard campaign={campaign} notice={notice} hidden={hidden} onDone={onDone} /> };
++    case 'hidden_entries_for_newcomer':
++      return { key, hideDetailTitle: true, label: t('{name} ist neu am Tisch', { name: m ? m.characterName ?? m.displayName : t('Ein neues Mitglied') }),
++        detail: <NewcomerNoticeCard campaign={campaign} notice={notice} onDone={onDone} /> };
++    default:
++      return null;
++  }
+ }
+ 
+diff --git a/src/reading/ReadSettings.tsx b/src/reading/ReadSettings.tsx
+index d8ddd3e..7fa6511 100644
+--- a/src/reading/ReadSettings.tsx
++++ b/src/reading/ReadSettings.tsx
+@@ -54,6 +54,6 @@ export function ReadSettings({ prefs, onChange, id }: { prefs: ReadPrefs; onChan
+         </div>
+       </div>
+-      <div role="group" aria-label={t('Seite')} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+-        <span className="small" aria-hidden="true">{t('Seite')}</span>
++      <div role="group" aria-label={t('Farbe')} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
++        <span className="small" aria-hidden="true">{t('Farbe')}</span>
+         <div className="segmented" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+           {pages.map((p) => (
+diff --git a/src/theme.css b/src/theme.css
+index 5f8ed83..fd80214 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2021,2 +2021,47 @@ button.table-group-face {
+   border-top: 1px solid var(--line);
+ }
++
++/* ---------- „Jetzt dran“ auf der Übersicht (Design-Prüfung 15.10.) ---------- */
++.now-list {
++  gap: 0;
++  padding: 10px 14px 6px;
++  box-shadow: inset 4px 0 0 var(--tinte), var(--shadow-card);
++}
++[data-theme="dark"] .now-list { box-shadow: inset 4px 0 0 var(--line-strong), var(--shadow-card); }
++@media (prefers-color-scheme: dark) {
++  :root:not([data-theme="light"]) .now-list { box-shadow: inset 4px 0 0 var(--line-strong), var(--shadow-card); }
++}
++.now-list h2 { margin: 0 0 2px; }
++.now-list ul { list-style: none; margin: 0; padding: 0; }
++.now-list li + li { border-top: 1px solid var(--line); }
++.now-row {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  min-height: 48px;
++  color: var(--ink);
++  text-decoration: none;
++}
++.now-row > span:first-child { flex: 1; }
++.now-go { color: var(--ink-faint); font-size: 1.25em; line-height: 1; width: 1em; text-align: center; }
++.now-fold > summary { font-weight: 400; }
++.now-detail { padding: 0 0 12px; }
++.now-detail > .card { padding: 0; border: 0; background: none; box-shadow: none; }
++.now-detail.no-title > .card > strong:first-child { display: none; }
++
++/* „Cloud aktiv“ als eine Zeile, führt zu „Was mit deinen Daten passiert“ */
++.cloud-line {
++  width: 100%;
++  min-height: 48px;
++  align-items: center;
++  border: 0;
++  text-align: left;
++  color: var(--ink);
++  font: inherit;
++  cursor: pointer;
++}
++
++/* Kurze Liste in Rückfragen: was gelöscht wird, was bleibt */
++.confirm-list { display: flex; flex-direction: column; gap: 6px; margin: 0; }
++.confirm-list dt { font-weight: 700; font-size: 14px; }
++.confirm-list dd { margin: 0; }
