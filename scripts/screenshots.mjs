@@ -157,10 +157,10 @@ for (const run of RUNS) {
     // suchen, eine Notiz schreiben; erst Tablet quer, dann Handy
     await page.evaluate((cid) => {
       localStorage.setItem('taleward.slSchirm', JSON.stringify([
-        { id: 'plan', x: 0, y: 0, w: 2, h: 5 },
-        { id: 'bible', x: 2, y: 0, w: 2, h: 3 }, { id: 'docs', x: 2, y: 3, w: 2, h: 2 },
-        { id: 'group', x: 4, y: 0, w: 2, h: 2 }, { id: 'clock', x: 4, y: 2, w: 2, h: 1 },
-        { id: 'links', x: 4, y: 3, w: 2, h: 1 }, { id: 'notes', x: 4, y: 4, w: 2, h: 1 }
+        // Anordnung: links Plan und Gruppe, Mitte Uhr und Bibel, rechts Unterlagen, Notizzettel, Links
+        { id: 'plan', x: 0, y: 0, w: 2, h: 4 }, { id: 'group', x: 0, y: 4, w: 2, h: 1 },
+        { id: 'clock', x: 2, y: 0, w: 2, h: 1 }, { id: 'bible', x: 2, y: 1, w: 2, h: 4 },
+        { id: 'docs', x: 4, y: 0, w: 2, h: 2 }, { id: 'notes', x: 4, y: 2, w: 2, h: 2 }, { id: 'links', x: 4, y: 4, w: 2, h: 1 }
       ]));
       const conn = JSON.parse(localStorage.getItem('session-chronik.connections'))[0].id;
       const now = Date.now(), end = new Date(now + 84 * 60000);
