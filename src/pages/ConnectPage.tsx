@@ -279,6 +279,9 @@ export function ConnectPage() {
                 <button type="button" aria-pressed={mode === 'register'} onClick={() => setMode('register')}>{t('Neues Konto')}</button>
               </div>
             )}
+            {canRegister && code && mode === 'register' && (
+              <span className="muted small">{t('Schon ein Konto auf diesem Server? Dann tippe auf „Anmelden“. Du trittst mit deinem Konto bei, ein zweites brauchst du nicht.')}</span>
+            )}
 
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {mode === 'register' && (

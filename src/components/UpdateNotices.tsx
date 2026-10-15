@@ -29,6 +29,15 @@ function newestOffer(conns: Connection[]): Offer | null {
   return best;
 }
 
+/** „Was ist neu“ kommt als Markdown: Überschriften weglassen, Aufzählungen mit Punkt */
+export function plainNotes(notes: string): string {
+  return notes.split('\n')
+    .filter((l) => !/^\s*#{1,6}\s/.test(l))
+    .map((l) => l.replace(/^\s*[-*]\s+/, '• '))
+    .join('\n')
+    .trim();
+}
+
 /** Download-Knopf als echter Link – öffnet im Browser des Handys */
 export function DownloadButton({ url, className = 'btn small' }: { url: string; className?: string }) {
   const href = safeLink(url);
@@ -106,8 +115,9 @@ export function UpdateNotices({ connections }: { connections: Connection[] }) {
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem(DISMISS_KEY); } catch { return null; }
   });
-  // Web-Fassung ist immer aktuell – kein Hinweis auf App-Versionen
-  const offer = DIST === 'web' ? null : newestOffer(connections);
+  // Web-Fassung ist immer aktuell; die Play-Store-Fassung aktualisiert der Store selbst (der Server kennt oft schon
+  // eine neuere Fassung, als der Store gerade verteilt) – in beiden kein Hinweis auf neue Versionen
+  const offer = DIST === 'web' || DIST === 'store' ? null : newestOffer(connections);
   const blocked = connections.filter(appTooOld);
   const outdatedServers = connections.filter((c) => serverTooOld(c) && !appTooOld(c));
 
@@ -136,7 +146,7 @@ export function UpdateNotices({ connections }: { connections: Connection[] }) {
             <strong>{t('Taleward {v} ist da', { v: offer.version })}</strong>
             <span className="muted small">{t('du hast {v}', { v: APP_VERSION })}</span>
           </div>
-          {offer.notes && <span className="small" style={{ whiteSpace: 'pre-wrap' }}>{offer.notes}</span>}
+          {offer.notes && <span className="small" style={{ whiteSpace: 'pre-wrap' }}>{plainNotes(offer.notes)}</span>}
           <div className="row wrap" style={{ gap: 8, alignItems: 'flex-start' }}>
             <UpdateAction offer={{ url: offer.url, sha256: offer.sha256, size: offer.size }} />
             <button type="button" className="btn small outline" onClick={() => {

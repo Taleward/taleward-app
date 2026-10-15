@@ -15,7 +15,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiFor, fetchServerInfo } from '../api/client';
 import { isMusterUrl } from '../api/muster';
 import { offlineSince } from '../api/readCopy';
-import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, updateConnection, versionLess, type Connection } from '../api/connections';
+import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
 import { IconInfo } from '../components/Icons';
 import { useAuth } from '../auth/AuthContext';
 import { Divider, ErrorBox, Screen } from '../components/Screen';
@@ -131,7 +131,9 @@ export function Campaigns() {
         return;
       }
       // Link zu einem Server, mit dem die App noch nicht verbunden ist: dort erst Konto anlegen oder anmelden
-      const known = invite.baseUrl ? active.find((c) => c.baseUrl === invite.baseUrl) : targetServer();
+      const known = invite.baseUrl
+        ? active.find((c) => c.baseUrl === invite.baseUrl) ?? active.find((c) => sameServerHost(c.baseUrl, invite.baseUrl!))
+        : targetServer();
       if (!known) {
         navigate(`/verbinden?invite=${encodeURIComponent(value.trim())}`);
         return;

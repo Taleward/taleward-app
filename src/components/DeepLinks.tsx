@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { apiFor, fetchInvitePreview } from '../api/client';
-import { activeConnections, apiAtLeast, parseInvite } from '../api/connections';
+import { activeConnections, apiAtLeast, parseInvite, sameServerHost } from '../api/connections';
 import { inviteFromAppUrl } from '../invite';
 import { t } from '../i18n';
 import { isSafeAppPath } from '../api/pathGuard';
@@ -50,7 +50,10 @@ export function DeepLinks() {
       const link = inviteFromAppUrl(url);
       if (!link) return;
       const invite = parseInvite(link);
-      const conn = invite?.baseUrl ? activeConnections().find((c) => c.baseUrl === invite.baseUrl) : undefined;
+      const all = activeConnections();
+      const conn = invite?.baseUrl
+        ? all.find((c) => c.baseUrl === invite.baseUrl) ?? all.find((c) => sameServerHost(c.baseUrl, invite.baseUrl!))
+        : undefined;
       if (invite && conn) {
         // Nie ungefragt beitreten: Ein Link von irgendeiner Webseite könnte sonst in eine fremde Kampagne führen.
         // Ab Schnittstelle 0.4.10 nennt die Rückfrage auch die Kampagne.

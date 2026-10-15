@@ -133,7 +133,7 @@ export function p(path: string): string {
   return `/v/${currentId ?? currentConnection().id}${path}`;
 }
 
-export { normalizeBaseUrl, parseInvite } from './addresses';
+export { normalizeBaseUrl, parseInvite, sameServerHost } from './addresses';
 
 
 function newId(baseUrl: string): string {

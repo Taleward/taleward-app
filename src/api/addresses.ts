@@ -58,6 +58,16 @@ export function normalizeBaseUrl(input: string): string {
  * Einladung erkennen: Link „https://verein.de/einladung/RABE-4821“ (mit Server)
  * oder nur der Code „RABE-4821“ (Server muss dann gewählt werden).
  */
+/** Gehören Einladungslink und gespeicherte Verbindung zum selben Server? Gleicher Hostname (mit Port) genügt –
+ *  ein Link kann https nennen, wo die App im Heimnetz über http verbunden ist, oder ohne den Unterpfad /app/ */
+export function sameServerHost(a: string, b: string): boolean {
+  try {
+    return new URL(a).host.toLowerCase() === new URL(b).host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export function parseInvite(input: string): { baseUrl: string | null; code: string } | null {
   const s = input.trim();
   const link = s.match(/^(https?:\/\/[^/\s]+)(?:\/[^\s]*)?\/einladung\/([A-Za-z0-9-]+)\/?$/i);

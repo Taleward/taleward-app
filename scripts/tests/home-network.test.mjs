@@ -1,7 +1,7 @@
 // Unverschlüsselt nur im Heimnetz und Einladungscodes in beiden Formaten.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isHomeNetworkHost, normalizeBaseUrl, parseInvite, secureUrl } from '../../src/api/addresses.ts';
+import { isHomeNetworkHost, normalizeBaseUrl, parseInvite, sameServerHost, secureUrl } from '../../src/api/addresses.ts';
 
 test('Heimnetz wird erkannt', () => {
   for (const h of ['192.168.1.5', '10.0.0.2', '172.16.0.1', '172.31.255.255', '127.0.0.1', 'localhost', 'nas.local',
@@ -41,4 +41,12 @@ test('Einladungscodes im alten und neuen Format', () => {
   assert.deepEqual(parseInvite('rabe-48213759'), { baseUrl: null, code: 'RABE-48213759' });
   assert.deepEqual(parseInvite('https://taleward.verein.de/einladung/rabe-48213759'), { baseUrl: 'https://taleward.verein.de/api/v1', code: 'RABE-48213759' });
   assert.equal(parseInvite('kein code'), null);
+});
+
+test('Einladungslink und Verbindung: gleicher Hostname gilt als derselbe Server', () => {
+  assert.equal(sameServerHost('https://verein.example/api/v1', 'https://verein.example/api/v1'), true);
+  assert.equal(sameServerHost('http://verein.example/app/api/v1', 'https://verein.example/api/v1'), true);
+  assert.equal(sameServerHost('https://verein.example:8443/api/v1', 'https://verein.example/api/v1'), false);
+  assert.equal(sameServerHost('https://andere.example/api/v1', 'https://verein.example/api/v1'), false);
+  assert.equal(sameServerHost('kaputt', 'https://verein.example/api/v1'), false);
 });
