@@ -1736,11 +1736,15 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 /* Links zu anderen Programmen */
 .btn.link-btn {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
   text-align: left;
 }
+.link-text { display: flex; flex-direction: column; align-items: flex-start; }
+/* Zeichen vor Links (Marke oder Art des Dienstes), in der Schriftfarbe */
+.link-icon { display: inline-flex; flex-shrink: 0; color: var(--ink-muted); }
+.btn.link-chip .link-icon { margin-right: 2px; }
 
 .link-host {
   font: 400 calc(12px * var(--ts))/1.333 var(--font-sans);
@@ -2071,3 +2075,4 @@ button.table-group-face {
 .confirm-list { display: flex; flex-direction: column; gap: 6px; margin: 0; }
 .confirm-list dt { font-weight: 700; font-size: calc(14px * var(--ts)); }
 .confirm-list dd { margin: 0; }
+.link-edit-row .link-icon { vertical-align: -3px; }

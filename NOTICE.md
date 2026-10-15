@@ -38,6 +38,15 @@ Die Linienicons in `src/components/Icons.tsx` übernehmen Formen von Lucide (htt
 > WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE
 > USE OR PERFORMANCE OF THIS SOFTWARE.
 
+Die allgemeinen Zeichen vor Links in `src/links/LinkIcon.tsx` (headphones, file-text, map, music, globe) stammen
+ebenfalls aus Lucide 1.48.0 (ISC-Lizenz, siehe oben).
+
+Die Markenzeichen vor Links (`src/links/brandPaths.ts`) stammen aus dem Paket `simple-icons` (https://simpleicons.org,
+Version 16.35.0), freigegeben unter CC0 1.0. Die Marken selbst gehören ihren jeweiligen Inhabern (Discord, TeamSpeak, Mumble,
+Zoom, Google Meet, WhatsApp, Signal, Telegram, YouTube, Twitch, Spotify, Google Docs, Google Drive, Dropbox, Nextcloud,
+Obsidian, Notion, Roll20, Foundry Virtual Tabletop). Taleward zeigt sie nur, um kenntlich zu machen, wohin ein Link
+führt; es besteht keine Verbindung zu diesen Unternehmen.
+
 Die Formen von calendar, check, chevron-left, info, search und arrow-up stammen aus dem Projekt Feather:
 
 > The MIT License (MIT) (for the icons listed above)

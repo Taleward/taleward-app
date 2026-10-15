@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { Link } from '../api/types';
 import { t } from '../i18n';
 import { confirmDialog } from './confirm';
+import { LinkIcon } from '../links/LinkIcon';
 
 /*
  * Links zu anderen Programmen (ab Schnittstelle 0.4.13): virtueller Spieltisch, Discord, Karte, Musik.
@@ -68,7 +69,7 @@ export function LinkButtons({ links: raw, small = true, compact }: { links: Link
         {links.map((l) => (
           <button key={l.id} type="button" className="btn small ghost link-chip" onClick={() => openLink(l)}
             aria-label={t('{label} öffnen ({host})', { label: l.label, host: hostOf(l.url) })}>
-            {l.label} <span aria-hidden>↗</span>
+            <LinkIcon url={l.url} size={16} />{l.label} <span aria-hidden>↗</span>
           </button>
         ))}
       </div>
@@ -79,8 +80,11 @@ export function LinkButtons({ links: raw, small = true, compact }: { links: Link
       {links.map((l) => (
         <button key={l.id} type="button" className={small ? 'btn small outline link-btn' : 'btn outline link-btn'} onClick={() => openLink(l)}
           aria-label={t('{label} öffnen ({host})', { label: l.label, host: hostOf(l.url) })}>
-          <span>{l.label}</span>
-          <span className="link-host" aria-hidden>{hostOf(l.url)} ↗</span>
+          <LinkIcon url={l.url} size={20} />
+          <span className="link-text">
+            <span>{l.label}</span>
+            <span className="link-host" aria-hidden>{hostOf(l.url)} ↗</span>
+          </span>
         </button>
       ))}
     </div>
@@ -136,7 +140,7 @@ export function LinkEditor({ links, max, canShare, saveLabel, onSave, onCancel }
       {list.map((l) => (
         <div key={l.id} className="link-edit-row">
           <span style={{ flex: 1, minWidth: 0 }}>
-            <strong>{l.label}</strong> <span className="muted small">{hostOf(l.url)}</span>
+            <LinkIcon url={l.url} size={16} /> <strong>{l.label}</strong> <span className="muted small">{hostOf(l.url)}</span>
           </span>
           {canShare && (
             <label className="check small" style={{ margin: 0 }}>
