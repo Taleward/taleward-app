@@ -1,0 +1,27 @@
+From c56b191cd03496192129e53b74ad541fe3e9912c Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 22:32:32 +0200
+Subject: [PATCH] Aufnahme SL-Schirm: andere Anordnung der Module
+
+---
+ scripts/screenshots.mjs | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/scripts/screenshots.mjs b/scripts/screenshots.mjs
+index d3ae163..7170f90 100644
+--- a/scripts/screenshots.mjs
++++ b/scripts/screenshots.mjs
+@@ -158,8 +158,8 @@ for (const run of RUNS) {
+     await page.evaluate((cid) => {
+       localStorage.setItem('taleward.slSchirm', JSON.stringify([
+-        { id: 'plan', x: 0, y: 0, w: 2, h: 5 },
+-        { id: 'bible', x: 2, y: 0, w: 2, h: 3 }, { id: 'docs', x: 2, y: 3, w: 2, h: 2 },
+-        { id: 'group', x: 4, y: 0, w: 2, h: 2 }, { id: 'clock', x: 4, y: 2, w: 2, h: 1 },
+-        { id: 'links', x: 4, y: 3, w: 2, h: 1 }, { id: 'notes', x: 4, y: 4, w: 2, h: 1 }
++        // Anordnung: links Plan und Gruppe, Mitte Uhr und Bibel, rechts Unterlagen, Notizzettel, Links
++        { id: 'plan', x: 0, y: 0, w: 2, h: 4 }, { id: 'group', x: 0, y: 4, w: 2, h: 1 },
++        { id: 'clock', x: 2, y: 0, w: 2, h: 1 }, { id: 'bible', x: 2, y: 1, w: 2, h: 4 },
++        { id: 'docs', x: 4, y: 0, w: 2, h: 2 }, { id: 'notes', x: 4, y: 2, w: 2, h: 2 }, { id: 'links', x: 4, y: 4, w: 2, h: 1 }
+       ]));
+       const conn = JSON.parse(localStorage.getItem('session-chronik.connections'))[0].id;
