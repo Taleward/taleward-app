@@ -1,0 +1,40 @@
+From ddf83ab5b75ccd927c24c774c35fbaacd320b8b8 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 06:54:10 +0200
+Subject: [PATCH 126/126] Version 0.26.0
+
+---
+ package-lock.json | 4 ++--
+ package.json      | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index 6a095a2..88d96d1 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,5 +1,5 @@
+ {
+   "name": "taleward-app",
+-  "version": "0.25.4",
++  "version": "0.26.0",
+   "lockfileVersion": 3,
+   "requires": true,
+@@ -7,5 +7,5 @@
+     "": {
+       "name": "taleward-app",
+-      "version": "0.25.4",
++      "version": "0.26.0",
+       "dependencies": {
+         "@capacitor/android": "^8.5.2",
+diff --git a/package.json b/package.json
+index eb9e333..1377a06 100644
+--- a/package.json
++++ b/package.json
+@@ -2,5 +2,5 @@
+   "name": "taleward-app",
+   "private": true,
+-  "version": "0.25.4",
++  "version": "0.26.0",
+   "type": "module",
+   "scripts": {
