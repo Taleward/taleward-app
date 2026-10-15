@@ -1,0 +1,38 @@
+From f15c14af93574a001844a76dac5a188ad83a5b27 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 15 Oct 2026 21:07:50 +0200
+Subject: [PATCH] Anfragen ohne Antwort nach 30 s beenden
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+GET, PUT, PATCH und DELETE warten höchstens 30 Sekunden und melden dann wie bei einem nicht erreichbaren Server; POST und Hochladen bleiben ohne Grenze.
+---
+ src/api/client.ts | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 25bd7e1..a592fb8 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -92,4 +92,9 @@ interface RequestOptions {
+ }
+ 
++/** Abbruch nach 30 s; ältere WebViews ohne AbortSignal.timeout warten wie bisher */
++function requestTimeout(): AbortSignal | undefined {
++  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(30_000) : undefined;
++}
++
+ async function requestOn<T>(conn: Connection, method: string, path: string, opts: RequestOptions = {}): Promise<T> {
+   // Pfade nur aus Teilen nach dem Muster der Schnittstelle (0.4.14)
+@@ -120,5 +125,8 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+       // Nie aus einem Zwischenspeicher antworten: Proxys, CDNs oder die WebView könnten sonst veraltete Listen
+       // liefern (z. B. neue Kampagne fehlt nach dem Anlegen)
+-      cache: 'no-store'
++      cache: 'no-store',
++      // Antwortet der Server gar nicht, nicht endlos warten: nach 30 s wie „nicht erreichbar“ behandeln.
++      // POST (Hochladen, Abschließen, Neu schreiben …) darf länger dauern und bekommt keine Grenze.
++      signal: method === 'POST' || opts.form || opts.raw !== undefined ? undefined : requestTimeout()
+     });
+   } catch {
