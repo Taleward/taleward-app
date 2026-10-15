@@ -53,8 +53,8 @@ export function ReadSettings({ prefs, onChange, id }: { prefs: ReadPrefs; onChan
           ))}
         </div>
       </div>
-      <div role="group" aria-label={t('Seite')} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <span className="small" aria-hidden="true">{t('Seite')}</span>
+      <div role="group" aria-label={t('Farbe')} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span className="small" aria-hidden="true">{t('Farbe')}</span>
         <div className="segmented" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
           {pages.map((p) => (
             <button key={p.v} type="button" aria-pressed={prefs.page === p.v} onClick={() => onChange({ page: p.v })}>{p.label}</button>

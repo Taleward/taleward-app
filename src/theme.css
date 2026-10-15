@@ -2020,3 +2020,48 @@ button.table-group-face {
   padding-top: var(--space-3);
   border-top: 1px solid var(--line);
 }
+
+/* ---------- „Jetzt dran“ auf der Übersicht (Design-Prüfung 15.10.) ---------- */
+.now-list {
+  gap: 0;
+  padding: 10px 14px 6px;
+  box-shadow: inset 4px 0 0 var(--tinte), var(--shadow-card);
+}
+[data-theme="dark"] .now-list { box-shadow: inset 4px 0 0 var(--line-strong), var(--shadow-card); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .now-list { box-shadow: inset 4px 0 0 var(--line-strong), var(--shadow-card); }
+}
+.now-list h2 { margin: 0 0 2px; }
+.now-list ul { list-style: none; margin: 0; padding: 0; }
+.now-list li + li { border-top: 1px solid var(--line); }
+.now-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.now-row > span:first-child { flex: 1; }
+.now-go { color: var(--ink-faint); font-size: 1.25em; line-height: 1; width: 1em; text-align: center; }
+.now-fold > summary { font-weight: 400; }
+.now-detail { padding: 0 0 12px; }
+.now-detail > .card { padding: 0; border: 0; background: none; box-shadow: none; }
+.now-detail.no-title > .card > strong:first-child { display: none; }
+
+/* „Cloud aktiv“ als eine Zeile, führt zu „Was mit deinen Daten passiert“ */
+.cloud-line {
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  border: 0;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Kurze Liste in Rückfragen: was gelöscht wird, was bleibt */
+.confirm-list { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.confirm-list dt { font-weight: 700; font-size: 14px; }
+.confirm-list dd { margin: 0; }

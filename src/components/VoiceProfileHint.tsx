@@ -8,15 +8,16 @@ const KEY = 'taleward.voiceHintDismissed';
 
 function dismissedFor(connId: string): boolean {
   try {
-    return (JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[]).includes(connId);
+    const list = JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[];
+    return list.includes('*') || list.includes(connId);
   } catch {
     return false;
   }
 }
 
 /**
- * Freiwilliger Hinweis auf das Stimmprofil: erscheint nur ohne Stimmprofil auf diesem Server und lässt sich je Server
- * wegklicken. Kein Druck – Aufnahmen funktionieren auch ohne (Vorstellungsrunde oder Zuordnung durch die SL).
+ * Freiwilliger Hinweis auf das Stimmprofil: erscheint nur ohne Stimmprofil auf diesem Server. Einmal wegklicken gilt
+ * für alle Kampagnen und Server (Design-Prüfung 15.10.); anlegen geht weiter unter „Konten und Server“. Kein Druck – Aufnahmen funktionieren auch ohne (Vorstellungsrunde oder Zuordnung durch die SL).
  */
 export function VoiceProfileHint() {
   const connId = currentConnectionId() ?? '-';
@@ -34,7 +35,7 @@ export function VoiceProfileHint() {
   const dismiss = () => {
     try {
       const list = JSON.parse(localStorage.getItem(KEY) ?? '[]') as string[];
-      localStorage.setItem(KEY, JSON.stringify([...new Set([...list, connId])]));
+      localStorage.setItem(KEY, JSON.stringify([...new Set([...list, '*'])]));
     } catch { /* egal */ }
     setShow(false);
   };

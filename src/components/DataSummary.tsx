@@ -53,7 +53,7 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
   });
 
   return (
-    <details className="card data-summary" style={{ gap: 10 }}>
+    <details id="data-summary" className="card data-summary" style={{ gap: 10 }}>
       <summary style={{ fontWeight: 700 }}>{t('Was mit deinen Daten passiert')}</summary>
       <dl style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '8px 0 0' }}>
         {rows.map((r) => (
@@ -72,4 +72,13 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
       </span>
     </details>
   );
+}
+
+/** Aufklappen und hinscrollen, z. B. von der Zeile „Cloud aktiv“ */
+export function openDataSummary() {
+  const d = document.getElementById('data-summary') as HTMLDetailsElement | null;
+  if (!d) return;
+  d.open = true;
+  d.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  d.querySelector('summary')?.focus();
 }

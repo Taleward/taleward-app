@@ -1,3 +1,4 @@
+import { IconInfo } from './Icons';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type { Campaign, CloudProviderInfo, ServerInfo } from '../api/types';
@@ -48,20 +49,17 @@ export function cloudUse(info: ServerInfo | null, campaign: Campaign) {
 }
 
 /** Kasten auf der Übersicht: klar zeigen, ob Stimmen oder Text den Verein verlassen */
-export function CloudNotice({ info, campaign }: { info: ServerInfo | null; campaign: Campaign }) {
+export function CloudNotice({ info, campaign, onOpen }: { info: ServerInfo | null; campaign: Campaign; onOpen: () => void }) {
   const { transcription, summary } = cloudUse(info, campaign);
   if (!transcription && !summary) return null;
+  // Eine Zeile statt eigener Karte (Design-Prüfung 15.10.): Sichtbar für alle bleibt sie, die Einzelheiten stehen
+  // unter „Was mit deinen Daten passiert“.
+  const providers = [...new Set([transcription?.provider, summary?.provider].filter((x): x is string => !!x))].join(', ');
   return (
-    <div className="notice" style={{ flexDirection: 'column', gap: 4 }}>
-      <strong>{t('Cloud-Dienste aktiv')}</strong>
-      {transcription && (
-        <span className="small">
-          {transcription.primary
-            ? t('Aufnahmen werden über {provider} transkribiert.', { provider: transcription.provider })
-            : t('Ist 24 Stunden lang kein Worker erreichbar, transkribiert {provider}.', { provider: transcription.provider })}
-        </span>
-      )}
-      {summary && <span className="small">{t('Kapitel schreibt: {provider}. Dafür gehen Text der Runde und Unterlagen dorthin, keine Stimmen.', { provider: summary.provider })}</span>}
-    </div>
+    <button type="button" className="notice cloud-line" onClick={onOpen}>
+      <span aria-hidden="true" style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
+      <span style={{ flex: 1 }}>{t('Cloud aktiv · {provider}', { provider: providers })}</span>
+      <span aria-hidden="true" style={{ color: 'var(--ink-faint)' }}>›</span>
+    </button>
   );
 }

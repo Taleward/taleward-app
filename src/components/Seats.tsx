@@ -115,7 +115,7 @@ export function OrphanNoticeCard({ campaign, notice, onDone }: { campaign: Campa
       <span className="muted small">{t('Was wird aus {figure}? Die Geschichte der Figur bleibt in der Kampagne, egal wie du dich entscheidest.', { figure })}</span>
       <ErrorBox error={error} />
       <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn small" disabled={busy} onClick={toNpc}>{t('Als NSC weiterführen')}</button>
+        <button type="button" className="btn small outline" disabled={busy} onClick={toNpc}>{t('Als NSC weiterführen')}</button>
         <button type="button" className="btn small outline" disabled={busy} onClick={() => setAssigning(true)}>{t('Einem Spieler geben')}</button>
         <button type="button" className="btn small ghost" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Später')}</button>
       </div>
@@ -149,9 +149,13 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
 
   const release = async () => {
     // Vor dem Freigeben sagen, was bei der Person bleibt
-    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, geht nicht an die nächste Person: Der Hintergrund am Platz wird gelöscht. Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare stehen danach bei einem ehemaligen Mitglied. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.',
+    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} braucht danach eine neue Einladung. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat.',
       { figure, person: m.displayName, campaign: campaign.title, server: currentConnection().name });
-    if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true })) {
+    const list = [
+      { label: t('Gelöscht'), text: t('Hintergrund am Platz, offene Auswertungen') },
+      { label: t('Bleibt beim ehemaligen Mitglied'), text: t('Charakterbögen, Vorschläge, Kommentare') }
+    ];
+    if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true, list })) {
       run(() => api.releaseSeat(campaign.id, m.id));
     }
   };
@@ -162,7 +166,7 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
       <span className="muted small">{t('{person} hat den Platz aus der umgezogenen Kampagne eingenommen. Passt das?', { person: m.displayName })}</span>
       <ErrorBox error={error} />
       <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn small" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Passt')}</button>
+        <button type="button" className="btn small outline" disabled={busy} onClick={() => run(() => api.dismissGmNotice(campaign.id, notice.id))}>{t('Passt')}</button>
         <button type="button" className="btn small danger outline" disabled={busy} onClick={release}>{t('Platz freigeben')}</button>
       </div>
     </div>

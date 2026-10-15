@@ -11,6 +11,8 @@ interface Request {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  /** Kurze Liste unter der Erklärung, z. B. was gelöscht wird und was bleibt (Design-Prüfung 15.10.) */
+  list?: { label: string; text: string }[];
   resolve: (ok: boolean) => void;
 }
 
@@ -46,6 +48,13 @@ export function ConfirmHost() {
   return (
     <Dialog title={title} onClose={() => close(false)}>
       {body && <p style={{ margin: 0 }}>{body}</p>}
+      {req.list && (
+        <dl className="confirm-list">
+          {req.list.map((r) => (
+            <div key={r.label}><dt>{r.label}</dt><dd>{r.text}</dd></div>
+          ))}
+        </dl>
+      )}
       {/* Untereinander und volle Breite: auch lange Beschriftungen passen, Daumen erreicht beide */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button type="button" className={req.danger ? 'btn danger' : 'btn'} autoFocus onClick={() => close(true)}>

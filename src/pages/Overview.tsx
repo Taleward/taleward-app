@@ -1,7 +1,8 @@
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
 import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
 import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
-import { DataSummary } from '../components/DataSummary';
+import { DataSummary, openDataSummary } from '../components/DataSummary';
+import { NowList, type NowItem } from '../components/NowList';
 import { isDeletedMember } from '../api/types';
 import { InviteBox } from '../components/InviteBox';
 import { confirmDialog } from '../components/confirm';
@@ -60,6 +61,8 @@ export function Overview() {
   const me = campaign?.members.find((m) => m.userId === user?.id);
   const serverInfo = useServerInfo();
   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
+  const needMe = pending.filter((s) => needsMe(s.state));
+  const working = pending.filter((s) => !needsMe(s.state));
   // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht (Wunsch 14.10.)
   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
   const latest = sessions?.find((s) => s.state === 'published');
@@ -107,51 +110,26 @@ export function Overview() {
           )}
           {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
-          {characterIncomplete(me) && (
-            <Link to={p(`/k/${campaignId}/charakter/${me!.id}`)} className="card task">
-              <strong>{t('Dein Charakter ist noch unvollständig')}</strong>
-              <span className="muted small">{t('Name, Bild und Kurzbeschreibung helfen allen am Tisch.')}</span>
-            </Link>
-          )}
+          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, load)} />
 
-          {/* Stand der Kampagne */}
-          {gm && pending.length > 0 && (
-            <Link to={p(`/s/${pending[0].id}`)} className={needsMe(pending[0].state) ? 'card task' : 'card'}>
+          {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
+          {gm && working.length > 0 && needMe.length === 0 && (
+            <Link to={p(`/s/${working[0].id}`)} className="card">
               <div className="row between">
-                <strong>{t('Kapitel {n}', { n: pending[0].number })}</strong>
-                {/* Hervorgehoben, wenn die SL etwas tun muss; sonst arbeitet gerade der Server. Rot bleibt für Achtung. */}
-                <span className={needsMe(pending[0].state) ? 'pill brass' : 'pill'}>
-                  {PENDING_LABEL[pending[0].state] ? t(PENDING_LABEL[pending[0].state]!) : pending[0].state}
+                <strong>{t('Kapitel {n}', { n: working[0].number })}</strong>
+                <span className="pill">
+                  {PENDING_LABEL[working[0].state] ? t(PENDING_LABEL[working[0].state]!) : working[0].state}
                 </span>
               </div>
               <span className="muted small">
-                {needsMe(pending[0].state)
-                  ? t('Tippen, um weiterzumachen.')
-                  : t('Der Server arbeitet. Tippen für den Fortschritt.')}
-                {pending.length > 1 ? ' ' + t('Insgesamt {n} Kapitel in Arbeit.', { n: pending.length }) : ''}
+                {t('Der Server arbeitet. Tippen für den Fortschritt.')}
+                {working.length > 1 ? ' ' + t('Insgesamt {n} Kapitel in Arbeit.', { n: working.length }) : ''}
               </span>
             </Link>
           )}
-          {gm && !!campaign.openCharacterProposals && (
-            <Link to={p(`/k/${campaignId}/mitgebracht`)} className="card task">
-              <div className="row between">
-                <strong>{t('Mitgebrachte Welt')}</strong>
-                <span className="pill brass">{tn(campaign.openCharacterProposals, '{n} offen', '{n} offen')}</span>
-              </div>
-              <span className="muted small">{t('Die Charaktere bringen Einträge für die Bibel mit. Tippen zum Prüfen.')}</span>
-            </Link>
-          )}
-          {gm && campaign.gmNotices && mergeJoinNotices(campaign.gmNotices).map(({ notice, hidden }) => (
-            notice.code === 'member_joined'
-              ? <MemberJoinedCard key={notice.id} campaign={campaign} notice={notice} hidden={hidden} onDone={load} />
-              : <GmNoticeCard key={notice.id} campaign={campaign} notice={notice} info={serverInfo} onDone={load} />
-          ))}
           {/* Nächste Runde */}
-          <Link to={p(`/k/${campaignId}/termin`)} className={campaign.datePollNeedsMyVote ? 'card task' : 'card'}>
-            <div className="row between">
-              <span className="overline">{t('Nächste Runde')}</span>
-              {campaign.datePollNeedsMyVote && <span className="pill brass">{t('Abstimmen')}</span>}
-            </div>
+          <Link to={p(`/k/${campaignId}/termin`)} className="card">
+            <span className="overline">{t('Nächste Runde')}</span>
             {campaign.nextSessionAt
               ? <strong style={{ fontFamily: 'var(--display)', fontSize: 19 }}>{formatDateTime(campaign.nextSessionAt)}</strong>
               : <strong>{campaign.datePollNeedsMyVote ? t('Terminabstimmung läuft') : t('Noch kein Termin')}</strong>}
@@ -181,7 +159,7 @@ export function Overview() {
             </div>
           )}
 
-          <CloudNotice info={serverInfo} campaign={campaign} />
+          <CloudNotice info={serverInfo} campaign={campaign} onOpen={openDataSummary} />
           <Divider />
           {safeLinks(campaign.links).some((l) => l.shared) && (
             <section className="overview-links" aria-labelledby="group-links">
@@ -731,7 +709,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           </div>
         </div>
       ) : (
-        <button type="button" className="btn small quiet" style={{ alignSelf: 'flex-start' }} onClick={() => setDeleting(true)}>{t('Kampagne löschen …')}</button>
+        <button type="button" className="btn danger outline" onClick={() => setDeleting(true)}>{t('Kampagne löschen …')}</button>
       ))}
       </div>
     </details>
@@ -752,13 +730,72 @@ function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNoti
     }));
 }
 
-/** Hinweis an die SL (ab 0.4.7), z. B. ein Neuzugang ist vor teilweise verborgenen Einträgen verborgen */
-function GmNoticeCard({ campaign, notice, info, onDone }: { campaign: Campaign; notice: GmNotice; info: ServerInfo | null; onDone: () => void }) {
-  if (notice.code === 'character_analysis_pending') return apiAtLeast('0.4.18') && <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} />;
-  if (notice.code === 'seat_claimed') return <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} />;
-  if (notice.code === 'character_orphaned') return <OrphanNoticeCard campaign={campaign} notice={notice} onDone={onDone} />;
-  if (notice.code === 'member_joined') return <MemberJoinedCard campaign={campaign} notice={notice} onDone={onDone} />;
-  return <NewcomerNoticeCard campaign={campaign} notice={notice} onDone={onDone} />;
+/**
+ * Aufgaben für „Jetzt dran“ (Design-Prüfung 15.10.): Kapitel, die auf die SL warten, mitgebrachte Welt, Hinweise an
+ * die SL, eigener Charakter, Terminabstimmung. Hinweise klappen ihre Entscheidung auf, alles andere führt zur Seite.
+ */
+function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, onDone: () => void): NowItem[] {
+  const items: NowItem[] = [];
+  if (gm) {
+    for (const s of needMe) {
+      items.push({
+        key: 's-' + s.id,
+        label: t('Kapitel {n}', { n: s.number }) + ' · ' + (PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state),
+        to: p(`/s/${s.id}`)
+      });
+    }
+    if (campaign.openCharacterProposals) {
+      items.push({
+        key: 'world',
+        label: t('Mitgebrachte Welt') + ' · ' + tn(campaign.openCharacterProposals, '{n} offen', '{n} offen'),
+        to: p(`/k/${campaign.id}/mitgebracht`)
+      });
+    }
+    for (const { notice, hidden } of mergeJoinNotices(campaign.gmNotices ?? [])) {
+      const item = noticeItem(campaign, notice, hidden, info, onDone);
+      if (item) items.push(item);
+    }
+  }
+  if (characterIncomplete(me)) {
+    items.push({ key: 'me', label: t('Dein Charakter ist noch unvollständig'), to: p(`/k/${campaign.id}/charakter/${me!.id}`) });
+  }
+  if (campaign.datePollNeedsMyVote) {
+    items.push({ key: 'poll', label: t('Nächste Runde') + ' · ' + t('Abstimmen'), to: p(`/k/${campaign.id}/termin`) });
+  }
+  return items;
+}
+
+/** Hinweis an die SL (ab 0.4.7) als Zeile; dieselben Bedingungen wie in den Karten, damit keine leere Zeile bleibt */
+function noticeItem(campaign: Campaign, notice: GmNotice, hidden: GmNotice | undefined, info: ServerInfo | null, onDone: () => void): NowItem | null {
+  const m = campaign.members.find((x) => x.id === notice.memberId);
+  const key = 'n-' + notice.id;
+  switch (notice.code) {
+    case 'character_analysis_pending':
+      if (!apiAtLeast('0.4.18') || !m || isDeletedMember(m)) return null;
+      return { key, label: t('{person} bittet um eine Auswertung', { person: m.displayName }),
+        detail: <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} /> };
+    case 'seat_claimed':
+      if (!m) return null;
+      return { key, hideDetailTitle: true, label: t('{person} spielt jetzt {figure}', { person: m.displayName, figure: m.characterName ?? t('einen Platz') }),
+        detail: <SeatClaimedCard campaign={campaign} notice={notice} onDone={onDone} /> };
+    case 'character_orphaned': {
+      if (!notice.entryIds[0]) return null;
+      const figure = m?.characterName ?? t('die Figur');
+      const deleted = !!m && (!!m.deletedAt || m.userId === '');
+      return { key, hideDetailTitle: true,
+        label: deleted ? t('Das Konto hinter {figure} wurde gelöscht', { figure }) : t('{person} hat die Runde verlassen', { person: m?.displayName || t('Ein Spieler') }),
+        detail: <OrphanNoticeCard campaign={campaign} notice={notice} onDone={onDone} /> };
+    }
+    case 'member_joined':
+      if (!m || isDeletedMember(m)) return null;
+      return { key, hideDetailTitle: true, label: t('{person} ist der Kampagne beigetreten', { person: m.displayName }),
+        detail: <MemberJoinedCard campaign={campaign} notice={notice} hidden={hidden} onDone={onDone} /> };
+    case 'hidden_entries_for_newcomer':
+      return { key, hideDetailTitle: true, label: t('{name} ist neu am Tisch', { name: m ? m.characterName ?? m.displayName : t('Ein neues Mitglied') }),
+        detail: <NewcomerNoticeCard campaign={campaign} notice={notice} onDone={onDone} /> };
+    default:
+      return null;
+  }
 }
 
 function NewcomerNoticeCard({ campaign, notice, onDone }: { campaign: Campaign; notice: GmNotice; onDone: () => void }) {

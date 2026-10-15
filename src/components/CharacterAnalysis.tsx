@@ -91,7 +91,7 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
   };
 
   return (
-    <div className="card task">
+    <div className="card">
       <strong>
         {analysis.source === 'backstory'
           ? t('{person} möchte den Hintergrund von {name} auswerten lassen', { person: m.displayName, name })
@@ -106,7 +106,7 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
       </span>
       <ErrorBox error={error} />
       <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn small moss" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
+        <button type="button" className="btn small outline" disabled={busy} onClick={() => decide(true)}>{t('Auswerten')}</button>
         <button type="button" className="btn small outline" disabled={busy} onClick={() => decide(false)}>{t('Ablehnen')}</button>
       </div>
     </div>
