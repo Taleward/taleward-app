@@ -170,7 +170,7 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
   if (!type.includes('application/json')) return res.blob() as Promise<T>;
   const data = await res.json();
   if (copyUser && stillSignedIn()) {
-    saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser), campaignOfPath(path, data)).catch(() => undefined);
+    saveCopy(conn.id, copyUser, path, cleanForCopy(path, data, copyUser), campaignOfPath(path, data), stillSignedIn).catch(() => undefined);
     // Kampagnen, die nicht mehr in der Liste stehen (verlassen, entfernt, gelöscht): ihre Kopie verwerfen
     if (path === '/campaigns' && Array.isArray(data)) {
       keepOnlyCampaigns(conn.id, data.map((c: { id?: unknown }) => String(c?.id ?? ''))).catch(() => undefined);

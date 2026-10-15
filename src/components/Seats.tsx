@@ -149,7 +149,7 @@ export function SeatClaimedCard({ campaign, notice, onDone }: { campaign: Campai
 
   const release = async () => {
     // Vor dem Freigeben sagen, was bei der Person bleibt
-    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, bleibt bei {person} und geht nicht an die nächste Person: Hintergrund, Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.',
+    const q = t('Platz von {figure} in „{campaign}“ auf „{server}“ wieder freigeben? {person} ist danach nicht mehr in der Kampagne und braucht eine neue Einladung. Was {person} selbst eingebracht hat, geht nicht an die nächste Person: Der Hintergrund am Platz wird gelöscht. Charakterbögen und ihre Auswertungen, eigene Vorschläge und Kommentare stehen danach bei einem ehemaligen Mitglied. Offene Auswertungen entfallen. Die Figur bleibt am Platz, mit allem, was sie in der Kampagne erlebt hat, auch mit ihrer Stimme in den bisherigen Kapiteln.',
       { figure, person: m.displayName, campaign: campaign.title, server: currentConnection().name });
     if (await confirmDialog(q, { confirmLabel: t('Platz freigeben'), danger: true })) {
       run(() => api.releaseSeat(campaign.id, m.id));

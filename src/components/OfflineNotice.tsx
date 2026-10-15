@@ -10,7 +10,7 @@ export function useOfflineSince(connId: string | null | undefined): string | nul
   return useSyncExternalStore(onOfflineChange, () => offlineSince(connId));
 }
 
-/** Hinweis oben auf jeder Seite einer Kampagne, solange die App aus der Lesekopie liest (Benjamin 14.10.) */
+/** Hinweis oben auf jeder Seite einer Kampagne, solange die App aus der Lesekopie liest */
 export function OfflineNotice({ connId }: { connId: string | null | undefined }) {
   const since = useOfflineSince(connId);
   if (!since || !connId) return null;

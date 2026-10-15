@@ -40,7 +40,8 @@ function req<T>(r: IDBRequest<T>): Promise<T> {
 
 const keyOf = (connId: string, userId: string, path: string) => `${connId}|${userId}|${path}`;
 
-export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null): Promise<void> {
+export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null,
+  stillAllowed: () => boolean = () => true): Promise<void> {
   const db = await open();
   if (!db) return;
   const key = keyOf(connId, userId, path);
@@ -56,16 +57,13 @@ export async function saveCopy(connId: string, userId: string, path: string, dat
     const head = await req(db.transaction(STORE).objectStore(STORE).get(keyOf(connId, userId, `/sessions/${session}`))) as Row | undefined;
     campaign = head?.campaignId ?? null;
   }
+  // Ohne bekannte Kampagne nichts ablegen (sonst fiele es beim Aufräumen einer Kampagne nicht mit weg); die Chronik
+  // holt den Kapitel-Kopf zuerst, danach kommt der Rest beim nächsten Nachladen
+  if (!campaign && path !== '/campaigns') return;
+  if (!stillAllowed()) return;
   const row: Row = { key, connId, userId, campaignId: campaign, savedAt: new Date().toISOString(), data };
   const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
   await req(store.put(row));
-  // Kam der Kapitel-Kopf erst nach Kapitel oder Kommentaren: deren Kampagne jetzt nachtragen
-  if (campaign && path === `/sessions/${sessionOfPath(path)}`) {
-    for (const sub of ['recap', 'comments']) {
-      const other = await req(store.get(keyOf(connId, userId, `${path}/${sub}`))) as Row | undefined;
-      if (other && !other.campaignId) await req(store.put({ ...other, campaignId: campaign }));
-    }
-  }
 }
 
 export async function readCopy(connId: string, userId: string, path: string): Promise<{ savedAt: string; data: unknown } | null> {
@@ -121,7 +119,9 @@ export async function removeOrphanCopies(current: { id: string; userId: string |
   const rows = await req(store.getAll()) as Row[];
   const ok = new Set(current.filter((c) => c.userId).map((c) => `${c.id}|${c.userId}`));
   const now = Date.now();
-  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`) || tooOld(r.savedAt, now)).map((r) => req(store.delete(r.key))));
+  const orphan = (r: Row) => !r.campaignId && !r.key.endsWith('|/campaigns');
+  await Promise.all(rows.filter((r) => !ok.has(`${r.connId}|${r.userId}`) || tooOld(r.savedAt, now) || orphan(r))
+    .map((r) => req(store.delete(r.key))));
 }
 
 // ---- Wer gerade aus der Kopie liest (je Server): für den Hinweis in der Oberfläche

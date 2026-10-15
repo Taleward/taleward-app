@@ -1,4 +1,4 @@
-// Lesekopie ohne Netz: nur, was alle Spielerinnen sehen dürfen (Benjamin 14.10.)
+// Lesekopie ohne Netz: nur, was alle Spielerinnen sehen dürfen
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { campaignOfPath, cleanForCopy, copyable, sessionOfPath } from '../../src/api/readCopyRules.ts';
@@ -87,4 +87,14 @@ test('jede Kopie kennt ihre Kampagne', () => {
   assert.equal(campaignOfPath('/sessions/s-1/recap', {}), null);
   assert.equal(sessionOfPath('/sessions/s-1/comments'), 's-1');
   assert.equal(campaignOfPath('/campaigns', []), null);
+});
+
+test('Kommentare nur mit bekannten Feldern, Einträge ohne Kapitelnummern', () => {
+  const c = cleanForCopy('/sessions/s-1/comments', [{ id: 'k', sessionId: 's-1', authorMemberId: 'm', recipientMemberId: null, text: 'Hallo', createdAt: 'x', editedAt: null, neuesFeld: 'geheim' }], 'u');
+  assert.equal(c[0].text, 'Hallo');
+  assert.equal(c[0].neuesFeld, undefined);
+  const e = cleanForCopy('/campaigns/c-1/entries', [{ id: 'e', visibility: 'public', name: 'Ort', firstSessionNumber: 3, lastSessionNumber: 9 }], 'u');
+  assert.equal(e[0].name, 'Ort');
+  assert.equal(e[0].firstSessionNumber, undefined);
+  assert.equal(e[0].lastSessionNumber, undefined);
 });

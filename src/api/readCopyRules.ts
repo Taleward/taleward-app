@@ -1,6 +1,6 @@
 /*
  * Lesekopie für unterwegs (ohne Netz): Welche Antworten des Servers auf dem Gerät bleiben dürfen und was vorher
- * herausfällt. Grundsatz (Benjamin 14.10.): Auf dem Gerät liegt nur, was alle Spielerinnen der Kampagne lesen dürfen –
+ * herausfällt. Grundsatz: Auf dem Gerät liegt nur, was alle Spielerinnen der Kampagne lesen dürfen –
  * auch bei der Spielleitung. Nie: SL-Notizen, Einträge „nur SL“ oder teilweise verborgene Einträge, offene Vorschläge,
  * Abschriften, ungeprüfte Kapitel, Hinweise an die SL, private Nachrichten, Hintergründe anderer Figuren.
  * Ohne Laufzeit-Importe, damit die Regeln für sich getestet werden können.
@@ -17,7 +17,7 @@ const RULES: { pattern: RegExp; clean: (data: unknown, myUserId: string | null) 
   { pattern: new RegExp(`^/campaigns/${ID}/sessions$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter(published).map(sessionSummary) : null) },
   { pattern: new RegExp(`^/sessions/${ID}$`), clean: (d) => (isObj(d) && published(d) ? session(d) : null) },
   { pattern: new RegExp(`^/sessions/${ID}/recap$`), clean: (d) => (isObj(d) && d.publishedAt ? recap(d) : null) },
-  { pattern: new RegExp(`^/sessions/${ID}/comments$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter((c) => c.recipientMemberId == null) : null) },
+  { pattern: new RegExp(`^/sessions/${ID}/comments$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter((c) => c.recipientMemberId == null).map(comment) : null) },
   { pattern: new RegExp(`^/campaigns/${ID}/entries$`), clean: (d) => (Array.isArray(d) ? d.filter(isObj).filter(publicEntry).map(entry) : null) }
 ];
 
@@ -101,14 +101,19 @@ function recap(r: Obj): Obj {
   return pick(r, ['sessionId', 'number', 'title', 'text', 'openThreads', 'publishedAt', 'parts']);
 }
 
+/** Öffentliche Kommentare nur mit den heutigen Feldern */
+function comment(c: Obj): Obj {
+  return pick(c, ['id', 'sessionId', 'authorMemberId', 'recipientMemberId', 'text', 'createdAt', 'editedAt']);
+}
+
 /** Nur öffentliche Einträge, die alle sehen (teilweise verborgene zählen wie „nur SL“) */
 function publicEntry(e: Obj): boolean {
   return e.visibility === 'public' && (!Array.isArray(e.hiddenFromMemberIds) || e.hiddenFromMemberIds.length === 0);
 }
 
 function entry(e: Obj): Obj {
-  const out: Obj = pick(e, ['id', 'campaignId', 'type', 'name', 'summary', 'status', 'holderMemberId', 'visibility',
-    'firstSessionNumber', 'lastSessionNumber', 'updatedAt']);
+  // Ohne Kapitelnummern: bei der SL können sie auf noch nicht veröffentlichte Kapitel zeigen
+  const out: Obj = pick(e, ['id', 'campaignId', 'type', 'name', 'summary', 'status', 'holderMemberId', 'visibility', 'updatedAt']);
   // Erwähnungen können bei der SL aus noch ungeprüften Kapiteln stammen – in der Kopie leer
   out.mentions = [];
   // Ungeteilte Links tragen shared: false (Spieler bekommen sie gar nicht)
