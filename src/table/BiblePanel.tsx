@@ -111,7 +111,7 @@ export function BiblePanel({ campaignId, members, query, onQuery, focusEntryId, 
     }
   };
 
-  const shown = entries ? fuzzyFilter(entries, query, (e) => [e.name, e.summary ?? '', e.gmNotes ?? '']) : null;
+  const shown = entries ? fuzzyFilter(entries, query, (e) => [e.name, ...(e.aliases ?? []), e.summary ?? '', e.gmNotes ?? '']) : null;
   const hiddenNames = (e: Entry) => (e.hiddenFromMemberIds ?? [])
     .map((id) => members.find((m) => m.id === id))
     .filter((m): m is Member => !!m)

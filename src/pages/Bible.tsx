@@ -3,7 +3,8 @@ import { PlayerPicker } from '../components/PlayerPicker';
 import { confirmDialog } from '../components/confirm';
 import { SecretBox, VisTag } from '../components/VisTag';
 import { LinkButtons } from '../components/Links';
-import { p } from '../api/connections';
+import { apiAtLeast, p } from '../api/connections';
+import { aliasesText, parseAliases } from '../bible/aliases';
 import { Link } from 'react-router-dom';
 import { t, tk } from '../i18n';
 import { useEffect, useState } from 'react';
@@ -59,7 +60,7 @@ export function Bible() {
   }, [campaignId, reload]);
 
   const entries = all && (query.trim()
-    ? fuzzyFilter(all, query, (e) => [e.name, e.summary, e.gmNotes ?? ''])
+    ? fuzzyFilter(all, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? ''])
     : all.filter((e) => e.type === tab));
   const holder = (id: string | null | undefined) => {
     const m = campaign?.members.find((x) => x.id === id);
@@ -188,6 +189,9 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
   const [name, setName] = useState(e.name);
   const [summary, setSummary] = useState(e.summary);
   const [gmNotes, setGmNotes] = useState(e.gmNotes ?? '');
+  // „Auch genannt“ (ab 0.4.21): andere Namen, durch Komma getrennt
+  const withAliases = apiAtLeast('0.4.21');
+  const [aliases, setAliases] = useState(aliasesText(e.aliases));
   const [secret, setSecret] = useState(e.visibility === 'gm_only');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -221,7 +225,8 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
   };
 
   const save = () => run(() => api.updateEntry(e.id, {
-    name: name.trim(), summary: summary.trim(), gmNotes: gmNotes.trim() || null, visibility: secret ? 'gm_only' : 'public'
+    name: name.trim(), summary: summary.trim(), gmNotes: gmNotes.trim() || null, visibility: secret ? 'gm_only' : 'public',
+    ...(withAliases ? { aliases: parseAliases(aliases, name) } : {})
   }));
 
   const remove = async () => {
@@ -237,6 +242,14 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
           <label htmlFor={`en-${e.id}`}>{t('Name')}</label>
           <input id={`en-${e.id}`} type="text" value={name} onChange={(ev) => setName(ev.target.value)} />
         </div>
+        {withAliases && (
+          <div className="field">
+            <label htmlFor={`ea-${e.id}`}>{t('Auch genannt')}</label>
+            <input id={`ea-${e.id}`} type="text" value={aliases} onChange={(ev) => setAliases(ev.target.value)}
+              placeholder={t('z. B. andere Schreibweise, Spitzname')} aria-describedby={`eah-${e.id}`} />
+            <span id={`eah-${e.id}`} className="muted small">{t('Durch Komma getrennt. Hilft Taleward, den Eintrag in der Abschrift wiederzuerkennen. Sichtbar wie der Name.')}</span>
+          </div>
+        )}
         <div className="field">
           <label htmlFor={`es-${e.id}`} className="row" style={{ gap: 6 }}><IconEye size={16} /> {t('Was Spieler wissen')}</label>
           <textarea id={`es-${e.id}`} value={summary} onChange={(ev) => setSummary(ev.target.value)} />
@@ -265,6 +278,7 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
         <div className="card-title">{e.name}</div>
         <Tag entry={e} />
       </div>
+      {!!e.aliases?.length && <div className="muted small">{t('Auch genannt: {names}', { names: e.aliases.join(', ') })}</div>}
       {e.summary && <div>{e.summary}</div>}
       {e.gmNotes && e.visibility !== 'gm_only' && <SecretBox>{e.gmNotes}</SecretBox>}
       {e.gmNotes && e.visibility === 'gm_only' && <div className="small">{e.gmNotes}</div>}

@@ -6,6 +6,7 @@ import { Dialog } from './Dialog';
 import { PlayerPicker } from './PlayerPicker';
 import { t, tk } from '../i18n';
 import { IconEye, IconLock } from './Icons';
+import { addsAlias } from '../bible/aliases';
 
 export const ENTRY_KIND: Record<EntryType, string> = {
   npc: tk('NSC'),
@@ -73,6 +74,13 @@ export function ProposalCard({ proposal: p, players = [], onChange, onError }: {
     setEditing(false);
   };
 
+  // Ab 0.4.21: „neu anlegen“ klingt wie ein vorhandener Eintrag – dort ergänzen statt doppelt anlegen
+  const match = p.action === 'create' ? p.match ?? null : null;
+  const merged = !!p.mergeIntoEntryId;
+  const mergeName = merged ? (match && match.entryId === p.mergeIntoEntryId ? match.name : null) : null;
+  const mergeInto = (entryId: string | null) =>
+    patch({ mergeIntoEntryId: entryId, decision: 'accepted' }, { ...p, mergeIntoEntryId: entryId, decision: 'accepted' });
+
   const flagged = p.flags.includes('joke_suspected') || p.flags.includes('low_confidence') || p.flags.includes('evidence_not_found');
   const secretEntry = p.suggestedVisibility === 'gm_only';
   const ev = p.evidence[0];
@@ -81,16 +89,17 @@ export function ProposalCard({ proposal: p, players = [], onChange, onError }: {
     <div className={flagged ? 'card warn' : 'card'}>
       <div className="row between wrap" style={{ gap: 6 }}>
         <span className="muted small" style={{ fontWeight: 700 }}>
-          {t(ENTRY_KIND[p.entryType])} · {p.action === 'create' ? t('neu') : p.action === 'reveal' ? t('wird bekannt') : t('ergänzt')}
+          {t(ENTRY_KIND[p.entryType])} · {merged ? (mergeName ? t('ergänzt {name}', { name: mergeName }) : t('ergänzt')) : p.action === 'create' ? t('neu') : p.action === 'reveal' ? t('wird bekannt') : t('ergänzt')}
         </span>
         <span className="row wrap" style={{ gap: 6 }}>
           {p.flags.includes('joke_suspected') && <span className="pill seal">{t('Vermutlich Scherz')}</span>}
           {!p.flags.includes('joke_suspected') && p.flags.includes('evidence_not_found') && <span className="pill seal">{t('Beleg in der Abschrift nicht gefunden')}</span>}
           {!p.flags.includes('joke_suspected') && !p.flags.includes('evidence_not_found') && p.flags.includes('low_confidence') && <span className="pill seal">{t('Unsicher')}</span>}
           {p.flags.includes('contradicts_bible') && <span className="pill brass">{t('Widerspricht der Bibel')}</span>}
+          {/* Beim Ergänzen bleibt die Sichtbarkeit des vorhandenen Eintrags */}
           {p.action === 'reveal'
             ? <span className="row" style={{ gap: 4 }}><VisTag gm /> → <VisTag gm={false} /></span>
-            : <VisTag gm={secretEntry} />}
+            : !merged && <VisTag gm={secretEntry} />}
           {hiddenNames.length > 0 && <span className="small" style={{ color: 'var(--siegel-text)' }}>{t('nicht für {names}', { names: hiddenNames.join(', ') })}</span>}
         </span>
       </div>
@@ -116,6 +125,31 @@ export function ProposalCard({ proposal: p, players = [], onChange, onError }: {
         </>
       ) : (
         <>
+          {match && !merged && p.decision === 'open' && (
+            <div className="proposal-match">
+              <span>{t('Klingt wie {name} ({kind}). Dort ergänzen?', { name: match.name, kind: t(ENTRY_KIND[match.entryType] ?? ENTRY_KIND.other) })}</span>
+              <span className="row wrap" style={{ gap: 8 }}>
+                <button type="button" className="btn small" onClick={() => mergeInto(match.entryId)}>
+                  {t('Bei {name} ergänzen', { name: match.name })}
+                </button>
+                <button type="button" className="linklike small tap-link" onClick={() => mergeInto(null)}>
+                  {t('Doch als neuen Eintrag anlegen')}
+                </button>
+              </span>
+            </div>
+          )}
+          {merged && (
+            <div className="proposal-match">
+              <span>
+                {mergeName ? t('Wird bei {name} ergänzt.', { name: mergeName }) : t('Wird bei einem vorhandenen Eintrag ergänzt.')}
+                {mergeName && addsAlias(p.title, mergeName, match?.matchedName && match.matchedName !== match.name ? [match.matchedName] : [])
+                  ? ' ' + t('„{alias}“ kommt zu „Auch genannt“.', { alias: p.title }) : ''}
+              </span>
+              <button type="button" className="linklike small tap-link" style={{ alignSelf: 'flex-start' }} onClick={() => mergeInto(null)}>
+                {t('Doch als neuen Eintrag anlegen')}
+              </button>
+            </div>
+          )}
           <div className="card-title">{p.title}</div>
           {p.detail && (
             <div className="small">
@@ -168,7 +202,7 @@ export function ProposalCard({ proposal: p, players = [], onChange, onError }: {
             {t('Verwerfen')}
           </button>
           <span className="proposal-links">
-            {players.length > 0 && (
+            {players.length > 0 && !merged && (
               <button type="button" className="btn small subtle" onClick={() => { setPick(visibleIds); setPicking(true); }}>
                 <IconEye size={16} /> {t('Sichtbar für …')}
               </button>
