@@ -116,6 +116,8 @@ function entry(e: Obj): Obj {
   const out: Obj = pick(e, ['id', 'campaignId', 'type', 'name', 'summary', 'status', 'holderMemberId', 'visibility', 'updatedAt']);
   // Erwähnungen können bei der SL aus noch ungeprüften Kapiteln stammen – in der Kopie leer
   out.mentions = [];
+  // „Auch genannt“ (ab 0.4.21) ist sichtbar wie der Name; nur kurze Texte
+  out.aliases = Array.isArray(e.aliases) ? e.aliases.filter((a): a is string => typeof a === 'string').slice(0, 10).map((a) => a.slice(0, 40)) : [];
   // Ungeteilte Links tragen shared: false (Spieler bekommen sie gar nicht)
   out.links = Array.isArray(e.links) ? e.links.filter(isObj).filter((l) => l.shared !== false) : [];
   return out;

@@ -396,13 +396,14 @@ function makeApi(conn: () => Connection) {
   /** guestName (ab 0.4.7): Stimme als Gast benennen; memberId und guestName schließen sich aus */
   assignSpeakers: (sessionId: string, mapping: { speakerId: string; memberId: string | null; guestName?: string | null }[]) =>
     request<ProcessingStatus>('PUT', `/sessions/${sessionId}/speakers`, { body: mapping }),
-  speakerSample: (sessionId: string, speakerId: string) =>
-    request<Blob>('GET', `/sessions/${sessionId}/speakers/${speakerId}/sample`),
+  /** index (ab 0.4.21): Hörprobe zu Speaker.samples[index]; ohne index die zu sampleText */
+  speakerSample: (sessionId: string, speakerId: string, index?: number) =>
+    request<Blob>('GET', `/sessions/${sessionId}/speakers/${speakerId}/sample${index === undefined ? '' : `?index=${Math.trunc(index)}`}`),
 
   proposals: (sessionId: string) => request<Proposal[]>('GET', `/sessions/${sessionId}/proposals`),
   decide: (
     proposalId: string,
-    change: { decision?: ProposalDecision; title?: string; detail?: string; gmNotes?: string; visibility?: Visibility; hiddenFromMemberIds?: string[] }
+    change: { decision?: ProposalDecision; title?: string; detail?: string; gmNotes?: string; visibility?: Visibility; hiddenFromMemberIds?: string[]; mergeIntoEntryId?: string | null }
   ) => request<Proposal>('PATCH', `/proposals/${proposalId}`, { body: change }),
 
   // Terminabstimmung

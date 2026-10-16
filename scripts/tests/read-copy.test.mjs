@@ -97,4 +97,7 @@ test('Kommentare nur mit bekannten Feldern, Einträge ohne Kapitelnummern', () =
   assert.equal(e[0].name, 'Ort');
   assert.equal(e[0].firstSessionNumber, undefined);
   assert.equal(e[0].lastSessionNumber, undefined);
+  // „Auch genannt“ bleibt, aber nur als kurze Texte
+  const a = cleanForCopy('/campaigns/c-1/entries', [{ id: 'e', visibility: 'public', name: 'Ort', aliases: ['Altort', 7, 'x'.repeat(80)] }], 'u');
+  assert.deepEqual(a[0].aliases, ['Altort', 'x'.repeat(40)]);
 });

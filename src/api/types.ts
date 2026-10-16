@@ -282,6 +282,25 @@ export interface Speaker {
   assignedGuestName?: string | null;
   /** Bestätigte Zuordnung nach der Bestätigung (ab 0.4.10); null = Gast oder ignoriert, fehlt = noch nicht bestätigt */
   assignedMemberId?: string | null;
+  /** Bis zu drei Textproben mit eigener Hörprobe (…/sample?index=i), ab 0.4.21; fehlt = nur sampleText */
+  samples?: SpeakerSample[];
+  /** Anrede oder Selbstnennung spricht gegen die Zuordnung (ab 0.4.21) */
+  hint?: SpeakerHint | null;
+}
+
+export interface SpeakerSample {
+  start: number;
+  end?: number | null;
+  text: string;
+}
+
+export interface SpeakerHint {
+  /** addressed_as = wird oft mit diesem Namen angesprochen; self_named = nennt sich selbst so */
+  code: 'addressed_as' | 'self_named' | string;
+  name: string;
+  /** Mitglied, dessen Figur so heißt */
+  memberId: string;
+  count: number;
 }
 
 /** Vorschau einer Einladung ohne Anmeldung (ab 0.4.10) */
@@ -335,6 +354,20 @@ export interface Proposal {
   /** Belegstellen: bei Sessions Sekunden (start), bei Unterlagen Seitenzahl (page) */
   evidence: { start?: number; page?: number; quote: string }[];
   decision: ProposalDecision;
+  /** Nur bei create: klingt wie ein vorhandener Eintrag (ab 0.4.21) */
+  match?: ProposalMatch | null;
+  /** Die SL ergänzt lieber diesen Eintrag statt einen neuen anzulegen (ab 0.4.21) */
+  mergeIntoEntryId?: string | null;
+}
+
+export interface ProposalMatch {
+  entryId: string;
+  /** Name des Eintrags */
+  name: string;
+  /** Welcher Name oder Alias passte */
+  matchedName?: string;
+  entryType: EntryType;
+  kind: 'sound' | 'spelling' | 'part_name' | string;
 }
 
 export interface Recap {
@@ -350,6 +383,16 @@ export interface Recap {
   revision?: RecapRevision | null;
   /** Teile eines langen Kapitels mit Zwischenüberschrift (ab 0.4.17); fehlt oder leer = ohne Teile */
   parts?: RecapPart[];
+  /** Nur SL (ab 0.4.21): Das Kapitel nennt Geheimes */
+  gmWarnings?: RecapGmWarning[];
+}
+
+export interface RecapGmWarning {
+  /** secret_entry_name = Name eines Eintrags, den nicht alle kennen; secret_wording = wörtlich aus geheimem Text */
+  code: 'secret_entry_name' | 'secret_wording' | string;
+  entryIds: string[];
+  names?: string[];
+  paragraphs?: number[];
 }
 
 /** Ein Teil beginnt bei Absatz firstParagraph (0-basiert) und reicht bis vor den nächsten (ab 0.4.17) */
@@ -428,6 +471,8 @@ export interface EntryInput {
   summary: string;
   status?: 'active' | 'done' | null;
   holderMemberId?: string | null;
+  /** Andere Namen oder Schreibweisen („Auch genannt“, ab 0.4.21), sichtbar wie der Name */
+  aliases?: string[];
   visibility: Visibility;
   /** Geheimer Teil, nur für die SL; der Server lässt ihn für Spieler weg (ab 0.3.2) */
   gmNotes?: string | null;
