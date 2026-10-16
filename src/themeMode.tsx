@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { t, tk } from './i18n';
+import { syncSystemBars } from './display/systemBars';
 
 /** Thema der App: folgt dem Handy (Standard) oder fest „Pergament“ (hell) bzw. „Spielabend“ (dunkel). */
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -18,6 +19,7 @@ export function applyThemeMode(mode: ThemeMode = getThemeMode()): void {
   const root = document.documentElement;
   if (mode === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', mode);
+  syncSystemBars();
 }
 
 export function setThemeMode(mode: ThemeMode): void {

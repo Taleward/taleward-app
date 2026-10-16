@@ -18,12 +18,9 @@ import { removeOrphanCopies } from './api/readCopy';
 
 async function start() {
   applyThemeMode();
-  // Statusleiste in tinte (Markenhandbuch); nur in der Android-App
+  // Nur in der Android-App (Symbole der Statusleiste setzt applyThemeMode)
   const { Capacitor } = await import('@capacitor/core');
   if (Capacitor.isNativePlatform()) {
-    const { StatusBar, Style } = await import('@capacitor/status-bar');
-    StatusBar.setBackgroundColor({ color: '#17313b' }).catch(() => undefined);
-    StatusBar.setStyle({ style: Style.Dark }).catch(() => undefined);
     // Schriftgröße des Handys übernehmen (Einstellungen → Anzeige)
     const { followSystemTextScale } = await import('./display/textScale');
     followSystemTextScale();

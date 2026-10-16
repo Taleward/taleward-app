@@ -216,5 +216,18 @@ if (existsSync(stylesPath)) {
     writeFileSync(stylesPath, styles);
     console.log('Startbildschirm auf tinte umgestellt');
   }
+  // Statusleiste bis Android 14 in tinte (ab Android 15 liegt die App darunter, das Thema wirkt dort nicht).
+  // Als Thema statt im Code: die Farb-Aufrufe für die Statusleiste sind seit Android 15 eingestellt.
+  styles = readFileSync(stylesPath, 'utf8');
+  if (!styles.includes('android:statusBarColor')) {
+    styles = styles.replace(
+      /(<style name="AppTheme\.NoActionBar"[^>]*>)/,
+      '$1\n        <item name="android:statusBarColor">@color/taleward_tinte</item>'
+    );
+    if (styles.includes('android:statusBarColor')) {
+      writeFileSync(stylesPath, styles);
+      console.log('Statusleiste auf tinte gesetzt');
+    }
+  }
 }
 console.log('Android-Einrichtung fertig.');
