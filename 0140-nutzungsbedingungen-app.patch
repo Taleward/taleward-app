@@ -1,0 +1,394 @@
+From 3ba06fb48a799c8cb0399550d6ec119033282ba4 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 16:52:17 +0200
+Subject: [PATCH 140/140] Nutzungsbedingungen und Impressum in der App
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Haken bei der Registrierung, Hinweis bei neuer Fassung mit Zustimmen auf Kampagnenliste und Übersicht, Betreiber mit Impressum, Datenschutz und Nutzungsbedingungen unter Konten und Server. Testserver mit Nutzungsbedingungen.
+---
+ src/components/Terms.tsx  | 106 ++++++++++++++++++++++++++++++++++++++
+ src/i18n/en.ts            |  10 ++++
+ src/mocks/db.ts           |   5 +-
+ src/mocks/handlers.ts     |  45 ++++++++++++++--
+ src/pages/AccountPage.tsx |   2 +
+ src/pages/Campaigns.tsx   |   3 ++
+ src/pages/ConnectPage.tsx |  38 +++++++++++++-
+ src/pages/Overview.tsx    |   2 +
+ src/theme.css             |   4 ++
+ 9 files changed, 209 insertions(+), 6 deletions(-)
+ create mode 100644 src/components/Terms.tsx
+
+diff --git a/src/components/Terms.tsx b/src/components/Terms.tsx
+new file mode 100644
+index 0000000..2259956
+--- /dev/null
++++ b/src/components/Terms.tsx
+@@ -0,0 +1,106 @@
++import { useEffect, useState } from 'react';
++import { Link } from 'react-router-dom';
++import { apiFor, isApiError } from '../api/client';
++import { hasValidToken, updateConnection, type Connection } from '../api/connections';
++import type { ServerInfo, User } from '../api/types';
++import { t } from '../i18n';
++import { ErrorBox } from './Screen';
++
++/*
++ * Nutzungsbedingungen und Impressum je Server (ab Schnittstelle 0.4.22). Jeder Server hat eigene Bedingungen; ändert
++ * der Betreiber sie, stimmt jede Person neu zu. Bis dahin geht auf diesem Server nur Lesen (der Server setzt das durch).
++ */
++
++interface TermsState {
++  info: ServerInfo;
++  user: User;
++}
++
++/** Server-Angaben und eigenes Profil laden – nur, wenn der Server Nutzungsbedingungen meldet */
++function useTerms(conn: Connection) {
++  const [state, setState] = useState<TermsState | null>(null);
++  const [reload, setReload] = useState(0);
++  const valid = hasValidToken(conn);
++  useEffect(() => {
++    if (!valid) return;
++    let gone = false;
++    const api = apiFor(conn);
++    api.info().then(async (info) => {
++      if (!info.termsUrl || !info.termsVersion) return;
++      const user = await api.me();
++      if (!gone) setState({ info, user });
++    }).catch(() => undefined);
++    return () => { gone = true; };
++  }, [conn.id, conn.token, valid, reload]); // eslint-disable-line react-hooks/exhaustive-deps
++  const outdated = !!state && (state.user.termsAcceptedVersion ?? 0) < (state.info.termsVersion ?? 0);
++  return { state, outdated, refresh: () => setReload((n) => n + 1), setUser: (user: User) => setState((s) => (s ? { ...s, user } : s)) };
++}
++
++/** Karte, solange eine neue Fassung auf Zustimmung wartet (Kampagnenliste, Übersicht) */
++export function TermsReminder({ conn }: { conn: Connection }) {
++  const { state, outdated, refresh, setUser } = useTerms(conn);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  if (!state || !outdated) return null;
++  const { info } = state;
++
++  const accept = async () => {
++    setBusy(true);
++    setError(null);
++    try {
++      const user = await apiFor(conn).acceptTerms(info.termsVersion!);
++      updateConnection(conn.id, { user: { ...(conn.user ?? user), ...user } });
++      setUser(user);
++    } catch (e) {
++      // Inzwischen gibt es schon wieder eine neuere Fassung: neu laden und noch einmal zeigen
++      if (isApiError(e, 'terms_changed')) refresh();
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <section className="card task terms-reminder" aria-labelledby={`terms-${conn.id}`}>
++      <strong id={`terms-${conn.id}`}>{t('Neue Nutzungsbedingungen bei „{name}“', { name: conn.name })}</strong>
++      <span className="small">
++        {state.user.termsAcceptedVersion
++          ? t('{operator} hat die Nutzungsbedingungen geändert. Bis du zustimmst, kannst du auf diesem Server nur lesen.', { operator: info.operator })
++          : t('{operator} hat jetzt Nutzungsbedingungen. Bis du zustimmst, kannst du auf diesem Server nur lesen.', { operator: info.operator })}
++      </span>
++      <a className="small tap-link" href={info.termsUrl!} target="_blank" rel="noreferrer" style={{ alignSelf: 'flex-start' }}>{t('Nutzungsbedingungen lesen')}</a>
++      <ErrorBox error={error} />
++      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
++        <button type="button" className="btn small outline" disabled={busy} onClick={accept}>{t('Zustimmen')}</button>
++        <Link className="linklike small tap-link" to="/konto">{t('Nicht einverstanden? Konto löschen')}</Link>
++      </div>
++    </section>
++  );
++}
++
++/** Unter „Konten und Server“: wer den Server betreibt, mit Impressum, Datenschutz und Nutzungsbedingungen */
++export function ServerLegal({ conn }: { conn: Connection }) {
++  const [info, setInfo] = useState<ServerInfo | null>(null);
++  useEffect(() => {
++    apiFor(conn).info().then(setInfo).catch(() => setInfo(null));
++  }, [conn.id, conn.baseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
++  if (!info) return null;
++  const links = [
++    info.legalNoticeUrl ? { href: info.legalNoticeUrl, label: t('Impressum') } : null,
++    info.privacyPolicyUrl ? { href: info.privacyPolicyUrl, label: t('Datenschutz') } : null,
++    info.termsUrl ? { href: info.termsUrl, label: t('Nutzungsbedingungen') } : null
++  ].filter((x): x is { href: string; label: string } => !!x);
++  return (
++    <div className="server-legal small">
++      <span>
++        {t('Betrieben von {operator}', { operator: info.operator })}
++        {info.contact ? ' · ' + info.contact : ''}
++      </span>
++      {links.length > 0 && (
++        <span className="row wrap" style={{ gap: '0 16px' }}>
++          {links.map((l) => <a key={l.label} className="tap-link" href={l.href} target="_blank" rel="noreferrer">{l.label}</a>)}
++        </span>
++      )}
++    </div>
++  );
++}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index e117ba0..cd8e01b 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1330,3 +1330,13 @@ export const en: Record<string, string> = {
+   "Zur Stelle": "Go to the passage",
+   "Die Spieler sehen das Kapitel so, wie es hier steht. Veröffentlichen kannst du trotzdem.": "The players see the chapter exactly as it stands here. You can still publish it.",
++  "Neue Nutzungsbedingungen bei „{name}“": "New terms of use on “{name}”",
++  "{operator} hat die Nutzungsbedingungen geändert. Bis du zustimmst, kannst du auf diesem Server nur lesen.": "{operator} has changed the terms of use. Until you agree, you can only read on this server.",
++  "{operator} hat jetzt Nutzungsbedingungen. Bis du zustimmst, kannst du auf diesem Server nur lesen.": "{operator} now has terms of use. Until you agree, you can only read on this server.",
++  "Nutzungsbedingungen lesen": "Read the terms of use",
++  "Nicht einverstanden? Konto löschen": "Don't agree? Delete your account",
++  "Impressum": "Legal notice",
++  "Datenschutz": "Privacy",
++  "Nutzungsbedingungen": "Terms of use",
++  "Bitte stimme den Nutzungsbedingungen zu.": "Please agree to the terms of use.",
++  "Ich stimme den Nutzungsbedingungen von {operator} zu.": "I agree to the terms of use of {operator}.",
+ };
+diff --git a/src/mocks/db.ts b/src/mocks/db.ts
+index c95417d..1d476a3 100644
+--- a/src/mocks/db.ts
++++ b/src/mocks/db.ts
+@@ -10,5 +10,8 @@ export const account = {
+   emailPending: null as string | null,
+   hasPassword: true,
+-  providers: [] as string[]
++  providers: [] as string[],
++  // Nutzungsbedingungen (0.4.22): zugestimmte Fassung
++  termsAcceptedVersion: 1 as number | null,
++  termsAcceptedAt: '2026-07-01T18:00:00Z' as string | null
+ };
+ 
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 7146670..27ea456 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -40,7 +40,16 @@ function hostKey(req: Request): string {
+ /** Test-Nutzer mit den Anmelde-Angaben, die nur die Person selbst sieht */
+ function meUser() {
+-  return ME.id === 'u-robin' ? { ...ME, ...account } : { ...ME, email: null, emailPending: null, hasPassword: true, providers: [] };
++  return ME.id === 'u-robin' ? { ...ME, ...account } : { ...ME, email: null, emailPending: null, hasPassword: true, providers: [], termsAcceptedVersion: termsVersion(), termsAcceptedAt: null };
+ }
+ 
++/**
++ * Fassung der Nutzungsbedingungen des Testservers (0.4.22). Zum Ausprobieren einer neuen Fassung:
++ * localStorage „taleward.mock.termsVersion“ auf 2 setzen und neu laden.
++ */
++function termsVersion(): number {
++  try { return Math.max(1, Number(localStorage.getItem('taleward.mock.termsVersion')) || 1); } catch { return 1; }
++}
++const termsOutdated = () => (account.termsAcceptedVersion ?? 0) < termsVersion();
++
+ function authed(req: Request): boolean {
+   return (req.headers.get('Authorization') ?? '').startsWith(`Bearer ${TOKEN}`);
+@@ -588,9 +597,13 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.21',
++      apiVersion: nachbar ? '0.3.9' : '0.4.22',
+       serverId: nachbar ? undefined : 'testserver',
+       registration: 'invite_only',
+       authMethods: ['password'],
+       privacyPolicyUrl: null,
++      // 0.4.22: Impressum und Nutzungsbedingungen des Betreibers
++      legalNoticeUrl: nachbar ? undefined : 'https://verein.test/impressum',
++      termsUrl: nachbar ? undefined : 'https://verein.test/nutzungsbedingungen',
++      termsVersion: nachbar ? undefined : termsVersion(),
+       minAge: 16,
+       audioRetention: nachbar ? { mode: 'immediate', maxDays: null } : { mode: 'until_release', maxDays: 7 },
+@@ -614,6 +627,12 @@ export const handlers = [
+   http.post(`${B}/auth/register`, async ({ request }) => {
+     await delay(300);
+-    const body = (await request.json()) as { inviteCode?: string; username?: string; displayName?: string; password?: string; acceptPrivacy?: boolean; ageConfirmed?: boolean; registrationToken?: string };
++    const body = (await request.json()) as { inviteCode?: string; username?: string; displayName?: string; password?: string; acceptPrivacy?: boolean; ageConfirmed?: boolean; registrationToken?: string; acceptTerms?: boolean; termsVersion?: number };
+     if (!body.acceptPrivacy || !body.ageConfirmed) return err(400, 'consent_required', 'Bitte Datenschutzhinweise und Alter bestätigen.');
++    // 0.4.22: Nutzungsbedingungen (nur der Testserver, der Nachbarverein ist älter)
++    if (new URL(request.url).hostname !== NACHBAR_HOST) {
++      if (!body.acceptTerms || !body.termsVersion) return err(400, 'consent_required', 'Bitte den Nutzungsbedingungen zustimmen.');
++      if (body.termsVersion !== termsVersion()) return err(409, 'terms_changed', 'Die Nutzungsbedingungen haben sich gerade geändert. Bitte lies die neue Fassung.');
++      Object.assign(account, { termsAcceptedVersion: body.termsVersion, termsAcceptedAt: new Date().toISOString() });
++    }
+     if (body.registrationToken) {
+       // Zweite Form (0.4.0): nach Anmeldung mit einem Dienst, ohne Benutzername und Passwort
+@@ -683,6 +702,26 @@ export const handlers = [
+   }),
+ 
++  // 0.4.22: Ohne Zustimmung zur aktuellen Fassung nur lesen (Ausnahmen wie in der Schnittstelle)
++  http.all(`${B}/*`, async ({ request }) => {
++    if (request.method === 'GET' || new URL(request.url).hostname === NACHBAR_HOST || !termsOutdated()) return undefined;
++    const path = new URL(request.url).pathname.replace(/^.*\/api\/v1/, '');
++    if (path === '/me/terms' || (path === '/me' && request.method === 'DELETE') || path.startsWith('/uploads/')) return undefined;
++    if (/\/recording-consent$/.test(path)) {
++      const body = (await request.clone().json().catch(() => ({}))) as { granted?: boolean };
++      if (body.granted === false) return undefined;
++    }
++    return err(403, 'terms_required', 'Die Nutzungsbedingungen haben sich geändert. Bis du zustimmst, kannst du nur lesen.');
++  }),
++
+   http.get(`${B}/me`, () => HttpResponse.json(meUser())),
+ 
++  http.put(`${B}/me/terms`, async ({ request }) => {
++    const body = (await request.json().catch(() => ({}))) as { accept?: boolean; version?: number };
++    if (body.accept !== true || !body.version) return err(400, 'invalid_input', 'Bitte zustimmen.');
++    if (body.version !== termsVersion()) return err(409, 'terms_changed', 'Die Nutzungsbedingungen haben sich gerade geändert. Bitte lies die neue Fassung.');
++    Object.assign(account, { termsAcceptedVersion: body.version, termsAcceptedAt: new Date().toISOString() });
++    return HttpResponse.json(meUser());
++  }),
++
+   http.put(`${B}/me/email`, async ({ request }) => {
+     const { email } = (await request.json()) as { email?: string };
+diff --git a/src/pages/AccountPage.tsx b/src/pages/AccountPage.tsx
+index 84c0a71..eb4a433 100644
+--- a/src/pages/AccountPage.tsx
++++ b/src/pages/AccountPage.tsx
+@@ -16,4 +16,5 @@ import { formatDateFull } from '../components/format';
+ import { LanguageSwitch, t, tn } from '../i18n';
+ import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
++import { ServerLegal } from '../components/Terms';
+ 
+ /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
+@@ -129,4 +130,5 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+       {conn.user && <div className="small">{t('Angemeldet als {name}', { name: conn.user.displayName })} ({conn.user.username})</div>}
+       {valid && conn.expiresAt && <div className="muted small">{t('Anmeldung gültig bis {date}', { date: formatDateFull(conn.expiresAt) })}</div>}
++      <ServerLegal conn={conn} />
+       {isOutdated(conn.apiVersion) && (
+         <div className="notice">
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index e93f30a..e4342e6 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -1,3 +1,4 @@
+ import { listCharacters } from '../characters/store';
++import { TermsReminder } from '../components/Terms';
+ import { serverHasCharacters } from '../characters/sync';
+ import { LinkInput } from '../components/LinkInput';
+@@ -172,4 +173,6 @@ export function Campaigns() {
+         </Link>
+       ))}
++      {/* Neue Nutzungsbedingungen (ab 0.4.22): bis zur Zustimmung nur lesen */}
++      {active.map((c) => <TermsReminder key={'terms-' + c.id} conn={c} />)}
+       {offline.map(({ conn: c, since }) => (
+         <div key={c.id} className="notice" role="status">
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index 2214d91..d5f4825 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -46,4 +46,6 @@ export function ConnectPage() {
+   const [privacy, setPrivacy] = useState(false);
+   const [age, setAge] = useState(false);
++  // Nutzungsbedingungen des Betreibers (ab 0.4.22)
++  const [terms, setTerms] = useState(false);
+   const [busy, setBusy] = useState(false);
+   const oidc = params.get('oidc');
+@@ -137,5 +139,5 @@ export function ConnectPage() {
+       const res = mode === 'login'
+         ? await apiFor(probe).login(username.trim(), password)
+-        : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true });
++        : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true, ...termsConsent(info) });
+       const login = { token: res.accessToken, expiresAt: res.expiresAt, user: res.user };
+       let conn: Connection;
+@@ -151,4 +153,8 @@ export function ConnectPage() {
+     } catch (err) {
+       setError(err);
++      // Fassung hat sich gerade geändert: neue Angaben holen, Haken neu setzen lassen
++      if (isApiError(err, 'terms_changed')) {
++        fetchServerInfo(baseUrl).then((i) => { setInfo(i); setTerms(false); }).catch(() => undefined);
++      }
+     } finally {
+       setBusy(false);
+@@ -167,4 +173,5 @@ export function ConnectPage() {
+     : password !== password2 ? t('Die Passwörter stimmen nicht überein.')
+     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
++    : info?.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
+     : !age ? t('Bitte bestätige das Mindestalter.')
+     : null;
+@@ -321,4 +328,13 @@ export function ConnectPage() {
+                     </span>
+                   </label>
++                  {info.termsUrl && (
++                    <label className="check" style={{ alignItems: 'flex-start' }}>
++                      <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} style={{ marginTop: 3 }} />
++                      <span>
++                        {t('Ich stimme den Nutzungsbedingungen von {operator} zu.', { operator: info.operator })}
++                        {' '}<a href={info.termsUrl} target="_blank" rel="noreferrer">{t('Öffnen')}</a>
++                      </span>
++                    </label>
++                  )}
+                   <label className="check" style={{ alignItems: 'flex-start' }}>
+                     <input type="checkbox" checked={age} onChange={(e) => setAge(e.target.checked)} style={{ marginTop: 3 }} />
+@@ -394,4 +410,6 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
+   const [privacy, setPrivacy] = useState(false);
+   const [age, setAge] = useState(false);
++  // Nutzungsbedingungen des Betreibers (ab 0.4.22)
++  const [terms, setTerms] = useState(false);
+   const [busy, setBusy] = useState(false);
+   const [error, setError] = useState<unknown>(null);
+@@ -400,4 +418,5 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
+     : !displayName.trim() ? t('Bitte deinen Namen eingeben.')
+     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
++    : info.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
+     : !age ? t('Bitte bestätige das Mindestalter.')
+     : null;
+@@ -411,5 +430,6 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
+       const probe = saveConnection({ baseUrl: pending.baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, user: null });
+       const res = await apiFor(probe).register({
+-        inviteCode: code.trim(), registrationToken: pending.registrationToken, displayName: displayName.trim(), acceptPrivacy: true, ageConfirmed: true
++        inviteCode: code.trim(), registrationToken: pending.registrationToken, displayName: displayName.trim(), acceptPrivacy: true, ageConfirmed: true,
++        ...termsConsent(info)
+       });
+       const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
+@@ -447,4 +467,13 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
+         </span>
+       </label>
++      {info.termsUrl && (
++        <label className="check" style={{ alignItems: 'flex-start' }}>
++          <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} style={{ marginTop: 3 }} />
++          <span>
++            {t('Ich stimme den Nutzungsbedingungen von {operator} zu.', { operator: info.operator })}
++            {' '}<a href={info.termsUrl} target="_blank" rel="noreferrer">{t('Öffnen')}</a>
++          </span>
++        </label>
++      )}
+       <label className="check" style={{ alignItems: 'flex-start' }}>
+         <input type="checkbox" checked={age} onChange={(e) => setAge(e.target.checked)} style={{ marginTop: 3 }} />
+@@ -477,2 +506,7 @@ export function oidcErrorText(code: string | null): string {
+   }
+ }
++
++/** Zustimmung zu den Nutzungsbedingungen mitschicken, wenn der Server welche hat (ab 0.4.22) */
++function termsConsent(info: ServerInfo): { acceptTerms?: true; termsVersion?: number } {
++  return info.termsUrl && info.termsVersion ? { acceptTerms: true, termsVersion: info.termsVersion } : {};
++}
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 4a0ac9d..7b10aa7 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -5,4 +5,5 @@ import { DataSummary, openDataSummary } from '../components/DataSummary';
+ import { NowList, type NowItem } from '../components/NowList';
+ import { PrepCard } from '../components/PrepCard';
++import { TermsReminder } from '../components/Terms';
+ import { prepWhen } from '../prep/prep';
+ import { isDeletedMember } from '../api/types';
+@@ -108,4 +109,5 @@ export function Overview() {
+ 
+           <MusterBanner />
++          <TermsReminder conn={currentConnection()} />
+           <BibleSearch campaignId={campaignId} />
+           {campaign.archivedAt && (
+diff --git a/src/theme.css b/src/theme.css
+index 0111773..b28022d 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2153,2 +2153,6 @@ button.table-group-face {
+ .prep-chips .btn.chip { gap: 4px; }
+ .prep-line { display: flex; justify-content: space-between; min-height: 48px; align-items: center; color: var(--ink); text-decoration: none; }
++
++/* Nutzungsbedingungen und Impressum je Server (ab Schnittstelle 0.4.22) */
++.terms-reminder { gap: 8px; }
++.server-legal { display: flex; flex-direction: column; gap: 4px; }
