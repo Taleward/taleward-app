@@ -2,7 +2,7 @@
  * Taleward Web-App: kleiner Service Worker, damit die App sich auf dem Startbildschirm installieren lässt und
  * schnell startet. Er fasst NUR Dateien der App selbst an (gleiche Herkunft) – nie Anfragen an Vereinsserver.
  */
-const CACHE = 'taleward-app-v1';
+const CACHE = 'taleward-app-v2'; // v2: alte Fassung hatte auch Server-Antworten gespeichert
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
@@ -14,6 +14,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin) return; // Server-Anfragen unberührt lassen
   if (url.pathname.includes('/auth/app')) return; // Rückweg der Anmeldung (Ticket in der Adresse): nie speichern
+  // Läuft die App auf dem eigenen Server (z. B. /app/), liegt die Schnittstelle auf derselben Herkunft:
+  // nur Dateien unterhalb der App anfassen, nie die Schnittstelle oder Seiten des Servers
+  const scope = new URL(self.registration.scope).pathname;
+  if (!url.pathname.startsWith(scope) || url.pathname.includes('/api/')) return;
   if (req.mode === 'navigate') {
     // Seite selbst: immer frisch vom Netz, sonst die zuletzt gesehene Fassung
     e.respondWith(fetch(req).then((res) => {

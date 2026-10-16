@@ -372,7 +372,9 @@ function makeApi(conn: () => Connection) {
   releaseSeat: (campaignId: string, memberId: string) =>
     request<Member>('POST', `/campaigns/${campaignId}/members/${memberId}/release`),
 
-  sessions: (campaignId: string) => request<SessionSummary[]>('GET', `/campaigns/${campaignId}/sessions`),
+  // Die Schnittstelle legt keine Reihenfolge fest (Server liefern aufsteigend); die App rechnet mit „neueste zuerst“
+  sessions: (campaignId: string) =>
+    request<SessionSummary[]>('GET', `/campaigns/${campaignId}/sessions`).then((list) => [...list].sort((a, b) => b.number - a.number)),
   session: (id: string) => request<Session>('GET', `/sessions/${id}`),
   createSession: (campaignId: string, playedAt: string, attendees: Attendee[], title?: string) =>
     request<Session>('POST', `/campaigns/${campaignId}/sessions`, { body: { playedAt, attendees, title } }),
