@@ -17,4 +17,7 @@ test('javascript:, data: und Unsinn werden verworfen', () => {
 test('Server-Info wird bereinigt, andere Felder bleiben', () => {
   const info = withSafeLinks({ name: 'Verein', privacyPolicyUrl: 'javascript:alert(1)', appDownloadUrl: 'https://verein.de/taleward.apk' });
   assert.deepEqual(info, { name: 'Verein', privacyPolicyUrl: null, appDownloadUrl: 'https://verein.de/taleward.apk' });
+  const legal = withSafeLinks({ privacyPolicyUrl: null, legalNoticeUrl: 'data:text/html,x', termsUrl: 'https://verein.de/nutzungsbedingungen' });
+  assert.equal(legal.legalNoticeUrl, null);
+  assert.equal(legal.termsUrl, 'https://verein.de/nutzungsbedingungen');
 });

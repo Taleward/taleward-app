@@ -13,10 +13,13 @@ export function safeLink(url: string | null | undefined): string | null {
 }
 
 /** Server-Info mit geprüften Adressen */
-export function withSafeLinks<T extends { privacyPolicyUrl?: string | null; appDownloadUrl?: string | null }>(info: T): T {
+export function withSafeLinks<T extends { privacyPolicyUrl?: string | null; appDownloadUrl?: string | null; legalNoticeUrl?: string | null; termsUrl?: string | null }>(info: T): T {
   return {
     ...info,
     privacyPolicyUrl: safeLink(info.privacyPolicyUrl),
-    ...('appDownloadUrl' in info ? { appDownloadUrl: safeLink(info.appDownloadUrl) } : {})
+    ...('appDownloadUrl' in info ? { appDownloadUrl: safeLink(info.appDownloadUrl) } : {}),
+    // Impressum und Nutzungsbedingungen (ab 0.4.22)
+    ...('legalNoticeUrl' in info ? { legalNoticeUrl: safeLink(info.legalNoticeUrl) } : {}),
+    ...('termsUrl' in info ? { termsUrl: safeLink(info.termsUrl) } : {})
   };
 }

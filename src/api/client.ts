@@ -227,10 +227,13 @@ function makeApi(conn: () => Connection) {
     request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/login', { body: { username, password } }),
   me: () => request<User>('GET', '/me'),
   info: () => request<ServerInfo>('GET', '/info').then(withSafeLinks),
-  register: (data:
-    | { inviteCode: string; username: string; displayName: string; password: string; acceptPrivacy: true; ageConfirmed: true }
-    | { inviteCode: string; registrationToken: string; displayName: string; acceptPrivacy: true; ageConfirmed: true }) =>
+  /** acceptTerms und termsVersion ab 0.4.22, wenn der Server Nutzungsbedingungen meldet */
+  register: (data: ({ inviteCode: string; username: string; displayName: string; password: string; acceptPrivacy: true; ageConfirmed: true }
+    | { inviteCode: string; registrationToken: string; displayName: string; acceptPrivacy: true; ageConfirmed: true })
+    & { acceptTerms?: true; termsVersion?: number }) =>
     request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/register', { body: data }),
+  /** Neuer Fassung der Nutzungsbedingungen zustimmen (ab 0.4.22) */
+  acceptTerms: (version: number) => request<User>('PUT', '/me/terms', { body: { accept: true, version } }),
   exportMe: () => request<Blob>('GET', '/me/export'),
   /** Konten mit Passwort: { password }, ohne Passwort: { confirmUsername } */
   deleteMe: (confirm: { password: string } | { confirmUsername: string }) => request<void>('DELETE', '/me', { body: confirm }),

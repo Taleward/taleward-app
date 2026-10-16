@@ -35,6 +35,9 @@ export interface User {
   hasPassword?: boolean;
   /** Verbundene Anmeldedienste */
   providers?: AuthProviderId[];
+  /** Zuletzt zugestimmte Fassung der Nutzungsbedingungen (ab 0.4.22); null = noch nie */
+  termsAcceptedVersion?: number | null;
+  termsAcceptedAt?: string | null;
 }
 
 export type AuthProviderId = 'google' | 'discord' | 'apple' | 'microsoft';
@@ -656,6 +659,12 @@ export interface ServerInfo {
   /** Unterstützte Anmeldearten; später z. B. 'oidc' für einen zentralen Anmeldedienst oder 'passkey' */
   authMethods: string[];
   privacyPolicyUrl: string | null;
+  /** Impressum des Betreibers (ab 0.4.22) */
+  legalNoticeUrl?: string | null;
+  /** Nutzungsbedingungen des Betreibers (ab 0.4.22 immer gesetzt) */
+  termsUrl?: string | null;
+  /** Fassung der Nutzungsbedingungen; höher als User.termsAcceptedVersion = neu zustimmen (ab 0.4.22) */
+  termsVersion?: number | null;
   /** Mindestalter für ein eigenes Konto (darunter nur mit Zustimmung der Eltern) */
   minAge: number;
   /** null = nur eigene Transkription; sonst Name des freigegebenen externen Anbieters (ab 0.3.4) */
