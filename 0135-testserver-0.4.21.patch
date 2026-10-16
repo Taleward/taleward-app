@@ -1,0 +1,279 @@
+From 0bc3913029f8bcb27433ef3a52f5ad7792a0739d Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 16:28:14 +0200
+Subject: [PATCH 135/138] =?UTF-8?q?Testserver=20f=C3=BCr=20Schnittstelle?=
+ =?UTF-8?q?=200.4.21?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Hinweise auf Geheimes im Kapitel, Auch genannt, Vorschläge mit Treffer in der Bibel und Ergänzen, drei Textproben und Hinweis je Stimme.
+---
+ src/mocks/checks.ts   | 79 +++++++++++++++++++++++++++++++++++++++++++
+ src/mocks/db.ts       | 16 +++++++--
+ src/mocks/handlers.ts | 69 ++++++++++++++++++++++++++++++-------
+ 3 files changed, 148 insertions(+), 16 deletions(-)
+ create mode 100644 src/mocks/checks.ts
+
+diff --git a/src/mocks/checks.ts b/src/mocks/checks.ts
+new file mode 100644
+index 0000000..01d0560
+--- /dev/null
++++ b/src/mocks/checks.ts
+@@ -0,0 +1,79 @@
++import type { Entry, ProposalMatch, RecapGmWarning } from '../api/types';
++
++/*
++ * Testserver (Schnittstelle 0.4.21): grobe Nachbildung der Server-Prüfungen ohne Sprachmodell –
++ * „Auch genannt“ bereinigen, „klingt wie“ bei neuen Vorschlägen, Geheimes im Kapitel. Der echte Server rechnet
++ * genauer (Kölner Phonetik, Zeichenabstand); hier reicht es, damit die Oberfläche etwas zu zeigen hat.
++ */
++
++const ARTICLE = /^(der|die|das|den|dem|des|the)\s+/i;
++const norm = (s: string) => s.toLocaleLowerCase('de').normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9ß ]/g, ' ').replace(/\s+/g, ' ').trim();
++
++export function cleanAliases(raw: unknown, name: string): string[] {
++  if (!Array.isArray(raw)) return [];
++  const seen = new Set([norm(name)]);
++  const out: string[] = [];
++  for (const a of raw) {
++    if (typeof a !== 'string') continue;
++    const v = a.trim().slice(0, 40).trim();
++    if (!v || seen.has(norm(v))) continue;
++    seen.add(norm(v));
++    out.push(v);
++    if (out.length === 10) break;
++  }
++  return out;
++}
++
++function distance(a: string, b: string): number {
++  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
++  for (let j = 1; j <= b.length; j++) d[0][j] = j;
++  for (let i = 1; i <= a.length; i++) {
++    for (let j = 1; j <= b.length; j++) {
++      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
++    }
++  }
++  return d[a.length][b.length];
++}
++
++const close = (a: string, b: string) => a === b || (Math.min(a.length, b.length) >= 4 && distance(a, b) <= (a.length >= 7 ? 2 : 1));
++
++/** Bester Treffer für einen „neu anlegen“-Vorschlag unter Namen und Aliassen der Kampagne */
++export function findMatch(title: string, list: Entry[]): ProposalMatch | null {
++  const t = norm(title.replace(ARTICLE, ''));
++  if (!t) return null;
++  const tw = t.split(' ');
++  for (const kind of ['spelling', 'part_name'] as const) {
++    for (const e of list) {
++      for (const cand of [e.name, ...(e.aliases ?? [])]) {
++        const c = norm(cand.replace(ARTICLE, ''));
++        const cw = c.split(' ');
++        const hit = kind === 'spelling'
++          ? close(t, c)
++          : tw.length !== cw.length && (tw.length < cw.length ? tw : cw).every((w) => (tw.length < cw.length ? cw : tw).some((x) => close(w, x)));
++        if (hit) return { entryId: e.id, name: e.name, matchedName: cand, entryType: e.type, kind };
++      }
++    }
++  }
++  return null;
++}
++
++/** Namen geheimer bzw. teilweise verborgener Einträge im Kapiteltext (mit einfacher Beugung: „den Raben“) */
++export function secretWarnings(text: string, list: Entry[], skipEntryIds: string[]): RecapGmWarning[] {
++  const paras = text.split(/\n\s*\n/);
++  const out: RecapGmWarning[] = [];
++  for (const e of list) {
++    const hidden = e.visibility === 'gm_only' || (e.hiddenFromMemberIds?.length ?? 0) > 0;
++    if (!hidden || skipEntryIds.includes(e.id)) continue;
++    for (const n of [e.name, ...(e.aliases ?? [])]) {
++      const core = n.replace(ARTICLE, '').trim();
++      if (core.length < 3) continue;
++      const re = new RegExp(`(^|[^\\p{L}])(${core.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:n|en|s|es)?)(?![\\p{L}])`, 'iu');
++      const at = paras.map((p, i) => (re.test(p) ? i : -1)).filter((i) => i >= 0);
++      if (!at.length) continue;
++      const found = paras[at[0]].match(re)?.[2] ?? core;
++      out.push({ code: 'secret_entry_name', entryIds: [e.id], names: [found], paragraphs: at });
++      break;
++    }
++  }
++  return out;
++}
+diff --git a/src/mocks/db.ts b/src/mocks/db.ts
+index 5792aab..c95417d 100644
+--- a/src/mocks/db.ts
++++ b/src/mocks/db.ts
+@@ -222,4 +222,7 @@ export function proposalsFor(sessionId: string): Proposal[] {
+       visibilityReason: 'Der Name fiel am Tisch: Die Gruppe hat einen Boten mit Rabenfeder gestellt.',
+       evidence: [{ start: 7310, quote: 'Der Bote sagt, er dient dem Raben.' }] }),
++    // Klingt wie „Meister Orrin Kalk“ (0.4.21: Vorschlag wird dort ergänzt statt doppelt angelegt)
++    base('p7', { title: 'Orin Kalk', detail: 'Soll im Hafenviertel von Kaltenfurt gesehen worden sein.',
++      evidence: [{ start: 6630, quote: 'Ein Glockengießer namens Orin? Der war letzte Woche am Hafen.' }] }),
+     base('p5', { entryType: 'other', title: 'Bruder Anselm ist ein Vampir', detail: 'Wahrscheinlich ein Scherz am Tisch – an dieser Stelle wurde gelacht.',
+       confidence: 0.2, flags: ['joke_suspected', 'low_confidence'], evidence: [{ start: 8030, quote: 'Anselm trinkt ja auch nie Wein … verdächtig!' }] })
+@@ -231,7 +234,14 @@ export const proposals: Proposal[] = proposalsFor('s-c-grau-13');
+ export function speakersFor(): Speaker[] {
+   return [
+-    { id: 'sp1', label: 'Stimme 1', speakingSeconds: 4210, sampleText: '„Ich bin Robin und leite heute die Runde.“', suggestedMemberId: 'm-robin', confidence: 0.95, source: 'intro_round' },
+-    { id: 'sp2', label: 'Stimme 2', speakingSeconds: 2380, sampleText: '„Jonas, ich spiele Thorwald, den Schmied.“', suggestedMemberId: 'm-jonas', confidence: 0.93, source: 'intro_round' },
+-    { id: 'sp3', label: 'Stimme 3', speakingSeconds: 1970, sampleText: '„Lea hier – Ilsabet, die Heilerin.“', suggestedMemberId: 'm-lea', confidence: 0.72, source: 'intro_round' },
++    { id: 'sp1', label: 'Stimme 1', speakingSeconds: 4210, sampleText: '„Ich bin Robin und leite heute die Runde.“', suggestedMemberId: 'm-robin', confidence: 0.95, source: 'intro_round',
++      // Ab 0.4.21 drei Textproben je Stimme
++      samples: [{ start: 12, text: '„Ich bin Robin und leite heute die Runde.“' }, { start: 1520, text: '„Ich bin Hauptfrau Dornfeld, und ihr kommt hier nicht rein.“' }, { start: 5400, text: '„Die Kapelle steht halb im Wasser.“' }] },
++    { id: 'sp2', label: 'Stimme 2', speakingSeconds: 2380, sampleText: '„Jonas, ich spiele Thorwald, den Schmied.“', suggestedMemberId: 'm-jonas', confidence: 0.93, source: 'intro_round',
++      samples: [{ start: 1804, text: '„Ich lege ihm die Hand auf die Stirn und spreche den Heilsegen.“' }, { start: 1830, text: '„Klar, ich seh mir den Wachmann an.“' }, { start: 5120, text: '„Ich bete leise für die Ertrunkenen.“' }],
++      // Stimme 2 wird mit „Ilsabet“ angesprochen – vermutlich mit Stimme 3 vertauscht
++      hint: { code: 'addressed_as', name: 'Ilsabet', memberId: 'm-lea', count: 4 } },
++    { id: 'sp3', label: 'Stimme 3', speakingSeconds: 1970, sampleText: '„Lea hier – Ilsabet, die Heilerin.“', suggestedMemberId: 'm-lea', confidence: 0.72, source: 'intro_round',
++      samples: [{ start: 2410, text: '„Ich hau mit dem Hammer drauf, bis das Schloss nachgibt.“' }, { start: 6190, text: '„Ich stecke den Schlüssel ein.“' }, { start: 6480, text: '„Ich, Thorwald, schwöre: Den Raben stellen wir noch vor dem Winter.“' }],
++      hint: { code: 'self_named', name: 'Thorwald', memberId: 'm-jonas', count: 2 } },
+     { id: 'sp4', label: 'Stimme 4', speakingSeconds: 2105, sampleText: '„Kemal. Bruder Anselm, immer noch durstig.“', suggestedMemberId: 'm-kemal', confidence: 0.88, source: 'intro_round' },
+     { id: 'sp5', label: 'Stimme 5', speakingSeconds: 1640, sampleText: '„Warte, wer hat den Schlüssel eingesteckt?“', suggestedMemberId: null, confidence: 0.3, source: 'none' }
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 0b6d2c6..7146670 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -2,4 +2,5 @@ import { http, HttpResponse, delay } from 'msw';
+ import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
+ import { textToPdf } from './minipdf';
++import { cleanAliases, findMatch, secretWarnings } from './checks';
+ 
+ /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
+@@ -193,8 +194,21 @@ function transcriptFor(sessionId: string) {
+ }
+ 
++/** 0.4.21: „neu anlegen“-Vorschläge gegen die Bibel prüfen (nur SL bekommt Vorschläge) */
++function withMatch(p: Proposal): Proposal {
++  if (p.action !== 'create' || p.source === 'character') return p;
++  const campaignId = sessions.find((x) => x.id === p.sessionId)?.campaignId ?? documents.find((d) => d.id === p.documentId)?.campaignId;
++  return { ...p, match: findMatch(p.title, entries.filter((e) => e.campaignId === campaignId)), mergeIntoEntryId: p.mergeIntoEntryId ?? null };
++}
++
+ /** Recap so, wie diese Person ihn sehen darf: den Prüfteil bekommt nur die SL */
+ function recapFor(r: Recap, gm: boolean): Recap {
+-  if (gm) return withRevision(r);
+-  const { review: _r, revision: _v, ...rest } = r;
++  if (gm) {
++    // 0.4.21: Geheimes im Kapitel – nur für die SL; ein angenommener reveal-Vorschlag zählt nicht
++    const s = sessions.find((x) => x.id === r.sessionId);
++    const revealed = proposals.filter((p) => p.sessionId === r.sessionId && p.action === 'reveal' && p.decision === 'accepted').map((p) => p.targetEntryId ?? '');
++    const list = s ? entries.filter((e) => e.campaignId === s.campaignId) : [];
++    return { ...withRevision(r), gmWarnings: r.publishedAt ? [] : secretWarnings(r.text, list, revealed) };
++  }
++  const { review: _r, revision: _v, gmWarnings: _w, ...rest } = r;
+   return rest;
+ }
+@@ -564,5 +578,5 @@ export const handlers = [
+     if (hostKey(request) === DEMO_HOST) {
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.20', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.21', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
+@@ -574,5 +588,5 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.20',
++      apiVersion: nachbar ? '0.3.9' : '0.4.21',
+       serverId: nachbar ? undefined : 'testserver',
+       registration: 'invite_only',
+@@ -1790,12 +1804,18 @@ export const handlers = [
+   }),
+ 
+-  http.get(`${B}/sessions/:id/speakers/:sid/sample`, () =>
+-    new HttpResponse(toneWav(), { headers: { 'Content-Type': 'audio/wav' } })
+-  ),
++  http.get(`${B}/sessions/:id/speakers/:sid/sample`, ({ params, request }) => {
++    // 0.4.21: ?index= für eine der drei Textproben
++    const index = new URL(request.url).searchParams.get('index');
++    if (index !== null) {
++      const sp = (speakerLists[params.id as string] ?? speakersFor()).find((x) => x.id === params.sid);
++      if (!sp || !/^[0-2]$/.test(index) || Number(index) >= (sp.samples?.length ?? 0)) return err(404, 'not_found', 'Diese Hörprobe gibt es nicht.');
++    }
++    return new HttpResponse(toneWav(), { headers: { 'Content-Type': 'audio/wav' } });
++  }),
+ 
+   http.get(`${B}/sessions/:id/proposals`, ({ params }) => {
+     const s = sessions.find((x) => x.id === params.id);
+     if (!s || !isGm(s.campaignId)) return err(403, 'forbidden', 'Nur für die Spielleitung.');
+-    return HttpResponse.json(proposals.filter((p) => p.sessionId === s.id));
++    return HttpResponse.json(proposals.filter((p) => p.sessionId === s.id).map(withMatch));
+   }),
+ 
+@@ -1813,7 +1833,16 @@ export const handlers = [
+     if (body.detail !== undefined) p.detail = body.detail;
+     if (body.visibility) p.suggestedVisibility = body.visibility;
++    // 0.4.21: bei einem vorhandenen Eintrag ergänzen statt neu anlegen
++    if (body.mergeIntoEntryId !== undefined) {
++      const target = body.mergeIntoEntryId ? entries.find((e) => e.id === body.mergeIntoEntryId) : null;
++      const campaignId = sessions.find((x) => x.id === p.sessionId)?.campaignId ?? documents.find((d) => d.id === p.documentId)?.campaignId;
++      if (p.action !== 'create' || (body.mergeIntoEntryId && (!target || target.campaignId !== campaignId))) {
++        return err(400, 'invalid_input', 'Dieser Vorschlag lässt sich dort nicht ergänzen.');
++      }
++      p.mergeIntoEntryId = body.mergeIntoEntryId;
++    }
+     // Mitgebrachte Welt (0.4.7): Entscheidung wirkt sofort
+     if (p.source === 'character' && body.decision && body.decision !== 'open') applyCharacterProposal(p);
+-    return HttpResponse.json(p);
++    return HttpResponse.json(withMatch(p));
+   }),
+ 
+@@ -1857,5 +1886,5 @@ export const handlers = [
+     }
+     if (body.parts !== undefined) r.parts = body.parts.map((x) => ({ title: x.title.trim(), firstParagraph: x.firstParagraph }));
+-    return HttpResponse.json(r);
++    return HttpResponse.json(recapFor(r, true));
+   }),
+ 
+@@ -1900,5 +1929,5 @@ export const handlers = [
+     }
+     r.revision = null;
+-    return HttpResponse.json(r);
++    return HttpResponse.json(recapFor(r, true));
+   }),
+ 
+@@ -1954,5 +1983,5 @@ export const handlers = [
+     }
+     if (r?.review) Object.assign(r.review, { stale: false, checkedAt: new Date().toISOString() });
+-    return HttpResponse.json(r);
++    return HttpResponse.json(recapFor(r, true));
+   }),
+ 
+@@ -1964,4 +1993,15 @@ export const handlers = [
+       if (p.decision === 'open') p.decision = 'rejected';
+       if (p.decision !== 'accepted') continue;
++      const merge = p.action === 'create' && p.mergeIntoEntryId ? entries.find((e) => e.id === p.mergeIntoEntryId) : undefined;
++      if (merge) {
++        // 0.4.21: wie update anhängen, abweichende Schreibweise zu „Auch genannt“; Sichtbarkeit bleibt
++        if (p.detail && !merge.summary.includes(p.detail)) merge.summary = merge.summary ? `${merge.summary}\n\n${p.detail}` : p.detail;
++        if (p.gmNotes) merge.gmNotes = merge.gmNotes ? `${merge.gmNotes}\n\n${p.gmNotes}` : p.gmNotes;
++        merge.aliases = cleanAliases([...(merge.aliases ?? []), p.title], merge.name);
++        merge.lastSessionNumber = s.number;
++        merge.mentions.push({ sessionNumber: s.number, note: p.detail });
++        merge.updatedAt = new Date().toISOString();
++        continue;
++      }
+       const target = p.targetEntryId ? entries.find((e) => e.id === p.targetEntryId) : undefined;
+       if (target && p.action === 'reveal') {
+@@ -2022,5 +2062,5 @@ export const handlers = [
+         .map((e) => (gm ? e : { ...e, gmNotes: undefined, hiddenFromMemberIds: undefined, formerHolderMemberId: undefined, links: visibleLinks(e.links, false) }))
+         .filter((e) => !type || e.type === type)
+-        .filter((e) => !q || (e.name + ' ' + e.summary + ' ' + (gm ? e.gmNotes ?? '' : '')).toLowerCase().includes(q))
++        .filter((e) => !q || (e.name + ' ' + (e.aliases ?? []).join(' ') + ' ' + e.summary + ' ' + (gm ? e.gmNotes ?? '' : '')).toLowerCase().includes(q))
+         .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+     );
+@@ -2040,4 +2080,6 @@ export const handlers = [
+     }
+     Object.assign(e, Object.fromEntries(Object.entries(body).filter(([k]) => ['name', 'summary', 'gmNotes', 'visibility', 'status', 'holderMemberId', 'type', 'hiddenFromMemberIds', 'links'].includes(k))));
++    // 0.4.21: „Auch genannt“ bereinigt speichern (ohne Namen, ohne Doppelte)
++    if (body.aliases !== undefined || body.name !== undefined) e.aliases = cleanAliases(body.aliases ?? e.aliases ?? [], e.name);
+     e.updatedAt = new Date().toISOString();
+     return HttpResponse.json(e);
+@@ -2089,4 +2131,5 @@ export const handlers = [
+     const e = {
+       ...(body as EntryInput),
++      aliases: cleanAliases(body.aliases, body.name),
+       // Wie der Server: ohne Angabe nur für die SL sichtbar
+       visibility: body.visibility ?? 'gm_only', id: 'e-' + crypto.randomUUID().slice(0, 8), campaignId: params.id as string,
