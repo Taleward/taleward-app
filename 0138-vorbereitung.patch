@@ -1,0 +1,314 @@
+From f1f3ebe1ed02e85cac23296de670ff068574ffca Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 16:28:41 +0200
+Subject: [PATCH 138/138] =?UTF-8?q?Vorbereitung=20auf=20die=20n=C3=A4chste?=
+ =?UTF-8?q?=20Runde,=20kleine=20Korrekturen=20auf=20der=20=C3=9Cbersicht?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Karte für die Spielleitung, sobald ein Termin steht: offene Fäden des letzten Kapitels, NSC und Orte der letzten Runde, neue Kommentare zu älteren Kapiteln; am Spieltag ganz oben. Terminkarte entfällt, solange die eigene Stimme fehlt; genauere Zeile bei einer Bitte um Auswertung; Schriftgröße auch für offene Fäden, Zitate und das große Charakterbild.
+---
+ scripts/tests/prep.test.mjs | 34 +++++++++++++++
+ src/components/Avatar.tsx   |  2 +-
+ src/components/PrepCard.tsx | 83 +++++++++++++++++++++++++++++++++++++
+ src/pages/Overview.tsx      | 39 +++++++++++++----
+ src/prep/prep.ts            | 42 +++++++++++++++++++
+ 5 files changed, 192 insertions(+), 8 deletions(-)
+ create mode 100644 scripts/tests/prep.test.mjs
+ create mode 100644 src/components/PrepCard.tsx
+ create mode 100644 src/prep/prep.ts
+
+diff --git a/scripts/tests/prep.test.mjs b/scripts/tests/prep.test.mjs
+new file mode 100644
+index 0000000..1d667eb
+--- /dev/null
++++ b/scripts/tests/prep.test.mjs
+@@ -0,0 +1,34 @@
++// Vorbereitung auf die nächste Runde: wann die Karte steht, welche Einträge hineingehören
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { lastRoundEntries, needsDate, prepWhen } from '../../src/prep/prep.ts';
++
++const at = (s) => new Date(s);
++
++test('Ohne Termin oder lange nach dem Beginn: keine Karte', () => {
++  assert.equal(prepWhen(null, at('2026-10-17T10:00:00')), 'none');
++  assert.equal(prepWhen('kaputt', at('2026-10-17T10:00:00')), 'none');
++  assert.equal(prepWhen('2026-10-17T19:00:00', at('2026-10-18T02:00:00')), 'none');
++});
++
++test('Spieltag und davor', () => {
++  assert.equal(prepWhen('2026-10-17T19:00:00', at('2026-10-17T09:00:00')), 'today');
++  assert.equal(prepWhen('2026-10-17T19:00:00', at('2026-10-17T22:00:00')), 'today');
++  assert.equal(prepWhen('2026-10-17T19:00:00', at('2026-10-15T09:00:00')), 'upcoming');
++});
++
++test('Datum erst ab einer Woche Abstand', () => {
++  assert.equal(needsDate('2026-10-17T19:00:00', at('2026-10-15T09:00:00')), false);
++  assert.equal(needsDate('2026-10-31T19:00:00', at('2026-10-15T09:00:00')), true);
++});
++
++test('NSC und Orte der letzten Runde, NSC zuerst', () => {
++  const list = [
++    { type: 'location', name: 'Senkmoor', lastSessionNumber: 8 },
++    { type: 'npc', name: 'Ohm Tessel', lastSessionNumber: 8 },
++    { type: 'npc', name: 'Edmar Quell', lastSessionNumber: 8 },
++    { type: 'npc', name: 'Rell', lastSessionNumber: 7 },
++    { type: 'quest', name: 'Livs Verschwinden', lastSessionNumber: 8 }
++  ];
++  assert.deepEqual(lastRoundEntries(list, 8).map((e) => e.name), ['Edmar Quell', 'Ohm Tessel', 'Senkmoor']);
++});
+diff --git a/src/components/Avatar.tsx b/src/components/Avatar.tsx
+index e02fa6d..4f79569 100644
+--- a/src/components/Avatar.tsx
++++ b/src/components/Avatar.tsx
+@@ -66,5 +66,5 @@ function PortraitLightbox({ campaignId, member, onClose }: { campaignId: string;
+       {failed && <div style={{ color: '#f3f3ee' }}>{t('Das Bild konnte nicht geladen werden.')}</div>}
+       <div style={{ textAlign: 'center', color: '#f3f3ee' }}>
+-        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 700 }}>{member.characterName ?? member.displayName}</div>
++        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 'calc(22px * var(--ts))', fontWeight: 700 }}>{member.characterName ?? member.displayName}</div>
+         {member.characterName && <div style={{ color: '#c9d0d2' }}>{t('gespielt von {name}', { name: member.displayName })}</div>}
+       </div>
+diff --git a/src/components/PrepCard.tsx b/src/components/PrepCard.tsx
+new file mode 100644
+index 0000000..0d0f90c
+--- /dev/null
++++ b/src/components/PrepCard.tsx
+@@ -0,0 +1,83 @@
++import { useEffect, useState } from 'react';
++import { Link } from 'react-router-dom';
++import { api } from '../api/client';
++import { p } from '../api/connections';
++import type { Campaign, Entry, SessionSummary } from '../api/types';
++import { locale, t } from '../i18n';
++import { lastRoundEntries, needsDate, type PrepWhen } from '../prep/prep';
++import { IconLock } from './Icons';
++
++const MAX_THREADS = 5;
++
++/** „Samstag, 19:00“, eine Woche und mehr entfernt „Samstag, 31. Oktober, 19:00“, am Spieltag „Heute, 19:00“ */
++function when(iso: string, today: boolean): string {
++  const d = new Date(iso);
++  const time = d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
++  if (today) return t('Heute, {time}', { time });
++  const day = d.toLocaleDateString(locale(), needsDate(iso, new Date()) ? { weekday: 'long', day: 'numeric', month: 'long' } : { weekday: 'long' });
++  return `${day}, ${time}`;
++}
++
++/**
++ * Vorbereitung auf die nächste Runde (nur SL), sobald ein Termin steht: offene Fäden des letzten Kapitels, NSC und
++ * Orte der letzten Runde, neue Kommentare zu älteren Kapiteln. Nur Bestätigtes, kein Sprachmodell. Offene Vorschläge
++ * stehen schon in „Jetzt dran“, neue Kommentare zum letzten Kapitel auf dessen Karte – darum hier nicht noch einmal.
++ */
++export function PrepCard({ campaign, sessions, phase }: { campaign: Campaign; sessions: SessionSummary[]; phase: Exclude<PrepWhen, 'none'> }) {
++  const latest = sessions.find((s) => s.state === 'published') ?? null;
++  const [threads, setThreads] = useState<string[]>([]);
++  const [entries, setEntries] = useState<Entry[]>([]);
++
++  useEffect(() => {
++    if (!latest) return;
++    let gone = false;
++    api.recap(latest.id).then((r) => { if (!gone) setThreads(r.openThreads ?? []); }).catch(() => undefined);
++    api.entries(campaign.id).then((list) => { if (!gone) setEntries(lastRoundEntries(list, latest.number)); }).catch(() => undefined);
++    return () => { gone = true; };
++  }, [campaign.id, latest?.id, latest?.number]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  const older = sessions.filter((s) => s.state === 'published' && s.id !== latest?.id && (s.unreadComments ?? 0) > 0).slice(0, 3);
++  const bible = (name: string) => p(`/k/${campaign.id}/bibel?q=${encodeURIComponent(name)}`);
++
++  return (
++    <section className={phase === 'today' ? 'card prep-card today' : 'card prep-card'} aria-labelledby="prep-title">
++      <span className="overline row" style={{ gap: 6 }}>
++        {t('Nächste Runde')} · <IconLock size={12} /> {t('nur für dich')}
++      </span>
++      <h2 id="prep-title" className="prep-when">{t('Für {when}', { when: when(campaign.nextSessionAt!, phase === 'today') })}</h2>
++
++      {latest && threads.length > 0 && (
++        <div className="prep-part">
++          <h3 className="prep-head">{t('Offen aus Kapitel {n}', { n: latest.number })}</h3>
++          <ul className="prep-threads">
++            {threads.slice(0, MAX_THREADS).map((x) => (
++              <li key={x}><Link to={p(`/s/${latest.id}/recap`)}>{x}</Link></li>
++            ))}
++          </ul>
++        </div>
++      )}
++
++      {latest && entries.length > 0 && (
++        <div className="prep-part">
++          <h3 className="prep-head">{t('Zuletzt dabei')}</h3>
++          <div className="prep-chips">
++            {entries.map((e) => (
++              <Link key={e.id} className="btn small chip" to={bible(e.name)}>
++                {e.visibility === 'gm_only' && <IconLock size={12} />}{e.name}
++              </Link>
++            ))}
++          </div>
++        </div>
++      )}
++
++      {older.map((s) => (
++        <Link key={s.id} className="prep-line" to={p(`/s/${s.id}/recap`)}>
++          {t('Neue Kommentare zu Kapitel {n}', { n: s.number })} <span aria-hidden="true">›</span>
++        </Link>
++      ))}
++
++      {!latest && <span className="muted small">{t('Nach der ersten Runde stehen hier offene Fäden und wer zuletzt dabei war.')}</span>}
++      <Link className="linklike small tap-link" to={p(`/k/${campaign.id}/termin`)} style={{ alignSelf: 'flex-start' }}>{t('Termin ansehen')}</Link>
++    </section>
++  );
++}
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 543789e..4a0ac9d 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -4,4 +4,6 @@ import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnal
+ import { DataSummary, openDataSummary } from '../components/DataSummary';
+ import { NowList, type NowItem } from '../components/NowList';
++import { PrepCard } from '../components/PrepCard';
++import { prepWhen } from '../prep/prep';
+ import { isDeletedMember } from '../api/types';
+ import { InviteBox } from '../components/InviteBox';
+@@ -22,5 +24,5 @@ import { useNavigate } from 'react-router-dom';
+ import { api } from '../api/client';
+ import { useAuth } from '../auth/AuthContext';
+-import type { Campaign, GameSystem, GmNotice, Member, ServerInfo, SessionSummary, Usage } from '../api/types';
++import type { Campaign, CharacterAnalysis, GameSystem, GmNotice, Member, ServerInfo, SessionSummary, Usage } from '../api/types';
+ import { IconCheck, IconInfo, IconLock, IconScreen, IconSearch } from '../components/Icons';
+ import { LinkButtons, safeLinks } from '../components/Links';
+@@ -39,4 +41,6 @@ export function Overview() {
+   const [error, setError] = useState<unknown>(null);
+   const [pickingCover, setPickingCover] = useState(false);
++  // Für die Zeile „… möchte den Hintergrund von … auswerten lassen“ in „Jetzt dran“
++  const [analyses, setAnalyses] = useState<CharacterAnalysis[]>([]);
+ 
+   const load = async () => {
+@@ -58,4 +62,9 @@ export function Overview() {
+ 
+   const gm = campaign?.myRole === 'gm';
++  const wantsAnalyses = gm && apiAtLeast('0.4.18') && !!campaign?.gmNotices?.some((n) => n.code === 'character_analysis_pending');
++  useEffect(() => {
++    if (!wantsAnalyses) return;
++    api.characterAnalyses(campaignId).then(setAnalyses).catch(() => undefined);
++  }, [campaignId, wantsAnalyses, campaign]);
+   const { user } = useAuth();
+   const me = campaign?.members.find((m) => m.userId === user?.id);
+@@ -67,4 +76,7 @@ export function Overview() {
+   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
+   const latest = sessions?.find((s) => s.state === 'published');
++  // Vorbereitung auf die nächste Runde (nur SL, sobald ein Termin steht); am Spieltag ganz oben
++  const prep = gm && campaign && !campaign.archivedAt && sessions ? prepWhen(campaign.nextSessionAt, new Date()) : 'none';
++  const prepCard = prep !== 'none' && campaign && sessions ? <PrepCard campaign={campaign} sessions={sessions} phase={prep} /> : null;
+ 
+   return (
+@@ -111,5 +123,6 @@ export function Overview() {
+           {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
+           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
+-          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, load)} />
++          {prep === 'today' && prepCard}
++          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)} />
+ 
+           {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
+@@ -128,5 +141,8 @@ export function Overview() {
+             </Link>
+           )}
+-          {/* Nächste Runde */}
++          {prep === 'upcoming' && prepCard}
++          {/* Nächste Runde – fehlt die eigene Stimme ohne festen Termin, steht es schon in „Jetzt dran“; die
++              Vorbereitung der SL nennt den Termin selbst */}
++          {prep === 'none' && !(campaign.datePollNeedsMyVote && !campaign.nextSessionAt) && (
+           <Link to={p(`/k/${campaignId}/termin`)} className="card">
+             <span className="overline">{t('Nächste Runde')}</span>
+@@ -138,4 +154,5 @@ export function Overview() {
+             </span>
+           </Link>
++          )}
+ 
+ 
+@@ -739,5 +756,5 @@ function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNoti
+  * die SL, eigener Charakter, Terminabstimmung. Hinweise klappen ihre Entscheidung auf, alles andere führt zur Seite.
+  */
+-function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, onDone: () => void): NowItem[] {
++function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, analyses: CharacterAnalysis[], onDone: () => void): NowItem[] {
+   const items: NowItem[] = [];
+   if (gm) {
+@@ -757,5 +774,5 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
+     }
+     for (const { notice, hidden } of mergeJoinNotices(campaign.gmNotices ?? [])) {
+-      const item = noticeItem(campaign, notice, hidden, info, onDone);
++      const item = noticeItem(campaign, notice, hidden, info, analyses, onDone);
+       if (item) items.push(item);
+     }
+@@ -771,12 +788,20 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
+ 
+ /** Hinweis an die SL (ab 0.4.7) als Zeile; dieselben Bedingungen wie in den Karten, damit keine leere Zeile bleibt */
+-function noticeItem(campaign: Campaign, notice: GmNotice, hidden: GmNotice | undefined, info: ServerInfo | null, onDone: () => void): NowItem | null {
++function noticeItem(campaign: Campaign, notice: GmNotice, hidden: GmNotice | undefined, info: ServerInfo | null, analyses: CharacterAnalysis[], onDone: () => void): NowItem | null {
+   const m = campaign.members.find((x) => x.id === notice.memberId);
+   const key = 'n-' + notice.id;
+   switch (notice.code) {
+     case 'character_analysis_pending':
++    {
+       if (!apiAtLeast('0.4.18') || !m || isDeletedMember(m)) return null;
+-      return { key, label: t('{person} bittet um eine Auswertung', { person: m.displayName }),
++      // Ist die Auswertung geladen, sagt die Zeile schon, worum es geht, und die Karte wiederholt es nicht
++      const a = analyses.find((x) => x.id === notice.analysisId);
++      const name = m.characterName ?? m.displayName;
++      const label = !a ? t('{person} bittet um eine Auswertung', { person: m.displayName })
++        : a.source === 'backstory' ? t('{person} möchte den Hintergrund von {name} auswerten lassen', { person: m.displayName, name })
++          : t('{person} möchte den Charakterbogen „{title}“ auswerten lassen', { person: m.displayName, title: a.title });
++      return { key, label, hideDetailTitle: !!a,
+         detail: <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} /> };
++    }
+     case 'seat_claimed':
+       if (!m) return null;
+diff --git a/src/prep/prep.ts b/src/prep/prep.ts
+new file mode 100644
+index 0000000..79248fc
+--- /dev/null
++++ b/src/prep/prep.ts
+@@ -0,0 +1,42 @@
++/**
++ * Vorbereitung auf die nächste Runde (nur SL): wann die Karte erscheint und was hineingehört.
++ * Ohne Laufzeit-Importe, damit es sich testen lässt (scripts/tests/prep.test.mjs).
++ */
++
++/** Nach dem Beginn der Runde bleibt die Karte noch so lange stehen (die Runde läuft ja noch) */
++export const AFTER_START_MS = 6 * 3600 * 1000;
++
++export type PrepWhen = 'none' | 'upcoming' | 'today';
++
++const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
++
++/** none = kein Termin oder Runde vorbei; today = Spieltag (Karte nach oben); upcoming = Termin steht */
++export function prepWhen(nextSessionAt: string | null | undefined, now: Date): PrepWhen {
++  if (!nextSessionAt) return 'none';
++  const at = new Date(nextSessionAt);
++  if (Number.isNaN(at.getTime())) return 'none';
++  if (now.getTime() > at.getTime() + AFTER_START_MS) return 'none';
++  return sameDay(at, now) ? 'today' : 'upcoming';
++}
++
++/** Mehr als sechs Tage entfernt: mit Datum, sonst reicht der Wochentag */
++export function needsDate(nextSessionAt: string, now: Date): boolean {
++  return new Date(nextSessionAt).getTime() - now.getTime() > 6 * 24 * 3600 * 1000;
++}
++
++export interface PrepEntryLike {
++  type: string;
++  name: string;
++  lastSessionNumber: number | null;
++}
++
++export const PREP_TYPES = ['npc', 'location'];
++export const MAX_PREP_ENTRIES = 8;
++
++/** NSC und Orte, die zuletzt im Kapitel `number` vorkamen; NSC zuerst, dann alphabetisch */
++export function lastRoundEntries<T extends PrepEntryLike>(entries: T[], number: number): T[] {
++  return entries
++    .filter((e) => e.lastSessionNumber === number && PREP_TYPES.includes(e.type))
++    .sort((a, b) => PREP_TYPES.indexOf(a.type) - PREP_TYPES.indexOf(b.type) || a.name.localeCompare(b.name, 'de'))
++    .slice(0, MAX_PREP_ENTRIES);
++}
