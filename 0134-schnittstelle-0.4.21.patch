@@ -1,0 +1,301 @@
+From 253638eb0c50158f8a2c47b6206d85e36ea495f9 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 16:28:14 +0200
+Subject: [PATCH 134/138] Schnittstelle 0.4.21: Geheimes im Kapitel, Auch
+ genannt, Stimmen sicherer zuordnen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+YAML, Typen und Client. Recap.gmWarnings, EntryInput.aliases, Proposal.match und mergeIntoEntryId, Speaker.samples und hint, Hörprobe mit index.
+---
+ docs/session-chronik-api.yaml    | 115 ++++++++++++++++++++++++++++++-
+ scripts/tests/read-copy.test.mjs |   3 +
+ src/api/client.ts                |   7 +-
+ src/api/musterRuntime.ts         |   2 +-
+ src/api/readCopyRules.ts         |   2 +
+ src/api/types.ts                 |  45 ++++++++++++
+ 6 files changed, 169 insertions(+), 5 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 9383ec2..fcbf119 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.20
++  version: 0.4.21
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -209,4 +209,12 @@ info:
+     andere Aufnahmen, der Upload bleibt offen, die App versucht den Abschluss nach kurzer Pause erneut, ohne Teile neu
+     zu senden). Keine neuen Felder.
++    Änderungen in 0.4.21 (Geheimes im Kapitel, „Auch genannt“, Stimmen sicherer zuordnen): Recap.gmWarnings – der Server
++    meldet der SL, wenn das Kapitel den Namen eines Eintrags nennt, den nicht alle Spieler kennen, oder wörtlich aus
++    geheimen Texten übernimmt (nur SL, Veröffentlichen bleibt möglich). EntryInput.aliases – freiwillige weitere Namen
++    eines Eintrags („Auch genannt“), Sichtbarkeit wie der Name. Proposal.match – ein „neu anlegen“-Vorschlag klingt wie
++    ein vorhandener Eintrag (ohne Sprachmodell geprüft); PATCH /proposals/{id} mit mergeIntoEntryId ergänzt den Eintrag
++    statt einen neuen anzulegen, die abweichende Schreibweise kommt zu aliases. Speaker.samples – bis zu drei
++    Textproben je Stimme mit eigener Hörprobe (GET …/sample?index=), Speaker.hint – Anrede oder Selbstnennung passt
++    nicht zur Zuordnung. Ältere Apps sehen weiter sampleText und lassen die neuen Felder weg.
+ 
+ servers:
+@@ -1975,4 +1983,12 @@ paths:
+       tags: [Stimmen]
+       summary: Kurze Hörprobe (wenige Sekunden, wird mit dem Audio gelöscht)
++      parameters:
++        - name: index
++          in: query
++          required: false
++          description: |
++            Ab 0.4.21: Hörprobe zu Speaker.samples[index]. Ohne index wie bisher die Hörprobe zu sampleText. Index außerhalb
++            der Liste → 404.
++          schema: { type: integer, minimum: 0, maximum: 2 }
+       responses:
+         "200":
+@@ -2027,4 +2043,10 @@ paths:
+                 visibility: { $ref: "#/components/schemas/Visibility" }
+                 hiddenFromMemberIds: { type: array, items: { type: string } }
++                mergeIntoEntryId:
++                  type: [string, "null"]
++                  description: |
++                    Ab 0.4.21, nur bei action create: bei diesem Eintrag ergänzen statt neu anlegen (meist match.entryId,
++                    jeder Eintrag der Kampagne ist erlaubt); null nimmt es zurück. Anderer Eintrag oder andere action → 400
++                    `invalid_input`. Die App schickt dabei in der Regel decision accepted mit.
+       responses:
+         "200":
+@@ -3625,4 +3647,37 @@ components:
+         speakingSeconds: { type: number }
+         sampleText: { type: string, description: Transkript der Hörprobe }
++        samples:
++          type: array
++          maxItems: 3
++          description: |
++            Ab 0.4.21: bis zu drei Textproben dieser Stimme, über die Runde verteilt, je mindestens einige Wörter, bevorzugt
++            Sätze mit Figurennamen; aufsteigend nach start. Die Hörprobe zu samples[i] liefert GET …/sample?index=i,
++            solange das Audio da ist. sampleText bleibt für ältere Apps (in der Regel gleich samples[0].text). Fehlt das
++            Feld oder ist es leer, zeigt die App nur sampleText.
++          items:
++            type: object
++            required: [start, text]
++            properties:
++              start: { type: number, description: "Sekunden im Transkript" }
++              end: { type: [number, "null"] }
++              text: { type: string, maxLength: 300 }
++        hint:
++          description: |
++            Ab 0.4.21, optional: Die Abschrift spricht gegen die Zuordnung. Der Server zählt ohne Sprachmodell, wie oft
++            die Stimme mit einem Figurennamen angesprochen wird (addressed_as, z. B. „Litha, was machst du?“ kurz vor ihrem
++            Beitrag) oder sich selbst so nennt (self_named, „Ich, Litha, …“), und meldet es nur bei einem klaren Widerspruch
++            zur Zuordnung (vor der Bestätigung suggestedMemberId, danach assignedMemberId). memberId = Mitglied, dessen
++            Figur so heißt. Die App bietet dann „Tauschen“ an: Diese Stimme bekommt memberId, die Stimme, die bisher
++            memberId hatte, bekommt die bisherige Zuordnung dieser Stimme; bestätigt wird wie immer mit PUT. null = kein
++            Hinweis.
++          oneOf:
++            - type: object
++              required: [code, name, memberId, count]
++              properties:
++                code: { type: string, enum: [addressed_as, self_named] }
++                name: { type: string, description: "Der Figurenname, wie er in der Abschrift steht" }
++                memberId: { type: string }
++                count: { type: integer, minimum: 1 }
++            - { type: "null" }
+         suggestedMemberId: { type: [string, "null"] }
+         confidence: { type: number, minimum: 0, maximum: 1 }
+@@ -3682,4 +3737,28 @@ components:
+             Regelerklärung, Off-Topic) – der Name muss als Spielerwissen in der Szene vorkommen.
+         targetEntryId: { type: [string, "null"], description: Bei update der betroffene Eintrag }
++        match:
++          description: |
++            Ab 0.4.21, nur bei action create (Session und Unterlage): Der Vorschlag klingt wie ein vorhandener Eintrag. Der
++            Server prüft ohne Sprachmodell gegen Namen und aliases aller Einträge der Kampagne (auch gm_only): Klang
++            (sound, Kölner Phonetik), Schreibweise (spelling, kleiner Zeichenabstand), Teilname (part_name, „Hauptmann
++            Varek“ gegen „Varek“). Höchstens ein Treffer, der beste. name = Name des Eintrags, matchedName = welcher Name
++            oder Alias passte. null = kein Treffer. Die App fragt dann „Klingt wie … Dort ergänzen?“.
++          oneOf:
++            - type: object
++              required: [entryId, name, entryType, kind]
++              properties:
++                entryId: { type: string }
++                name: { type: string }
++                matchedName: { type: string }
++                entryType: { $ref: "#/components/schemas/EntryType" }
++                kind: { type: string, enum: [sound, spelling, part_name] }
++            - { type: "null" }
++        mergeIntoEntryId:
++          type: [string, "null"]
++          description: |
++            Ab 0.4.21: Die SL hat entschieden, den create-Vorschlag bei diesem Eintrag zu ergänzen (PATCH). Gesetzt wirkt er
++            wie update auf diesen Eintrag (beim Veröffentlichen bzw. Übernehmen wie bei update angehängt); der Titel des
++            Vorschlags kommt zu aliases, wenn er weder Name noch Alias ist. Die Sichtbarkeit des Eintrags ändert sich
++            dadurch nicht. null = als neuer Eintrag.
+         title: { type: string }
+         detail: { type: string, description: "Spielerwissen (öffentlicher Teil)" }
+@@ -3768,4 +3847,28 @@ components:
+         publishedAt: { type: [string, "null"], format: date-time }
+         review: { $ref: "#/components/schemas/RecapReview" }
++        gmWarnings:
++          type: array
++          description: |
++            Ab 0.4.21, nur SL (für Spieler weggelassen, auch keine Anzahl). Der Server prüft das Kapitel nach jedem
++            Schreiben und jeder Änderung des Textes (PUT …/recap, übernommene Korrektur, neu schreiben):
++            secret_entry_name = der Text nennt Name oder Alias eines Eintrags, den nicht alle Spieler kennen (gm_only oder
++            teilweise verborgen); secret_wording = eine längere Stelle stimmt wörtlich mit gmNotes oder dem Text eines
++            gm_only-Eintrags überein. Ein Hinweis je Code und Eintrag. Veröffentlichen bleibt möglich; die App zeigt die
++            Hinweise vor der Freigabe. Ein Eintrag, den dieses Kapitel per reveal-Vorschlag aufdecken würde, zählt nicht,
++            solange der Vorschlag angenommen ist. Leer oder fehlend = nichts gefunden.
++          items:
++            type: object
++            required: [code, entryIds]
++            properties:
++              code: { type: string, enum: [secret_entry_name, secret_wording] }
++              entryIds: { type: array, minItems: 1, items: { type: string } }
++              names:
++                type: array
++                items: { type: string }
++                description: Die gefundenen Namen bzw. Aliasse, wie sie im Kapitel stehen
++              paragraphs:
++                type: array
++                items: { type: integer, minimum: 0 }
++                description: Betroffene Absätze (0-basiert, wie RecapReview.paragraphs)
+         revision:
+           description: Offener Korrektur-Entwurf (ab 0.4.15, nur SL; für Spieler weggelassen). Ohne Entwurf null.
+@@ -3906,4 +4009,14 @@ components:
+         status: { type: [string, "null"], enum: [active, done, null], description: Nur für Quests }
+         holderMemberId: { type: [string, "null"], description: Nur für Gegenstände }
++        aliases:
++          type: array
++          maxItems: 10
++          items: { type: string, minLength: 1, maxLength: 40 }
++          description: |
++            Ab 0.4.21, freiwillig („Auch genannt“): andere Namen oder Schreibweisen, unter denen der Eintrag vorkommt
++            („Tarvok“, „der Alte“). Sichtbar wie der Name: Spieler bekommen sie nur bei Einträgen, die sie sehen, und
++            die Suche der Spieler findet sie nur dort. Recap-Pipeline: nur aliases öffentlicher, nicht teilweise
++            verborgener Einträge; Vorschlags-Pipeline, Dublettenprüfung (Proposal.match) und Namenshilfe: alle. Doppelte und
++            der Name selbst fallen beim Speichern weg. Fehlt bei älteren Servern.
+         visibility: { $ref: "#/components/schemas/Visibility" }
+         hiddenFromMemberIds:
+diff --git a/scripts/tests/read-copy.test.mjs b/scripts/tests/read-copy.test.mjs
+index de3f237..eb93455 100644
+--- a/scripts/tests/read-copy.test.mjs
++++ b/scripts/tests/read-copy.test.mjs
+@@ -98,3 +98,6 @@ test('Kommentare nur mit bekannten Feldern, Einträge ohne Kapitelnummern', () =
+   assert.equal(e[0].firstSessionNumber, undefined);
+   assert.equal(e[0].lastSessionNumber, undefined);
++  // „Auch genannt“ bleibt, aber nur als kurze Texte
++  const a = cleanForCopy('/campaigns/c-1/entries', [{ id: 'e', visibility: 'public', name: 'Ort', aliases: ['Altort', 7, 'x'.repeat(80)] }], 'u');
++  assert.deepEqual(a[0].aliases, ['Altort', 'x'.repeat(40)]);
+ });
+diff --git a/src/api/client.ts b/src/api/client.ts
+index a592fb8..5f4e686 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -397,11 +397,12 @@ function makeApi(conn: () => Connection) {
+   assignSpeakers: (sessionId: string, mapping: { speakerId: string; memberId: string | null; guestName?: string | null }[]) =>
+     request<ProcessingStatus>('PUT', `/sessions/${sessionId}/speakers`, { body: mapping }),
+-  speakerSample: (sessionId: string, speakerId: string) =>
+-    request<Blob>('GET', `/sessions/${sessionId}/speakers/${speakerId}/sample`),
++  /** index (ab 0.4.21): Hörprobe zu Speaker.samples[index]; ohne index die zu sampleText */
++  speakerSample: (sessionId: string, speakerId: string, index?: number) =>
++    request<Blob>('GET', `/sessions/${sessionId}/speakers/${speakerId}/sample${index === undefined ? '' : `?index=${Math.trunc(index)}`}`),
+ 
+   proposals: (sessionId: string) => request<Proposal[]>('GET', `/sessions/${sessionId}/proposals`),
+   decide: (
+     proposalId: string,
+-    change: { decision?: ProposalDecision; title?: string; detail?: string; gmNotes?: string; visibility?: Visibility; hiddenFromMemberIds?: string[] }
++    change: { decision?: ProposalDecision; title?: string; detail?: string; gmNotes?: string; visibility?: Visibility; hiddenFromMemberIds?: string[]; mergeIntoEntryId?: string | null }
+   ) => request<Proposal>('PATCH', `/proposals/${proposalId}`, { body: change }),
+ 
+diff --git a/src/api/musterRuntime.ts b/src/api/musterRuntime.ts
+index f12d49a..43a00d8 100644
+--- a/src/api/musterRuntime.ts
++++ b/src/api/musterRuntime.ts
+@@ -49,5 +49,5 @@ export async function startMuster(role: MusterRole): Promise<Connection> {
+   try { localStorage.setItem(KEY, JSON.stringify({ lang })); } catch { /* egal */ }
+   await install(lang);
+-  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.20', token: null, expiresAt: null, user: null });
++  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.21', token: null, expiresAt: null, user: null });
+   const res = await apiFor(probe).login(role, 'muster');
+   const conn = saveConnection({ ...probe, name: t('Musterkampagne'), token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
+diff --git a/src/api/readCopyRules.ts b/src/api/readCopyRules.ts
+index c3c2813..61e0603 100644
+--- a/src/api/readCopyRules.ts
++++ b/src/api/readCopyRules.ts
+@@ -117,4 +117,6 @@ function entry(e: Obj): Obj {
+   // Erwähnungen können bei der SL aus noch ungeprüften Kapiteln stammen – in der Kopie leer
+   out.mentions = [];
++  // „Auch genannt“ (ab 0.4.21) ist sichtbar wie der Name; nur kurze Texte
++  out.aliases = Array.isArray(e.aliases) ? e.aliases.filter((a): a is string => typeof a === 'string').slice(0, 10).map((a) => a.slice(0, 40)) : [];
+   // Ungeteilte Links tragen shared: false (Spieler bekommen sie gar nicht)
+   out.links = Array.isArray(e.links) ? e.links.filter(isObj).filter((l) => l.shared !== false) : [];
+diff --git a/src/api/types.ts b/src/api/types.ts
+index e2a2b7a..4d4f386 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -283,4 +283,23 @@ export interface Speaker {
+   /** Bestätigte Zuordnung nach der Bestätigung (ab 0.4.10); null = Gast oder ignoriert, fehlt = noch nicht bestätigt */
+   assignedMemberId?: string | null;
++  /** Bis zu drei Textproben mit eigener Hörprobe (…/sample?index=i), ab 0.4.21; fehlt = nur sampleText */
++  samples?: SpeakerSample[];
++  /** Anrede oder Selbstnennung spricht gegen die Zuordnung (ab 0.4.21) */
++  hint?: SpeakerHint | null;
++}
++
++export interface SpeakerSample {
++  start: number;
++  end?: number | null;
++  text: string;
++}
++
++export interface SpeakerHint {
++  /** addressed_as = wird oft mit diesem Namen angesprochen; self_named = nennt sich selbst so */
++  code: 'addressed_as' | 'self_named' | string;
++  name: string;
++  /** Mitglied, dessen Figur so heißt */
++  memberId: string;
++  count: number;
+ }
+ 
+@@ -336,4 +355,18 @@ export interface Proposal {
+   evidence: { start?: number; page?: number; quote: string }[];
+   decision: ProposalDecision;
++  /** Nur bei create: klingt wie ein vorhandener Eintrag (ab 0.4.21) */
++  match?: ProposalMatch | null;
++  /** Die SL ergänzt lieber diesen Eintrag statt einen neuen anzulegen (ab 0.4.21) */
++  mergeIntoEntryId?: string | null;
++}
++
++export interface ProposalMatch {
++  entryId: string;
++  /** Name des Eintrags */
++  name: string;
++  /** Welcher Name oder Alias passte */
++  matchedName?: string;
++  entryType: EntryType;
++  kind: 'sound' | 'spelling' | 'part_name' | string;
+ }
+ 
+@@ -351,4 +384,14 @@ export interface Recap {
+   /** Teile eines langen Kapitels mit Zwischenüberschrift (ab 0.4.17); fehlt oder leer = ohne Teile */
+   parts?: RecapPart[];
++  /** Nur SL (ab 0.4.21): Das Kapitel nennt Geheimes */
++  gmWarnings?: RecapGmWarning[];
++}
++
++export interface RecapGmWarning {
++  /** secret_entry_name = Name eines Eintrags, den nicht alle kennen; secret_wording = wörtlich aus geheimem Text */
++  code: 'secret_entry_name' | 'secret_wording' | string;
++  entryIds: string[];
++  names?: string[];
++  paragraphs?: number[];
+ }
+ 
+@@ -429,4 +472,6 @@ export interface EntryInput {
+   status?: 'active' | 'done' | null;
+   holderMemberId?: string | null;
++  /** Andere Namen oder Schreibweisen („Auch genannt“, ab 0.4.21), sichtbar wie der Name */
++  aliases?: string[];
+   visibility: Visibility;
+   /** Geheimer Teil, nur für die SL; der Server lässt ihn für Spieler weg (ab 0.3.2) */
