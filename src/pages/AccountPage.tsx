@@ -15,6 +15,7 @@ import { ErrorBox, Screen } from '../components/Screen';
 import { formatDateFull } from '../components/format';
 import { LanguageSwitch, t, tn } from '../i18n';
 import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
+import { ServerLegal } from '../components/Terms';
 
 /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
 /** Quellcode dieser App – Pflicht nach AGPL §13 für Nutzer über das Netzwerk */
@@ -128,6 +129,7 @@ function ConnectionCard({ conn }: { conn: Connection }) {
       )}
       {conn.user && <div className="small">{t('Angemeldet als {name}', { name: conn.user.displayName })} ({conn.user.username})</div>}
       {valid && conn.expiresAt && <div className="muted small">{t('Anmeldung gültig bis {date}', { date: formatDateFull(conn.expiresAt) })}</div>}
+      <ServerLegal conn={conn} />
       {isOutdated(conn.apiVersion) && (
         <div className="notice">
           <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>

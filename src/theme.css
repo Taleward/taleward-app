@@ -2152,3 +2152,7 @@ button.table-group-face {
 .prep-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .prep-chips .btn.chip { gap: 4px; }
 .prep-line { display: flex; justify-content: space-between; min-height: 48px; align-items: center; color: var(--ink); text-decoration: none; }
+
+/* Nutzungsbedingungen und Impressum je Server (ab Schnittstelle 0.4.22) */
+.terms-reminder { gap: 8px; }
+.server-legal { display: flex; flex-direction: column; gap: 4px; }

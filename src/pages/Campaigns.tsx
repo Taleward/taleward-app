@@ -1,4 +1,5 @@
 import { listCharacters } from '../characters/store';
+import { TermsReminder } from '../components/Terms';
 import { serverHasCharacters } from '../characters/sync';
 import { LinkInput } from '../components/LinkInput';
 import { NotifyPrompt } from '../notify/NotifySettings';
@@ -171,6 +172,8 @@ export function Campaigns() {
           <span className="muted small">{t('Tippen, um dich neu anzumelden.')}</span>
         </Link>
       ))}
+      {/* Neue Nutzungsbedingungen (ab 0.4.22): bis zur Zustimmung nur lesen */}
+      {active.map((c) => <TermsReminder key={'terms-' + c.id} conn={c} />)}
       {offline.map(({ conn: c, since }) => (
         <div key={c.id} className="notice" role="status">
           <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>

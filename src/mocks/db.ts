@@ -9,7 +9,10 @@ export const account = {
   email: null as string | null,
   emailPending: null as string | null,
   hasPassword: true,
-  providers: [] as string[]
+  providers: [] as string[],
+  // Nutzungsbedingungen (0.4.22): zugestimmte Fassung
+  termsAcceptedVersion: 1 as number | null,
+  termsAcceptedAt: '2026-07-01T18:00:00Z' as string | null
 };
 
 /** Zweiter „Server“ im Testmodus, erreichbar über https://nachbarverein.test/api/v1 */

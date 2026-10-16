@@ -39,8 +39,17 @@ function hostKey(req: Request): string {
 
 /** Test-Nutzer mit den Anmelde-Angaben, die nur die Person selbst sieht */
 function meUser() {
-  return ME.id === 'u-robin' ? { ...ME, ...account } : { ...ME, email: null, emailPending: null, hasPassword: true, providers: [] };
+  return ME.id === 'u-robin' ? { ...ME, ...account } : { ...ME, email: null, emailPending: null, hasPassword: true, providers: [], termsAcceptedVersion: termsVersion(), termsAcceptedAt: null };
 }
+
+/**
+ * Fassung der Nutzungsbedingungen des Testservers (0.4.22). Zum Ausprobieren einer neuen Fassung:
+ * localStorage „taleward.mock.termsVersion“ auf 2 setzen und neu laden.
+ */
+function termsVersion(): number {
+  try { return Math.max(1, Number(localStorage.getItem('taleward.mock.termsVersion')) || 1); } catch { return 1; }
+}
+const termsOutdated = () => (account.termsAcceptedVersion ?? 0) < termsVersion();
 
 function authed(req: Request): boolean {
   return (req.headers.get('Authorization') ?? '').startsWith(`Bearer ${TOKEN}`);
@@ -587,11 +596,15 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.21',
+      apiVersion: nachbar ? '0.3.9' : '0.4.22',
       serverId: nachbar ? undefined : 'testserver',
       registration: 'invite_only',
       authMethods: ['password'],
       privacyPolicyUrl: null,
+      // 0.4.22: Impressum und Nutzungsbedingungen des Betreibers
+      legalNoticeUrl: nachbar ? undefined : 'https://verein.test/impressum',
+      termsUrl: nachbar ? undefined : 'https://verein.test/nutzungsbedingungen',
+      termsVersion: nachbar ? undefined : termsVersion(),
       minAge: 16,
       audioRetention: nachbar ? { mode: 'immediate', maxDays: null } : { mode: 'until_release', maxDays: 7 },
       authProviders: nachbar ? [] : [{ id: 'google', name: 'Google' }, { id: 'discord', name: 'Discord' }, { id: 'apple', name: 'Apple' }],
@@ -613,8 +626,14 @@ export const handlers = [
 
   http.post(`${B}/auth/register`, async ({ request }) => {
     await delay(300);
-    const body = (await request.json()) as { inviteCode?: string; username?: string; displayName?: string; password?: string; acceptPrivacy?: boolean; ageConfirmed?: boolean; registrationToken?: string };
+    const body = (await request.json()) as { inviteCode?: string; username?: string; displayName?: string; password?: string; acceptPrivacy?: boolean; ageConfirmed?: boolean; registrationToken?: string; acceptTerms?: boolean; termsVersion?: number };
     if (!body.acceptPrivacy || !body.ageConfirmed) return err(400, 'consent_required', 'Bitte Datenschutzhinweise und Alter bestätigen.');
+    // 0.4.22: Nutzungsbedingungen (nur der Testserver, der Nachbarverein ist älter)
+    if (new URL(request.url).hostname !== NACHBAR_HOST) {
+      if (!body.acceptTerms || !body.termsVersion) return err(400, 'consent_required', 'Bitte den Nutzungsbedingungen zustimmen.');
+      if (body.termsVersion !== termsVersion()) return err(409, 'terms_changed', 'Die Nutzungsbedingungen haben sich gerade geändert. Bitte lies die neue Fassung.');
+      Object.assign(account, { termsAcceptedVersion: body.termsVersion, termsAcceptedAt: new Date().toISOString() });
+    }
     if (body.registrationToken) {
       // Zweite Form (0.4.0): nach Anmeldung mit einem Dienst, ohne Benutzername und Passwort
       if (body.registrationToken !== 'reg-mock') return err(400, 'registration_token_invalid', 'Die Anmeldung über den Dienst ist abgelaufen. Bitte noch einmal.');
@@ -682,7 +701,27 @@ export const handlers = [
     if (!authed(request)) return err(401, 'token_invalid', 'Deine Anmeldung ist abgelaufen. Bitte melde dich erneut an.');
   }),
 
+  // 0.4.22: Ohne Zustimmung zur aktuellen Fassung nur lesen (Ausnahmen wie in der Schnittstelle)
+  http.all(`${B}/*`, async ({ request }) => {
+    if (request.method === 'GET' || new URL(request.url).hostname === NACHBAR_HOST || !termsOutdated()) return undefined;
+    const path = new URL(request.url).pathname.replace(/^.*\/api\/v1/, '');
+    if (path === '/me/terms' || (path === '/me' && request.method === 'DELETE') || path.startsWith('/uploads/')) return undefined;
+    if (/\/recording-consent$/.test(path)) {
+      const body = (await request.clone().json().catch(() => ({}))) as { granted?: boolean };
+      if (body.granted === false) return undefined;
+    }
+    return err(403, 'terms_required', 'Die Nutzungsbedingungen haben sich geändert. Bis du zustimmst, kannst du nur lesen.');
+  }),
+
   http.get(`${B}/me`, () => HttpResponse.json(meUser())),
+
+  http.put(`${B}/me/terms`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as { accept?: boolean; version?: number };
+    if (body.accept !== true || !body.version) return err(400, 'invalid_input', 'Bitte zustimmen.');
+    if (body.version !== termsVersion()) return err(409, 'terms_changed', 'Die Nutzungsbedingungen haben sich gerade geändert. Bitte lies die neue Fassung.');
+    Object.assign(account, { termsAcceptedVersion: body.version, termsAcceptedAt: new Date().toISOString() });
+    return HttpResponse.json(meUser());
+  }),
 
   http.put(`${B}/me/email`, async ({ request }) => {
     const { email } = (await request.json()) as { email?: string };

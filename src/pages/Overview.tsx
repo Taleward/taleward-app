@@ -4,6 +4,7 @@ import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnal
 import { DataSummary, openDataSummary } from '../components/DataSummary';
 import { NowList, type NowItem } from '../components/NowList';
 import { PrepCard } from '../components/PrepCard';
+import { TermsReminder } from '../components/Terms';
 import { prepWhen } from '../prep/prep';
 import { isDeletedMember } from '../api/types';
 import { InviteBox } from '../components/InviteBox';
@@ -107,6 +108,7 @@ export function Overview() {
           )}
 
           <MusterBanner />
+          <TermsReminder conn={currentConnection()} />
           <BibleSearch campaignId={campaignId} />
           {campaign.archivedAt && (
             <div className="notice"><strong>{t('Abgeschlossen')}</strong>&nbsp;{t('– nur noch zum Nachlesen, keine neuen Kapitel.')}</div>

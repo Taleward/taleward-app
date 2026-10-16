@@ -45,6 +45,8 @@ export function ConnectPage() {
   const [password2, setPassword2] = useState('');
   const [privacy, setPrivacy] = useState(false);
   const [age, setAge] = useState(false);
+  // Nutzungsbedingungen des Betreibers (ab 0.4.22)
+  const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const oidc = params.get('oidc');
   const [pendingReg] = useState(() => (oidc === 'register' ? readPendingRegister() : null));
@@ -136,7 +138,7 @@ export function ConnectPage() {
       const probe: Connection = moved ? { ...fields, id: '_probe', user: null } : saveConnection({ ...fields, user: null });
       const res = mode === 'login'
         ? await apiFor(probe).login(username.trim(), password)
-        : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true });
+        : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true, ...termsConsent(info) });
       const login = { token: res.accessToken, expiresAt: res.expiresAt, user: res.user };
       let conn: Connection;
       if (moved && adoptsMovedConnection(moved.user?.id, res.user.id)) {
@@ -150,6 +152,10 @@ export function ConnectPage() {
       await finish(conn);
     } catch (err) {
       setError(err);
+      // Fassung hat sich gerade geändert: neue Angaben holen, Haken neu setzen lassen
+      if (isApiError(err, 'terms_changed')) {
+        fetchServerInfo(baseUrl).then((i) => { setInfo(i); setTerms(false); }).catch(() => undefined);
+      }
     } finally {
       setBusy(false);
     }
@@ -166,6 +172,7 @@ export function ConnectPage() {
     : password.length < 8 ? t('Das Passwort braucht mindestens 8 Zeichen.')
     : password !== password2 ? t('Die Passwörter stimmen nicht überein.')
     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
+    : info?.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
     : !age ? t('Bitte bestätige das Mindestalter.')
     : null;
 
@@ -320,6 +327,15 @@ export function ConnectPage() {
                       {info.privacyPolicyUrl && <> <a href={info.privacyPolicyUrl} target="_blank" rel="noreferrer">{t('Öffnen')}</a></>}
                     </span>
                   </label>
+                  {info.termsUrl && (
+                    <label className="check" style={{ alignItems: 'flex-start' }}>
+                      <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} style={{ marginTop: 3 }} />
+                      <span>
+                        {t('Ich stimme den Nutzungsbedingungen von {operator} zu.', { operator: info.operator })}
+                        {' '}<a href={info.termsUrl} target="_blank" rel="noreferrer">{t('Öffnen')}</a>
+                      </span>
+                    </label>
+                  )}
                   <label className="check" style={{ alignItems: 'flex-start' }}>
                     <input type="checkbox" checked={age} onChange={(e) => setAge(e.target.checked)} style={{ marginTop: 3 }} />
                     <span>{t('Ich bin mindestens {n} Jahre alt – oder meine Eltern sind einverstanden.', { n: info.minAge })}</span>
@@ -393,12 +409,15 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
   const [code, setCode] = useState(pending.inviteCode ?? '');
   const [privacy, setPrivacy] = useState(false);
   const [age, setAge] = useState(false);
+  // Nutzungsbedingungen des Betreibers (ab 0.4.22)
+  const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [tried, setTried] = useState(false);
   const missing = !code.trim() ? t('Bitte den Einladungscode eingeben.')
     : !displayName.trim() ? t('Bitte deinen Namen eingeben.')
     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
+    : info.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
     : !age ? t('Bitte bestätige das Mindestalter.')
     : null;
 
@@ -410,7 +429,8 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
     try {
       const probe = saveConnection({ baseUrl: pending.baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, user: null });
       const res = await apiFor(probe).register({
-        inviteCode: code.trim(), registrationToken: pending.registrationToken, displayName: displayName.trim(), acceptPrivacy: true, ageConfirmed: true
+        inviteCode: code.trim(), registrationToken: pending.registrationToken, displayName: displayName.trim(), acceptPrivacy: true, ageConfirmed: true,
+        ...termsConsent(info)
       });
       const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
       clearPendingRegister();
@@ -446,6 +466,15 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
           {info.privacyPolicyUrl && <> <a href={info.privacyPolicyUrl} target="_blank" rel="noreferrer">{t('Öffnen')}</a></>}
         </span>
       </label>
+      {info.termsUrl && (
+        <label className="check" style={{ alignItems: 'flex-start' }}>
+          <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>
+            {t('Ich stimme den Nutzungsbedingungen von {operator} zu.', { operator: info.operator })}
+            {' '}<a href={info.termsUrl} target="_blank" rel="noreferrer">{t('Öffnen')}</a>
+          </span>
+        </label>
+      )}
       <label className="check" style={{ alignItems: 'flex-start' }}>
         <input type="checkbox" checked={age} onChange={(e) => setAge(e.target.checked)} style={{ marginTop: 3 }} />
         <span>{t('Ich bin mindestens {n} Jahre alt – oder meine Eltern sind einverstanden.', { n: info.minAge })}</span>
@@ -475,4 +504,9 @@ export function oidcErrorText(code: string | null): string {
     default:
       return t('Die Anmeldung über den Dienst hat nicht geklappt. Versuch es noch einmal oder melde dich mit Benutzername an.');
   }
+}
+
+/** Zustimmung zu den Nutzungsbedingungen mitschicken, wenn der Server welche hat (ab 0.4.22) */
+function termsConsent(info: ServerInfo): { acceptTerms?: true; termsVersion?: number } {
+  return info.termsUrl && info.termsVersion ? { acceptTerms: true, termsVersion: info.termsVersion } : {};
 }
