@@ -221,6 +221,9 @@ export function proposalsFor(sessionId: string): Proposal[] {
       gmNotes: 'Ist Veyras Bruder.', suggestedVisibility: 'public', confidence: 0.85,
       visibilityReason: 'Der Name fiel am Tisch: Die Gruppe hat einen Boten mit Rabenfeder gestellt.',
       evidence: [{ start: 7310, quote: 'Der Bote sagt, er dient dem Raben.' }] }),
+    // Klingt wie „Meister Orrin Kalk“ (0.4.21: Vorschlag wird dort ergänzt statt doppelt angelegt)
+    base('p7', { title: 'Orin Kalk', detail: 'Soll im Hafenviertel von Kaltenfurt gesehen worden sein.',
+      evidence: [{ start: 6630, quote: 'Ein Glockengießer namens Orin? Der war letzte Woche am Hafen.' }] }),
     base('p5', { entryType: 'other', title: 'Bruder Anselm ist ein Vampir', detail: 'Wahrscheinlich ein Scherz am Tisch – an dieser Stelle wurde gelacht.',
       confidence: 0.2, flags: ['joke_suspected', 'low_confidence'], evidence: [{ start: 8030, quote: 'Anselm trinkt ja auch nie Wein … verdächtig!' }] })
   ];
@@ -230,9 +233,16 @@ export const proposals: Proposal[] = proposalsFor('s-c-grau-13');
 
 export function speakersFor(): Speaker[] {
   return [
-    { id: 'sp1', label: 'Stimme 1', speakingSeconds: 4210, sampleText: '„Ich bin Robin und leite heute die Runde.“', suggestedMemberId: 'm-robin', confidence: 0.95, source: 'intro_round' },
-    { id: 'sp2', label: 'Stimme 2', speakingSeconds: 2380, sampleText: '„Jonas, ich spiele Thorwald, den Schmied.“', suggestedMemberId: 'm-jonas', confidence: 0.93, source: 'intro_round' },
-    { id: 'sp3', label: 'Stimme 3', speakingSeconds: 1970, sampleText: '„Lea hier – Ilsabet, die Heilerin.“', suggestedMemberId: 'm-lea', confidence: 0.72, source: 'intro_round' },
+    { id: 'sp1', label: 'Stimme 1', speakingSeconds: 4210, sampleText: '„Ich bin Robin und leite heute die Runde.“', suggestedMemberId: 'm-robin', confidence: 0.95, source: 'intro_round',
+      // Ab 0.4.21 drei Textproben je Stimme
+      samples: [{ start: 12, text: '„Ich bin Robin und leite heute die Runde.“' }, { start: 1520, text: '„Ich bin Hauptfrau Dornfeld, und ihr kommt hier nicht rein.“' }, { start: 5400, text: '„Die Kapelle steht halb im Wasser.“' }] },
+    { id: 'sp2', label: 'Stimme 2', speakingSeconds: 2380, sampleText: '„Jonas, ich spiele Thorwald, den Schmied.“', suggestedMemberId: 'm-jonas', confidence: 0.93, source: 'intro_round',
+      samples: [{ start: 1804, text: '„Ich lege ihm die Hand auf die Stirn und spreche den Heilsegen.“' }, { start: 1830, text: '„Klar, ich seh mir den Wachmann an.“' }, { start: 5120, text: '„Ich bete leise für die Ertrunkenen.“' }],
+      // Stimme 2 wird mit „Ilsabet“ angesprochen – vermutlich mit Stimme 3 vertauscht
+      hint: { code: 'addressed_as', name: 'Ilsabet', memberId: 'm-lea', count: 4 } },
+    { id: 'sp3', label: 'Stimme 3', speakingSeconds: 1970, sampleText: '„Lea hier – Ilsabet, die Heilerin.“', suggestedMemberId: 'm-lea', confidence: 0.72, source: 'intro_round',
+      samples: [{ start: 2410, text: '„Ich hau mit dem Hammer drauf, bis das Schloss nachgibt.“' }, { start: 6190, text: '„Ich stecke den Schlüssel ein.“' }, { start: 6480, text: '„Ich, Thorwald, schwöre: Den Raben stellen wir noch vor dem Winter.“' }],
+      hint: { code: 'self_named', name: 'Thorwald', memberId: 'm-jonas', count: 2 } },
     { id: 'sp4', label: 'Stimme 4', speakingSeconds: 2105, sampleText: '„Kemal. Bruder Anselm, immer noch durstig.“', suggestedMemberId: 'm-kemal', confidence: 0.88, source: 'intro_round' },
     { id: 'sp5', label: 'Stimme 5', speakingSeconds: 1640, sampleText: '„Warte, wer hat den Schlüssel eingesteckt?“', suggestedMemberId: null, confidence: 0.3, source: 'none' }
   ];

@@ -1,6 +1,7 @@
 import { http, HttpResponse, delay } from 'msw';
 import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
 import { textToPdf } from './minipdf';
+import { cleanAliases, findMatch, secretWarnings } from './checks';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
 const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
@@ -192,10 +193,23 @@ function transcriptFor(sessionId: string) {
   return transcriptLines.map(([start, memberId, text], i) => ({ start, end: start + 6, speakerId: `sp${i % 4}`, memberId, text: fix(text) }));
 }
 
+/** 0.4.21: „neu anlegen“-Vorschläge gegen die Bibel prüfen (nur SL bekommt Vorschläge) */
+function withMatch(p: Proposal): Proposal {
+  if (p.action !== 'create' || p.source === 'character') return p;
+  const campaignId = sessions.find((x) => x.id === p.sessionId)?.campaignId ?? documents.find((d) => d.id === p.documentId)?.campaignId;
+  return { ...p, match: findMatch(p.title, entries.filter((e) => e.campaignId === campaignId)), mergeIntoEntryId: p.mergeIntoEntryId ?? null };
+}
+
 /** Recap so, wie diese Person ihn sehen darf: den Prüfteil bekommt nur die SL */
 function recapFor(r: Recap, gm: boolean): Recap {
-  if (gm) return withRevision(r);
-  const { review: _r, revision: _v, ...rest } = r;
+  if (gm) {
+    // 0.4.21: Geheimes im Kapitel – nur für die SL; ein angenommener reveal-Vorschlag zählt nicht
+    const s = sessions.find((x) => x.id === r.sessionId);
+    const revealed = proposals.filter((p) => p.sessionId === r.sessionId && p.action === 'reveal' && p.decision === 'accepted').map((p) => p.targetEntryId ?? '');
+    const list = s ? entries.filter((e) => e.campaignId === s.campaignId) : [];
+    return { ...withRevision(r), gmWarnings: r.publishedAt ? [] : secretWarnings(r.text, list, revealed) };
+  }
+  const { review: _r, revision: _v, gmWarnings: _w, ...rest } = r;
   return rest;
 }
 
@@ -563,7 +577,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.20', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.21', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -573,7 +587,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.20',
+      apiVersion: nachbar ? '0.3.9' : '0.4.21',
       serverId: nachbar ? undefined : 'testserver',
       registration: 'invite_only',
       authMethods: ['password'],
@@ -1789,14 +1803,20 @@ export const handlers = [
     return HttpResponse.json(advance(s), { status: 202 });
   }),
 
-  http.get(`${B}/sessions/:id/speakers/:sid/sample`, () =>
-    new HttpResponse(toneWav(), { headers: { 'Content-Type': 'audio/wav' } })
-  ),
+  http.get(`${B}/sessions/:id/speakers/:sid/sample`, ({ params, request }) => {
+    // 0.4.21: ?index= für eine der drei Textproben
+    const index = new URL(request.url).searchParams.get('index');
+    if (index !== null) {
+      const sp = (speakerLists[params.id as string] ?? speakersFor()).find((x) => x.id === params.sid);
+      if (!sp || !/^[0-2]$/.test(index) || Number(index) >= (sp.samples?.length ?? 0)) return err(404, 'not_found', 'Diese Hörprobe gibt es nicht.');
+    }
+    return new HttpResponse(toneWav(), { headers: { 'Content-Type': 'audio/wav' } });
+  }),
 
   http.get(`${B}/sessions/:id/proposals`, ({ params }) => {
     const s = sessions.find((x) => x.id === params.id);
     if (!s || !isGm(s.campaignId)) return err(403, 'forbidden', 'Nur für die Spielleitung.');
-    return HttpResponse.json(proposals.filter((p) => p.sessionId === s.id));
+    return HttpResponse.json(proposals.filter((p) => p.sessionId === s.id).map(withMatch));
   }),
 
   http.patch(`${B}/proposals/:id`, async ({ params, request }) => {
@@ -1812,9 +1832,18 @@ export const handlers = [
     if (body.title !== undefined) p.title = body.title;
     if (body.detail !== undefined) p.detail = body.detail;
     if (body.visibility) p.suggestedVisibility = body.visibility;
+    // 0.4.21: bei einem vorhandenen Eintrag ergänzen statt neu anlegen
+    if (body.mergeIntoEntryId !== undefined) {
+      const target = body.mergeIntoEntryId ? entries.find((e) => e.id === body.mergeIntoEntryId) : null;
+      const campaignId = sessions.find((x) => x.id === p.sessionId)?.campaignId ?? documents.find((d) => d.id === p.documentId)?.campaignId;
+      if (p.action !== 'create' || (body.mergeIntoEntryId && (!target || target.campaignId !== campaignId))) {
+        return err(400, 'invalid_input', 'Dieser Vorschlag lässt sich dort nicht ergänzen.');
+      }
+      p.mergeIntoEntryId = body.mergeIntoEntryId;
+    }
     // Mitgebrachte Welt (0.4.7): Entscheidung wirkt sofort
     if (p.source === 'character' && body.decision && body.decision !== 'open') applyCharacterProposal(p);
-    return HttpResponse.json(p);
+    return HttpResponse.json(withMatch(p));
   }),
 
   http.get(`${B}/sessions/:id/recap`, ({ params }) => {
@@ -1856,7 +1885,7 @@ export const handlers = [
       delete revisionJobs[r.sessionId];
     }
     if (body.parts !== undefined) r.parts = body.parts.map((x) => ({ title: x.title.trim(), firstParagraph: x.firstParagraph }));
-    return HttpResponse.json(r);
+    return HttpResponse.json(recapFor(r, true));
   }),
 
   http.post(`${B}/sessions/:id/recap/revision`, async ({ params, request }) => {
@@ -1899,7 +1928,7 @@ export const handlers = [
       }
     }
     r.revision = null;
-    return HttpResponse.json(r);
+    return HttpResponse.json(recapFor(r, true));
   }),
 
   http.get(`${B}/sessions/:id/transcript`, ({ params }) => {
@@ -1953,7 +1982,7 @@ export const handlers = [
       return HttpResponse.json(advance(s), { status: 202 });
     }
     if (r?.review) Object.assign(r.review, { stale: false, checkedAt: new Date().toISOString() });
-    return HttpResponse.json(r);
+    return HttpResponse.json(recapFor(r, true));
   }),
 
   http.post(`${B}/sessions/:id/publish`, ({ params }) => {
@@ -1963,6 +1992,17 @@ export const handlers = [
     for (const p of proposals.filter((x) => x.sessionId === s.id)) {
       if (p.decision === 'open') p.decision = 'rejected';
       if (p.decision !== 'accepted') continue;
+      const merge = p.action === 'create' && p.mergeIntoEntryId ? entries.find((e) => e.id === p.mergeIntoEntryId) : undefined;
+      if (merge) {
+        // 0.4.21: wie update anhängen, abweichende Schreibweise zu „Auch genannt“; Sichtbarkeit bleibt
+        if (p.detail && !merge.summary.includes(p.detail)) merge.summary = merge.summary ? `${merge.summary}\n\n${p.detail}` : p.detail;
+        if (p.gmNotes) merge.gmNotes = merge.gmNotes ? `${merge.gmNotes}\n\n${p.gmNotes}` : p.gmNotes;
+        merge.aliases = cleanAliases([...(merge.aliases ?? []), p.title], merge.name);
+        merge.lastSessionNumber = s.number;
+        merge.mentions.push({ sessionNumber: s.number, note: p.detail });
+        merge.updatedAt = new Date().toISOString();
+        continue;
+      }
       const target = p.targetEntryId ? entries.find((e) => e.id === p.targetEntryId) : undefined;
       if (target && p.action === 'reveal') {
         // Freigabe: öffentlicher Teil wird sichtbar, der geheime bleibt
@@ -2021,7 +2061,7 @@ export const handlers = [
         .filter((e) => gm || (e.visibility === 'public' && !(e.hiddenFromMemberIds ?? []).includes(meId)))
         .map((e) => (gm ? e : { ...e, gmNotes: undefined, hiddenFromMemberIds: undefined, formerHolderMemberId: undefined, links: visibleLinks(e.links, false) }))
         .filter((e) => !type || e.type === type)
-        .filter((e) => !q || (e.name + ' ' + e.summary + ' ' + (gm ? e.gmNotes ?? '' : '')).toLowerCase().includes(q))
+        .filter((e) => !q || (e.name + ' ' + (e.aliases ?? []).join(' ') + ' ' + e.summary + ' ' + (gm ? e.gmNotes ?? '' : '')).toLowerCase().includes(q))
         .sort((a, b) => a.name.localeCompare(b.name, 'de'))
     );
   }),
@@ -2039,6 +2079,8 @@ export const handlers = [
       body.links = ok;
     }
     Object.assign(e, Object.fromEntries(Object.entries(body).filter(([k]) => ['name', 'summary', 'gmNotes', 'visibility', 'status', 'holderMemberId', 'type', 'hiddenFromMemberIds', 'links'].includes(k))));
+    // 0.4.21: „Auch genannt“ bereinigt speichern (ohne Namen, ohne Doppelte)
+    if (body.aliases !== undefined || body.name !== undefined) e.aliases = cleanAliases(body.aliases ?? e.aliases ?? [], e.name);
     e.updatedAt = new Date().toISOString();
     return HttpResponse.json(e);
   }),
@@ -2088,6 +2130,7 @@ export const handlers = [
     if (!body.name || !body.type) return err(400, 'invalid_input', 'Name und Art des Eintrags fehlen.');
     const e = {
       ...(body as EntryInput),
+      aliases: cleanAliases(body.aliases, body.name),
       // Wie der Server: ohne Angabe nur für die SL sichtbar
       visibility: body.visibility ?? 'gm_only', id: 'e-' + crypto.randomUUID().slice(0, 8), campaignId: params.id as string,
       firstSessionNumber: null, lastSessionNumber: null, mentions: [], updatedAt: new Date().toISOString()
