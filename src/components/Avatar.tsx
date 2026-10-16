@@ -65,7 +65,7 @@ function PortraitLightbox({ campaignId, member, onClose }: { campaignId: string;
       {!url && !failed && <div style={{ color: '#f3f3ee' }}>{t('Lade …')}</div>}
       {failed && <div style={{ color: '#f3f3ee' }}>{t('Das Bild konnte nicht geladen werden.')}</div>}
       <div style={{ textAlign: 'center', color: '#f3f3ee' }}>
-        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 700 }}>{member.characterName ?? member.displayName}</div>
+        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 'calc(22px * var(--ts))', fontWeight: 700 }}>{member.characterName ?? member.displayName}</div>
         {member.characterName && <div style={{ color: '#c9d0d2' }}>{t('gespielt von {name}', { name: member.displayName })}</div>}
       </div>
       <button type="button" className="btn outline small" style={{ color: '#f3f3ee', borderColor: '#f3f3ee', background: 'transparent' }} onClick={onClose}>

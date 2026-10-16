@@ -3,6 +3,8 @@ import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../componen
 import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
 import { DataSummary, openDataSummary } from '../components/DataSummary';
 import { NowList, type NowItem } from '../components/NowList';
+import { PrepCard } from '../components/PrepCard';
+import { prepWhen } from '../prep/prep';
 import { isDeletedMember } from '../api/types';
 import { InviteBox } from '../components/InviteBox';
 import { confirmDialog } from '../components/confirm';
@@ -21,7 +23,7 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import type { Campaign, GameSystem, GmNotice, Member, ServerInfo, SessionSummary, Usage } from '../api/types';
+import type { Campaign, CharacterAnalysis, GameSystem, GmNotice, Member, ServerInfo, SessionSummary, Usage } from '../api/types';
 import { IconCheck, IconInfo, IconLock, IconScreen, IconSearch } from '../components/Icons';
 import { LinkButtons, safeLinks } from '../components/Links';
 import { MusterBanner } from '../components/Muster';
@@ -38,6 +40,8 @@ export function Overview() {
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [pickingCover, setPickingCover] = useState(false);
+  // Für die Zeile „… möchte den Hintergrund von … auswerten lassen“ in „Jetzt dran“
+  const [analyses, setAnalyses] = useState<CharacterAnalysis[]>([]);
 
   const load = async () => {
     try {
@@ -57,6 +61,11 @@ export function Overview() {
   }, [campaignId]);
 
   const gm = campaign?.myRole === 'gm';
+  const wantsAnalyses = gm && apiAtLeast('0.4.18') && !!campaign?.gmNotices?.some((n) => n.code === 'character_analysis_pending');
+  useEffect(() => {
+    if (!wantsAnalyses) return;
+    api.characterAnalyses(campaignId).then(setAnalyses).catch(() => undefined);
+  }, [campaignId, wantsAnalyses, campaign]);
   const { user } = useAuth();
   const me = campaign?.members.find((m) => m.userId === user?.id);
   const serverInfo = useServerInfo();
@@ -66,6 +75,9 @@ export function Overview() {
   // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht
   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
   const latest = sessions?.find((s) => s.state === 'published');
+  // Vorbereitung auf die nächste Runde (nur SL, sobald ein Termin steht); am Spieltag ganz oben
+  const prep = gm && campaign && !campaign.archivedAt && sessions ? prepWhen(campaign.nextSessionAt, new Date()) : 'none';
+  const prepCard = prep !== 'none' && campaign && sessions ? <PrepCard campaign={campaign} sessions={sessions} phase={prep} /> : null;
 
   return (
     <Screen backTo={{ to: '/', label: t('Alle Kampagnen') }} overline={gm ? t('Du leitest') : campaign?.myCharacterName ? t('Du spielst {name}', { name: campaign.myCharacterName }) : ' '} title={campaign?.title ?? ' '} hero={{ campaign, large: true }}>
@@ -110,7 +122,8 @@ export function Overview() {
           )}
           {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
-          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, load)} />
+          {prep === 'today' && prepCard}
+          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)} />
 
           {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
           {gm && working.length > 0 && needMe.length === 0 && (
@@ -127,7 +140,10 @@ export function Overview() {
               </span>
             </Link>
           )}
-          {/* Nächste Runde */}
+          {prep === 'upcoming' && prepCard}
+          {/* Nächste Runde – fehlt die eigene Stimme ohne festen Termin, steht es schon in „Jetzt dran“; die
+              Vorbereitung der SL nennt den Termin selbst */}
+          {prep === 'none' && !(campaign.datePollNeedsMyVote && !campaign.nextSessionAt) && (
           <Link to={p(`/k/${campaignId}/termin`)} className="card">
             <span className="overline">{t('Nächste Runde')}</span>
             {campaign.nextSessionAt
@@ -137,6 +153,7 @@ export function Overview() {
               {campaign.datePollNeedsMyVote ? t('Sag, welche Termine dir passen.') : gm ? t('Termin abstimmen oder Stand ansehen') : t('Terminabstimmung ansehen')}
             </span>
           </Link>
+          )}
 
 
           {latest && (
@@ -738,7 +755,7 @@ function mergeJoinNotices(list: GmNotice[]): { notice: GmNotice; hidden?: GmNoti
  * Aufgaben für „Jetzt dran“: Kapitel, die auf die SL warten, mitgebrachte Welt, Hinweise an
  * die SL, eigener Charakter, Terminabstimmung. Hinweise klappen ihre Entscheidung auf, alles andere führt zur Seite.
  */
-function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, onDone: () => void): NowItem[] {
+function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needMe: SessionSummary[], info: ServerInfo | null, analyses: CharacterAnalysis[], onDone: () => void): NowItem[] {
   const items: NowItem[] = [];
   if (gm) {
     for (const s of needMe) {
@@ -756,7 +773,7 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
       });
     }
     for (const { notice, hidden } of mergeJoinNotices(campaign.gmNotices ?? [])) {
-      const item = noticeItem(campaign, notice, hidden, info, onDone);
+      const item = noticeItem(campaign, notice, hidden, info, analyses, onDone);
       if (item) items.push(item);
     }
   }
@@ -770,14 +787,22 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
 }
 
 /** Hinweis an die SL (ab 0.4.7) als Zeile; dieselben Bedingungen wie in den Karten, damit keine leere Zeile bleibt */
-function noticeItem(campaign: Campaign, notice: GmNotice, hidden: GmNotice | undefined, info: ServerInfo | null, onDone: () => void): NowItem | null {
+function noticeItem(campaign: Campaign, notice: GmNotice, hidden: GmNotice | undefined, info: ServerInfo | null, analyses: CharacterAnalysis[], onDone: () => void): NowItem | null {
   const m = campaign.members.find((x) => x.id === notice.memberId);
   const key = 'n-' + notice.id;
   switch (notice.code) {
     case 'character_analysis_pending':
+    {
       if (!apiAtLeast('0.4.18') || !m || isDeletedMember(m)) return null;
-      return { key, label: t('{person} bittet um eine Auswertung', { person: m.displayName }),
+      // Ist die Auswertung geladen, sagt die Zeile schon, worum es geht, und die Karte wiederholt es nicht
+      const a = analyses.find((x) => x.id === notice.analysisId);
+      const name = m.characterName ?? m.displayName;
+      const label = !a ? t('{person} bittet um eine Auswertung', { person: m.displayName })
+        : a.source === 'backstory' ? t('{person} möchte den Hintergrund von {name} auswerten lassen', { person: m.displayName, name })
+          : t('{person} möchte den Charakterbogen „{title}“ auswerten lassen', { person: m.displayName, title: a.title });
+      return { key, label, hideDetailTitle: !!a,
         detail: <AnalysisPendingCard campaign={campaign} notice={notice} info={info} onDone={onDone} /> };
+    }
     case 'seat_claimed':
       if (!m) return null;
       return { key, hideDetailTitle: true, label: t('{person} spielt jetzt {figure}', { person: m.displayName, figure: m.characterName ?? t('einen Platz') }),
