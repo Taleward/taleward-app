@@ -1,0 +1,435 @@
+From c6874f840e76d2448f63367f90aeb538fddecfe0 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 16 Oct 2026 16:28:40 +0200
+Subject: [PATCH 136/138] =?UTF-8?q?Stimmen=20mit=20drei=20H=C3=B6rproben,?=
+ =?UTF-8?q?=20Hinweis=20auf=20Geheimes=20vor=20dem=20Ver=C3=B6ffentlichen?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Seite Stimmen: bis zu drei Textproben je Stimme mit eigener Hörprobe, Hinweis bei unpassender Anrede mit Tauschen. Kapitel prüfen: Hinweis, wenn das Kapitel Geheimes nennt, mit Sprung zur Stelle; eine gemeinsame Rückfrage beim Veröffentlichen. Englische Texte für alle neuen Teile.
+---
+ scripts/tests/speaker-swap.test.mjs | 19 ++++++++++
+ src/components/RecapReviewView.tsx  | 14 +++++--
+ src/i18n/en.ts                      | 39 ++++++++++++++++++-
+ src/pages/Review.tsx                | 21 +++++++++--
+ src/pages/Speakers.tsx              | 58 ++++++++++++++++++++++++++---
+ src/review/SecretWarnings.tsx       | 46 +++++++++++++++++++++++
+ src/theme.css                       | 56 +++++++++++++++++++++++++++-
+ src/voice/swap.ts                   | 14 +++++++
+ 8 files changed, 250 insertions(+), 17 deletions(-)
+ create mode 100644 scripts/tests/speaker-swap.test.mjs
+ create mode 100644 src/review/SecretWarnings.tsx
+ create mode 100644 src/voice/swap.ts
+
+diff --git a/scripts/tests/speaker-swap.test.mjs b/scripts/tests/speaker-swap.test.mjs
+new file mode 100644
+index 0000000..2521f79
+--- /dev/null
++++ b/scripts/tests/speaker-swap.test.mjs
+@@ -0,0 +1,19 @@
++// „Tauschen“ bei Stimmen: zwei Zuordnungen wechseln, alles andere bleibt
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { swapAssignment } from '../../src/voice/swap.ts';
++
++test('Zwei Stimmen tauschen', () => {
++  const m = { sp1: 'm-gm', sp2: 'm-jemma', sp3: 'm-litha' };
++  assert.deepEqual(swapAssignment(m, 'sp2', 'm-litha'), { sp1: 'm-gm', sp2: 'm-litha', sp3: 'm-jemma' });
++});
++
++test('Bisher offen oder Gast: die andere Stimme übernimmt das', () => {
++  assert.deepEqual(swapAssignment({ a: '', b: 'm-x' }, 'a', 'm-x'), { a: 'm-x', b: '' });
++  assert.deepEqual(swapAssignment({ a: 'guest:Mira', b: 'm-x' }, 'a', 'm-x'), { a: 'm-x', b: 'guest:Mira' });
++});
++
++test('Schon richtig: nichts ändert sich', () => {
++  const m = { a: 'm-x', b: 'm-y' };
++  assert.equal(swapAssignment(m, 'a', 'm-x'), m);
++});
+diff --git a/src/components/RecapReviewView.tsx b/src/components/RecapReviewView.tsx
+index bedbf4c..2d33de3 100644
+--- a/src/components/RecapReviewView.tsx
++++ b/src/components/RecapReviewView.tsx
+@@ -62,4 +62,12 @@ export function jumpToFirstFlagged(recap: Recap): void {
+ }
+ 
++/** Zu einem Absatz springen (0-basiert), z. B. vom Hinweis auf Geheimes */
++export function jumpToParagraph(index: number): void {
++  const el = document.querySelector<HTMLElement>(`[data-para="${Math.trunc(index)}"]`);
++  if (!el) return;
++  el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
++  el.focus({ preventScroll: true });
++}
++
+ /** Braucht der Entwurf Aufmerksamkeit? (dann klappt die Ansicht von selbst auf) */
+ export function reviewNeedsAttention(recap: Recap): boolean {
+@@ -113,5 +121,5 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
+     return (
+       <div className="review">
+-        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>)}
++        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>)}
+       </div>
+     );
+@@ -130,9 +138,9 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
+         const info = review.state === 'done' ? review.paragraphs.find((x) => x.index === i) : undefined;
+         if (!info || !isFlagged(info)) {
+-          return <Fragment key={i}>{heading(i)}<div className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>;
++          return <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>;
+         }
+         const evidence = info.evidence.slice(0, MAX_EVIDENCE);
+         return (
+-          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`)}>
++          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} data-para={i} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`)}>
+             {text(para, i)}
+             <p className="review-note small">
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 4151f69..e117ba0 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -222,6 +222,4 @@ export const en: Record<string, string> = {
+   "Fraktion": "Faction",
+   "Sonstiges": "Other",
+-  "{n} Vorschlag ist noch offen und wird verworfen. Trotzdem veröffentlichen?": "{n} suggestion is still open and will be discarded. Publish anyway?",
+-  "{n} Vorschläge sind noch offen und werden verworfen. Trotzdem veröffentlichen?": "{n} suggestions are still open and will be discarded. Publish anyway?",
+   "nur für dich": "only for you",
+   "Nur für dich": "Only for you",
+@@ -1295,3 +1293,40 @@ export const en: Record<string, string> = {
+   "Charakterbögen und ihre Auswertungen, Vorschläge, Kommentare": "Character sheets and their analyses, suggestions, comments",
+   "Der Server hat die Zustimmung nicht gespeichert. Bitte später noch einmal versuchen.": "The server did not save your consent. Please try again later.",
++  "Heute, {time}": "Today, {time}",
++  "Für {when}": "For {when}",
++  "Offen aus Kapitel {n}": "Still open from chapter {n}",
++  "Zuletzt dabei": "Seen last time",
++  "Neue Kommentare zu Kapitel {n}": "New comments on chapter {n}",
++  "Nach der ersten Runde stehen hier offene Fäden und wer zuletzt dabei war.": "After the first session, open threads and who turned up last time will appear here.",
++  "Termin ansehen": "View date",
++  "ergänzt {name}": "adds to {name}",
++  "Klingt wie {name} ({kind}). Dort ergänzen?": "Sounds like {name} ({kind}). Add it there?",
++  "Bei {name} ergänzen": "Add to {name}",
++  "Doch als neuen Eintrag anlegen": "Create a new entry after all",
++  "Wird bei {name} ergänzt.": "Will be added to {name}.",
++  "Wird bei einem vorhandenen Eintrag ergänzt.": "Will be added to an existing entry.",
++  "„{alias}“ kommt zu „Auch genannt“.": "“{alias}” goes into “Also known as”.",
++  "Auch genannt": "Also known as",
++  "z. B. andere Schreibweise, Spitzname": "e.g. another spelling, a nickname",
++  "Durch Komma getrennt. Hilft Taleward, den Eintrag in der Abschrift wiederzuerkennen. Sichtbar wie der Name.": "Separate with commas. Helps Taleward recognise the entry in the transcript. Visible like the name.",
++  "Auch genannt: {names}": "Also known as: {names}",
++  "Das Kapitel nennt noch Geheimes ({names}). Die Spieler lesen es so.": "The chapter still mentions something secret ({names}). The players will read it like this.",
++  "Das Kapitel nennt noch Geheimes. Die Spieler lesen es so.": "The chapter still mentions something secret. The players will read it like this.",
++  "{n} Vorschlag ist noch offen und wird verworfen.": "{n} suggestion is still open and will be discarded.",
++  "{n} Vorschläge sind noch offen und werden verworfen.": "{n} suggestions are still open and will be discarded.",
++  "Trotzdem veröffentlichen?": "Publish anyway?",
++  "Hörprobe {n} von {label} abspielen": "Play sample {n} of {label}",
++  "{label} nennt sich selbst „{name}“, ist aber {who} zugeordnet. Vertauscht?": "{label} calls themselves “{name}” but is assigned to {who}. Mixed up?",
++  "{label} nennt sich selbst „{name}“. Gehört die Stimme dorthin?": "{label} calls themselves “{name}”. Does the voice belong there?",
++  "{label} wird oft mit „{name}“ angesprochen, ist aber {who} zugeordnet. Vertauscht?": "{label} is often addressed as “{name}” but is assigned to {who}. Mixed up?",
++  "{label} wird oft mit „{name}“ angesprochen. Gehört die Stimme dorthin?": "{label} is often addressed as “{name}”. Does the voice belong there?",
++  "Tauschen": "Swap",
++  "Zuordnen": "Assign",
++  "Das Kapitel ist schon veröffentlicht, die Zuordnung lässt sich hier nicht mehr ändern.": "The chapter is already published, so the assignment can no longer be changed here.",
++  "ein geheimer Eintrag": "a secret entry",
++  "Bitte vor der Freigabe prüfen": "Please check before publishing",
++  "Übernimmt Text aus geheimen Notizen: {names}": "Uses wording from secret notes: {names}",
++  "Nennt den Namen eines geheimen Eintrags: {names}": "Names a secret entry: {names}",
++  "Zur Stelle": "Go to the passage",
++  "Die Spieler sehen das Kapitel so, wie es hier steht. Veröffentlichen kannst du trotzdem.": "The players see the chapter exactly as it stands here. You can still publish it.",
+ };
+diff --git a/src/pages/Review.tsx b/src/pages/Review.tsx
+index 9337893..e0cc358 100644
+--- a/src/pages/Review.tsx
++++ b/src/pages/Review.tsx
+@@ -6,10 +6,11 @@ import { useEffect, useState } from 'react';
+ import { useNavigate, useParams } from 'react-router-dom';
+ import { api, isApiError } from '../api/client';
+-import type { Member, Proposal, Recap, Session } from '../api/types';
++import type { Entry, Member, Proposal, Recap, Session } from '../api/types';
+ import { ProposalCard } from '../components/ProposalCard';
+ import { IconLock } from '../components/Icons';
+ import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
+ import { fromEditText, toEditText } from '../review/parts';
+-import { RecapReviewView, jumpToFirstFlagged, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
++import { RecapReviewView, jumpToFirstFlagged, jumpToParagraph, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
++import { SecretWarnings, secretNames } from '../review/SecretWarnings';
+ import { namesSkipped, serverHasNameCheck } from './NamesPage';
+ import { ParagraphHint, RevisionBox, RevisionDraft, paragraphRef, revisionOpen } from '../review/Revision';
+@@ -24,4 +25,6 @@ export function Review() {
+   const [players, setPlayers] = useState<Member[]>([]);
+   const [members, setMembers] = useState<Member[]>([]);
++  // Namen zu den Hinweisen auf Geheimes (ab 0.4.21), falls der Server sie nicht mitschickt
++  const [entries, setEntries] = useState<Entry[]>([]);
+   // Unsichere Namen (ab 0.4.6): eigener Schritt davor; übersprungen → hier nur noch als Hinweis
+   const [termCount, setTermCount] = useState(0);
+@@ -44,4 +47,5 @@ export function Review() {
+         }).catch(() => undefined);
+         setRecap(r);
++        if (r?.gmWarnings?.some((w) => !w.names?.length)) api.entries(s.campaignId).then(setEntries).catch(() => undefined);
+         setProposals(p);
+         setNote(n.text);
+@@ -94,5 +98,13 @@ export function Review() {
+ 
+   const publish = async () => {
+-    if (openCount > 0 && !(await confirmDialog(tn(openCount, '{n} Vorschlag ist noch offen und wird verworfen. Trotzdem veröffentlichen?', '{n} Vorschläge sind noch offen und werden verworfen. Trotzdem veröffentlichen?'), { confirmLabel: t('Veröffentlichen') }))) return;
++    // Eine Rückfrage für beides: Geheimes im Kapitel (ab 0.4.21) und noch offene Vorschläge
++    const secrets = recap ? secretNames(recap, entries) : [];
++    const reasons = [
++      recap?.gmWarnings?.length ? (secrets.length
++        ? t('Das Kapitel nennt noch Geheimes ({names}). Die Spieler lesen es so.', { names: secrets.join(', ') })
++        : t('Das Kapitel nennt noch Geheimes. Die Spieler lesen es so.')) : '',
++      openCount > 0 ? tn(openCount, '{n} Vorschlag ist noch offen und wird verworfen.', '{n} Vorschläge sind noch offen und werden verworfen.') : ''
++    ].filter(Boolean);
++    if (reasons.length && !(await confirmDialog(reasons.join(' ') + ' ' + t('Trotzdem veröffentlichen?'), { confirmLabel: t('Veröffentlichen') }))) return;
+     setBusy(true);
+     try {
+@@ -138,4 +150,5 @@ export function Review() {
+       {/* Werkzeuge als eine schmale Zeile */}
+       {tools.length > 0 && <div className="review-tools">{tools}</div>}
++      {recap && <SecretWarnings recap={recap} entries={entries} onJump={jumpToParagraph} />}
+       {recap && <RecapEditor sessionId={sessionId} recap={recap} members={members} onSaved={setRecap} onError={setError}
+         alwaysOpen={wide} highlight={hoverTitle} />}
+@@ -345,5 +358,5 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
+   }
+   return (
+-    <details className="card" open={reviewNeedsAttention(recap) || !!recap.revision || undefined}>
++    <details className="card" open={reviewNeedsAttention(recap) || !!recap.revision || !!recap.gmWarnings?.length || undefined}>
+       <summary>{head}</summary>
+       {/* Am Handy liegt der Satz in der Kopfzeile zum Aufklappen; der Sprung steht deshalb darunter */}
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index 33ffb3a..1c19606 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -9,4 +9,5 @@ import { confirmDialog } from '../components/confirm';
+ import { IconPlay } from '../components/Icons';
+ import { ErrorBox, Screen } from '../components/Screen';
++import { swapAssignment } from '../voice/swap';
+ 
+ const IGNORE = '__ignore';
+@@ -52,10 +53,10 @@ export function Speakers() {
+   }, [sessionId]);
+ 
+-  const play = async (speakerId: string) => {
++  const play = async (speakerId: string, index?: number) => {
+     try {
+       // Hörprobe mit Token laden, dann lokal abspielen
+       let blob: Blob;
+       try {
+-        blob = await api.speakerSample(sessionId, speakerId);
++        blob = await api.speakerSample(sessionId, speakerId, index);
+       } catch (e) {
+         if (isApiError(e) && e.status === 410) throw new Error(t('Die Aufnahme ist schon gelöscht, Hörproben gibt es nicht mehr.'));
+@@ -96,4 +97,11 @@ export function Speakers() {
+ 
+   const complete = speakers?.every((s) => mapping[s.id]) ?? false;
++  // Wem ist eine Stimme gerade zugeordnet (für den Hinweis „… ist aber X zugeordnet“)
++  const assignedName = (v: string | undefined) => {
++    if (!v || v === IGNORE) return null;
++    if (v.startsWith(GUEST)) return v.slice(GUEST.length);
++    const m = campaign?.members.find((x) => x.id === v);
++    return m ? m.characterName ?? m.displayName : null;
++  };
+   const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match').length ?? 0;
+ 
+@@ -120,10 +128,25 @@ export function Speakers() {
+           <div key={s.id} className={unsure ? 'card warn' : 'card'}>
+             <div className="row">
+-              <button type="button" className="icon-btn" aria-label={t('Hörprobe {label} abspielen', { label: s.label })} onClick={() => play(s.id)}>
+-                <IconPlay />
+-              </button>
++              {!s.samples?.length && (
++                <button type="button" className="icon-btn" aria-label={t('Hörprobe {label} abspielen', { label: s.label })} onClick={() => play(s.id)}>
++                  <IconPlay />
++                </button>
++              )}
+               <div style={{ flex: 1 }}>
+                 <div className="card-title">{s.label}</div>
+-                <div className="quote">{s.sampleText}</div>
++                {/* Ab 0.4.21 bis zu drei Textproben, jede mit eigener Hörprobe; sonst die eine wie bisher */}
++                {s.samples?.length ? (
++                  <ul className="speaker-samples">
++                    {s.samples.slice(0, 3).map((x, i) => (
++                      <li key={i}>
++                        <button type="button" className="icon-btn" onClick={() => play(s.id, i)}
++                          aria-label={t('Hörprobe {n} von {label} abspielen', { n: i + 1, label: s.label })}>
++                          <IconPlay />
++                        </button>
++                        <span className="quote">{x.text}</span>
++                      </li>
++                    ))}
++                  </ul>
++                ) : <div className="quote">{s.sampleText}</div>}
+                 {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
+                 {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
+@@ -133,4 +156,27 @@ export function Speakers() {
+               </div>
+             </div>
++            {/* Ab 0.4.21: Anrede oder Selbstnennung passt nicht zur Zuordnung – nur, solange sie noch nicht passt */}
++            {s.hint && mapping[s.id] !== s.hint.memberId && campaign?.members.some((m) => m.id === s.hint!.memberId) && (
++              <div className="speaker-hint">
++                <span>
++                  {(() => {
++                    const who = assignedName(mapping[s.id]);
++                    const vars = { label: s.label, name: s.hint.name, who: who ?? '' };
++                    if (s.hint.code === 'self_named') {
++                      return who ? t('{label} nennt sich selbst „{name}“, ist aber {who} zugeordnet. Vertauscht?', vars)
++                        : t('{label} nennt sich selbst „{name}“. Gehört die Stimme dorthin?', vars);
++                    }
++                    return who ? t('{label} wird oft mit „{name}“ angesprochen, ist aber {who} zugeordnet. Vertauscht?', vars)
++                      : t('{label} wird oft mit „{name}“ angesprochen. Gehört die Stimme dorthin?', vars);
++                  })()}
++                </span>
++                {editable && (
++                  <button type="button" className="btn small outline" onClick={() => setMapping(swapAssignment(mapping, s.id, s.hint!.memberId))}>
++                    {assignedName(mapping[s.id]) ? t('Tauschen') : t('Zuordnen')}
++                  </button>
++                )}
++                {session?.state === 'published' && <span className="muted small">{t('Das Kapitel ist schon veröffentlicht, die Zuordnung lässt sich hier nicht mehr ändern.')}</span>}
++              </div>
++            )}
+             <div className="field">
+               <label htmlFor={`sp-${s.id}`}>{t('Person')}</label>
+diff --git a/src/review/SecretWarnings.tsx b/src/review/SecretWarnings.tsx
+new file mode 100644
+index 0000000..0b88527
+--- /dev/null
++++ b/src/review/SecretWarnings.tsx
+@@ -0,0 +1,46 @@
++import type { Entry, Recap } from '../api/types';
++import { t } from '../i18n';
++import { IconLock } from '../components/Icons';
++
++/**
++ * Ab Schnittstelle 0.4.21, nur SL: Der Server hat im Kapitel Geheimes gefunden (Name eines Eintrags, den nicht alle
++ * kennen, oder wörtlich aus geheimen Notizen). Freigeben bleibt möglich; die SL soll es nur vorher gesehen haben.
++ */
++export function secretNames(recap: Recap, entries: Entry[]): string[] {
++  const names = new Set<string>();
++  for (const w of recap.gmWarnings ?? []) {
++    const found = w.names?.filter(Boolean) ?? [];
++    if (found.length) found.forEach((n) => names.add(n));
++    else w.entryIds.forEach((id) => { const e = entries.find((x) => x.id === id); if (e) names.add(e.name); });
++  }
++  return [...names];
++}
++
++export function SecretWarnings({ recap, entries, onJump }: { recap: Recap; entries: Entry[]; onJump: (paragraph: number) => void }) {
++  const warnings = recap.gmWarnings ?? [];
++  if (!warnings.length) return null;
++  const label = (ids: string[], names?: string[]) => {
++    const list = names?.filter(Boolean).length ? names! : ids.map((id) => entries.find((e) => e.id === id)?.name).filter((x): x is string => !!x);
++    return list.length ? list.join(', ') : t('ein geheimer Eintrag');
++  };
++  return (
++    <section className="secret-warning" role="note" aria-labelledby="secret-warning-title">
++      <strong id="secret-warning-title" className="row" style={{ gap: 6 }}><IconLock size={16} /> {t('Bitte vor der Freigabe prüfen')}</strong>
++      <ul>
++        {warnings.map((w, i) => (
++          <li key={i}>
++            <span>
++              {w.code === 'secret_wording'
++                ? t('Übernimmt Text aus geheimen Notizen: {names}', { names: label(w.entryIds, w.names) })
++                : t('Nennt den Namen eines geheimen Eintrags: {names}', { names: label(w.entryIds, w.names) })}
++            </span>
++            {w.paragraphs?.length ? (
++              <button type="button" className="linklike small tap-link" onClick={() => onJump(w.paragraphs![0])}>{t('Zur Stelle')}</button>
++            ) : null}
++          </li>
++        ))}
++      </ul>
++      <span className="muted small">{t('Die Spieler sehen das Kapitel so, wie es hier steht. Veröffentlichen kannst du trotzdem.')}</span>
++    </section>
++  );
++}
+diff --git a/src/theme.css b/src/theme.css
+index ed67a80..0111773 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -1019,5 +1019,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+   display: flex;
+   gap: 10px;
+-  font: italic 400 19px/31px var(--font-serif);
++  font: italic 400 calc(19px * var(--ts))/1.63 var(--font-serif);
+ }
+ 
+@@ -1033,5 +1033,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+ 
+ .quote {
+-  font: italic 400 15px/22px var(--font-serif);
++  font: italic 400 calc(15px * var(--ts))/1.47 var(--font-serif);
+   color: var(--ink-muted);
+   background: var(--paper-sunken);
+@@ -2101,2 +2101,54 @@ button.table-group-face {
+   }
+ }
++
++/* Stimmen: bis zu drei Textproben mit eigener Hörprobe, Hinweis bei verdächtiger Zuordnung (ab Schnittstelle 0.4.21) */
++.speaker-samples { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
++.speaker-samples li { display: flex; align-items: center; gap: 10px; }
++.speaker-samples .quote { flex: 1; }
++.speaker-hint {
++  display: flex;
++  flex-wrap: wrap;
++  align-items: center;
++  gap: 8px 12px;
++  color: var(--siegel-text);
++  font-size: calc(15px * var(--ts));
++  font-weight: 500;
++}
++.speaker-hint > span:first-child { flex: 1 1 220px; }
++
++/* Vorschlag klingt wie ein vorhandener Eintrag */
++.proposal-match {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  padding: 10px 12px;
++  border-radius: var(--radius-sm);
++  background: var(--paper-sunken);
++  font-size: calc(15px * var(--ts));
++}
++
++/* Kapitel prüfen: Geheimes im Kapitel (nur SL) */
++.secret-warning {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++  padding: 12px 14px;
++  border: 1.5px solid var(--siegel-text);
++  border-radius: var(--radius-sm);
++  background: var(--paper-raised);
++}
++.secret-warning > strong { color: var(--siegel-text); }
++.secret-warning ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
++.secret-warning li > span { margin-right: 8px; }
++
++/* Vorbereitung auf die nächste Runde (nur SL) */
++.prep-card { gap: 10px; }
++.prep-card.today { border-color: var(--line-strong); }
++.prep-when { margin: 0; font-family: var(--display); font-size: calc(19px * var(--ts)); }
++.prep-part { display: flex; flex-direction: column; gap: 4px; }
++.prep-head { margin: 0; font-size: calc(14px * var(--ts)); font-weight: 700; color: var(--ink-muted); }
++.prep-threads { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
++.prep-threads a { color: var(--ink); }
++.prep-chips { display: flex; flex-wrap: wrap; gap: 6px; }
++.prep-chips .btn.chip { gap: 4px; }
++.prep-line { display: flex; justify-content: space-between; min-height: 48px; align-items: center; color: var(--ink); text-decoration: none; }
+diff --git a/src/voice/swap.ts b/src/voice/swap.ts
+new file mode 100644
+index 0000000..d68ea3d
+--- /dev/null
++++ b/src/voice/swap.ts
+@@ -0,0 +1,14 @@
++/**
++ * „Tauschen“ auf der Seite „Stimmen zuordnen“ (Hinweis ab Schnittstelle 0.4.21).
++ * Ohne Laufzeit-Importe, damit es sich testen lässt (scripts/tests/speaker-swap.test.mjs).
++ *
++ * mapping: Stimme → Mitglied-ID, „guest:Name“, „__ignore“ oder '' (noch offen).
++ * Die Stimme bekommt memberId; jede Stimme, die bisher memberId hatte, bekommt die bisherige Zuordnung dieser Stimme.
++ */
++export function swapAssignment(mapping: Record<string, string>, speakerId: string, memberId: string): Record<string, string> {
++  const before = mapping[speakerId] ?? '';
++  if (before === memberId) return mapping;
++  const next: Record<string, string> = {};
++  for (const [id, v] of Object.entries(mapping)) next[id] = id === speakerId ? memberId : v === memberId ? before : v;
++  return next;
++}
