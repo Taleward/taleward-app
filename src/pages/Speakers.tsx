@@ -8,6 +8,7 @@ import type { Campaign, Session, Speaker } from '../api/types';
 import { confirmDialog } from '../components/confirm';
 import { IconPlay } from '../components/Icons';
 import { ErrorBox, Screen } from '../components/Screen';
+import { swapAssignment } from '../voice/swap';
 
 const IGNORE = '__ignore';
 const GUEST = 'guest:';
@@ -51,12 +52,12 @@ export function Speakers() {
     })();
   }, [sessionId]);
 
-  const play = async (speakerId: string) => {
+  const play = async (speakerId: string, index?: number) => {
     try {
       // Hörprobe mit Token laden, dann lokal abspielen
       let blob: Blob;
       try {
-        blob = await api.speakerSample(sessionId, speakerId);
+        blob = await api.speakerSample(sessionId, speakerId, index);
       } catch (e) {
         if (isApiError(e) && e.status === 410) throw new Error(t('Die Aufnahme ist schon gelöscht, Hörproben gibt es nicht mehr.'));
         throw e;
@@ -95,6 +96,13 @@ export function Speakers() {
   };
 
   const complete = speakers?.every((s) => mapping[s.id]) ?? false;
+  // Wem ist eine Stimme gerade zugeordnet (für den Hinweis „… ist aber X zugeordnet“)
+  const assignedName = (v: string | undefined) => {
+    if (!v || v === IGNORE) return null;
+    if (v.startsWith(GUEST)) return v.slice(GUEST.length);
+    const m = campaign?.members.find((x) => x.id === v);
+    return m ? m.characterName ?? m.displayName : null;
+  };
   const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match').length ?? 0;
 
   return (
@@ -119,12 +127,27 @@ export function Speakers() {
         return (
           <div key={s.id} className={unsure ? 'card warn' : 'card'}>
             <div className="row">
-              <button type="button" className="icon-btn" aria-label={t('Hörprobe {label} abspielen', { label: s.label })} onClick={() => play(s.id)}>
-                <IconPlay />
-              </button>
+              {!s.samples?.length && (
+                <button type="button" className="icon-btn" aria-label={t('Hörprobe {label} abspielen', { label: s.label })} onClick={() => play(s.id)}>
+                  <IconPlay />
+                </button>
+              )}
               <div style={{ flex: 1 }}>
                 <div className="card-title">{s.label}</div>
-                <div className="quote">{s.sampleText}</div>
+                {/* Ab 0.4.21 bis zu drei Textproben, jede mit eigener Hörprobe; sonst die eine wie bisher */}
+                {s.samples?.length ? (
+                  <ul className="speaker-samples">
+                    {s.samples.slice(0, 3).map((x, i) => (
+                      <li key={i}>
+                        <button type="button" className="icon-btn" onClick={() => play(s.id, i)}
+                          aria-label={t('Hörprobe {n} von {label} abspielen', { n: i + 1, label: s.label })}>
+                          <IconPlay />
+                        </button>
+                        <span className="quote">{x.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <div className="quote">{s.sampleText}</div>}
                 {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
                 {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
                 {!review && s.suggestedMemberId && s.confidence < 0.8 && mapping[s.id] === s.suggestedMemberId && (
@@ -132,6 +155,29 @@ export function Speakers() {
                 )}
               </div>
             </div>
+            {/* Ab 0.4.21: Anrede oder Selbstnennung passt nicht zur Zuordnung – nur, solange sie noch nicht passt */}
+            {s.hint && mapping[s.id] !== s.hint.memberId && campaign?.members.some((m) => m.id === s.hint!.memberId) && (
+              <div className="speaker-hint">
+                <span>
+                  {(() => {
+                    const who = assignedName(mapping[s.id]);
+                    const vars = { label: s.label, name: s.hint.name, who: who ?? '' };
+                    if (s.hint.code === 'self_named') {
+                      return who ? t('{label} nennt sich selbst „{name}“, ist aber {who} zugeordnet. Vertauscht?', vars)
+                        : t('{label} nennt sich selbst „{name}“. Gehört die Stimme dorthin?', vars);
+                    }
+                    return who ? t('{label} wird oft mit „{name}“ angesprochen, ist aber {who} zugeordnet. Vertauscht?', vars)
+                      : t('{label} wird oft mit „{name}“ angesprochen. Gehört die Stimme dorthin?', vars);
+                  })()}
+                </span>
+                {editable && (
+                  <button type="button" className="btn small outline" onClick={() => setMapping(swapAssignment(mapping, s.id, s.hint!.memberId))}>
+                    {assignedName(mapping[s.id]) ? t('Tauschen') : t('Zuordnen')}
+                  </button>
+                )}
+                {session?.state === 'published' && <span className="muted small">{t('Das Kapitel ist schon veröffentlicht, die Zuordnung lässt sich hier nicht mehr ändern.')}</span>}
+              </div>
+            )}
             <div className="field">
               <label htmlFor={`sp-${s.id}`}>{t('Person')}</label>
               <select id={`sp-${s.id}`} disabled={!editable} value={mapping[s.id] ?? ''} onChange={(e) => setMapping({ ...mapping, [s.id]: e.target.value })}>

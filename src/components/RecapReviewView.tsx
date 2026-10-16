@@ -61,6 +61,14 @@ export function jumpToFirstFlagged(recap: Recap): void {
   el.focus({ preventScroll: true });
 }
 
+/** Zu einem Absatz springen (0-basiert), z. B. vom Hinweis auf Geheimes */
+export function jumpToParagraph(index: number): void {
+  const el = document.querySelector<HTMLElement>(`[data-para="${Math.trunc(index)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+  el.focus({ preventScroll: true });
+}
+
 /** Braucht der Entwurf Aufmerksamkeit? (dann klappt die Ansicht von selbst auf) */
 export function reviewNeedsAttention(recap: Recap): boolean {
   return flagged(recap).some((p) => p.verdict !== 'off_game');
@@ -112,7 +120,7 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
   if (!review || review.state === 'skipped') {
     return (
       <div className="review">
-        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>)}
+        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>)}
       </div>
     );
   }
@@ -129,11 +137,11 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
       {paragraphs.map((para, i) => {
         const info = review.state === 'done' ? review.paragraphs.find((x) => x.index === i) : undefined;
         if (!info || !isFlagged(info)) {
-          return <Fragment key={i}>{heading(i)}<div className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>;
+          return <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>;
         }
         const evidence = info.evidence.slice(0, MAX_EVIDENCE);
         return (
-          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`)}>
+          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} data-para={i} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`)}>
             {text(para, i)}
             <p className="review-note small">
               {/* Die Begründung des Prüfers genügt; ohne sie ein kurzes Wort zur Art */}

@@ -5,12 +5,13 @@ import { t, tn } from '../i18n';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, isApiError } from '../api/client';
-import type { Member, Proposal, Recap, Session } from '../api/types';
+import type { Entry, Member, Proposal, Recap, Session } from '../api/types';
 import { ProposalCard } from '../components/ProposalCard';
 import { IconLock } from '../components/Icons';
 import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
 import { fromEditText, toEditText } from '../review/parts';
-import { RecapReviewView, jumpToFirstFlagged, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
+import { RecapReviewView, jumpToFirstFlagged, jumpToParagraph, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
+import { SecretWarnings, secretNames } from '../review/SecretWarnings';
 import { namesSkipped, serverHasNameCheck } from './NamesPage';
 import { ParagraphHint, RevisionBox, RevisionDraft, paragraphRef, revisionOpen } from '../review/Revision';
 import { mentions } from '../review/mentions';
@@ -23,6 +24,8 @@ export function Review() {
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [players, setPlayers] = useState<Member[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  // Namen zu den Hinweisen auf Geheimes (ab 0.4.21), falls der Server sie nicht mitschickt
+  const [entries, setEntries] = useState<Entry[]>([]);
   // Unsichere Namen (ab 0.4.6): eigener Schritt davor; übersprungen → hier nur noch als Hinweis
   const [termCount, setTermCount] = useState(0);
   const [note, setNote] = useState('');
@@ -43,6 +46,7 @@ export function Review() {
           setPlayers(c.members.filter((m) => m.role === 'player' && !isDeletedMember(m)));
         }).catch(() => undefined);
         setRecap(r);
+        if (r?.gmWarnings?.some((w) => !w.names?.length)) api.entries(s.campaignId).then(setEntries).catch(() => undefined);
         setProposals(p);
         setNote(n.text);
       })
@@ -93,7 +97,15 @@ export function Review() {
   };
 
   const publish = async () => {
-    if (openCount > 0 && !(await confirmDialog(tn(openCount, '{n} Vorschlag ist noch offen und wird verworfen. Trotzdem veröffentlichen?', '{n} Vorschläge sind noch offen und werden verworfen. Trotzdem veröffentlichen?'), { confirmLabel: t('Veröffentlichen') }))) return;
+    // Eine Rückfrage für beides: Geheimes im Kapitel (ab 0.4.21) und noch offene Vorschläge
+    const secrets = recap ? secretNames(recap, entries) : [];
+    const reasons = [
+      recap?.gmWarnings?.length ? (secrets.length
+        ? t('Das Kapitel nennt noch Geheimes ({names}). Die Spieler lesen es so.', { names: secrets.join(', ') })
+        : t('Das Kapitel nennt noch Geheimes. Die Spieler lesen es so.')) : '',
+      openCount > 0 ? tn(openCount, '{n} Vorschlag ist noch offen und wird verworfen.', '{n} Vorschläge sind noch offen und werden verworfen.') : ''
+    ].filter(Boolean);
+    if (reasons.length && !(await confirmDialog(reasons.join(' ') + ' ' + t('Trotzdem veröffentlichen?'), { confirmLabel: t('Veröffentlichen') }))) return;
     setBusy(true);
     try {
       await saveNote();
@@ -137,6 +149,7 @@ export function Review() {
       <div className="a">
       {/* Werkzeuge als eine schmale Zeile */}
       {tools.length > 0 && <div className="review-tools">{tools}</div>}
+      {recap && <SecretWarnings recap={recap} entries={entries} onJump={jumpToParagraph} />}
       {recap && <RecapEditor sessionId={sessionId} recap={recap} members={members} onSaved={setRecap} onError={setError}
         alwaysOpen={wide} highlight={hoverTitle} />}
       {/* Verwirft alle Änderungen – darum leise am Ende, nicht oben bei den Prüfwerkzeugen */}
@@ -344,7 +357,7 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
     return <section className="card recap-sheet"><div className="recap-sheet-head">{head}</div>{body}</section>;
   }
   return (
-    <details className="card" open={reviewNeedsAttention(recap) || !!recap.revision || undefined}>
+    <details className="card" open={reviewNeedsAttention(recap) || !!recap.revision || !!recap.gmWarnings?.length || undefined}>
       <summary>{head}</summary>
       {/* Am Handy liegt der Satz in der Kopfzeile zum Aufklappen; der Sprung steht deshalb darunter */}
       {recap.review?.state === 'done' && reviewNeedsAttention(recap) && (

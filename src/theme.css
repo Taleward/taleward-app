@@ -1018,7 +1018,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 .thread {
   display: flex;
   gap: 10px;
-  font: italic 400 19px/31px var(--font-serif);
+  font: italic 400 calc(19px * var(--ts))/1.63 var(--font-serif);
 }
 
 .thread::before {
@@ -1032,7 +1032,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .quote {
-  font: italic 400 15px/22px var(--font-serif);
+  font: italic 400 calc(15px * var(--ts))/1.47 var(--font-serif);
   color: var(--ink-muted);
   background: var(--paper-sunken);
   border-radius: var(--radius-sm);
@@ -2100,3 +2100,55 @@ button.table-group-face {
     column-gap: 48px;
   }
 }
+
+/* Stimmen: bis zu drei Textproben mit eigener Hörprobe, Hinweis bei verdächtiger Zuordnung (ab Schnittstelle 0.4.21) */
+.speaker-samples { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.speaker-samples li { display: flex; align-items: center; gap: 10px; }
+.speaker-samples .quote { flex: 1; }
+.speaker-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--siegel-text);
+  font-size: calc(15px * var(--ts));
+  font-weight: 500;
+}
+.speaker-hint > span:first-child { flex: 1 1 220px; }
+
+/* Vorschlag klingt wie ein vorhandener Eintrag */
+.proposal-match {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+  font-size: calc(15px * var(--ts));
+}
+
+/* Kapitel prüfen: Geheimes im Kapitel (nur SL) */
+.secret-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--siegel-text);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+}
+.secret-warning > strong { color: var(--siegel-text); }
+.secret-warning ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.secret-warning li > span { margin-right: 8px; }
+
+/* Vorbereitung auf die nächste Runde (nur SL) */
+.prep-card { gap: 10px; }
+.prep-card.today { border-color: var(--line-strong); }
+.prep-when { margin: 0; font-family: var(--display); font-size: calc(19px * var(--ts)); }
+.prep-part { display: flex; flex-direction: column; gap: 4px; }
+.prep-head { margin: 0; font-size: calc(14px * var(--ts)); font-weight: 700; color: var(--ink-muted); }
+.prep-threads { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.prep-threads a { color: var(--ink); }
+.prep-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.prep-chips .btn.chip { gap: 4px; }
+.prep-line { display: flex; justify-content: space-between; min-height: 48px; align-items: center; color: var(--ink); text-decoration: none; }
