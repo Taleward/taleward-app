@@ -178,7 +178,8 @@ export function BiblePanel({ campaignId, members, query, onQuery, focusEntryId, 
                 <strong>{e.name}</strong>
                 <span className="muted small"> · {t(ENTRY_KIND[e.type])}{e.lastSessionNumber ? ' · ' + t('zuletzt in Kapitel {n}', { n: e.lastSessionNumber }) : ''}</span>
               </span>
-              <VisTag gm={secret} />
+              {/* Nur das Seltene markieren: Öffentliches bleibt ohne Marke */}
+              {secret && <VisTag gm />}
             </button>
             {isOpen && (
               <div className="table-entry-body">

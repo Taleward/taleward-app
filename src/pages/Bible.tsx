@@ -94,7 +94,8 @@ export function Bible() {
         <div className="empty">{query ? t('Nichts gefunden für „{q}“.', { q: query }) : t('Hier steht noch nichts. Einträge entstehen aus freigegebenen Vorschlägen.')}</div>
       )}
 
-      <div className="grid-cards">
+      {/* Karten einer Reihe gleich hoch – sonst enden sie mit Löchern darunter */}
+      <div className="grid-cards even">
       {entries?.map((e) => (
         <EntryCard key={e.id} entry={e} gm={campaign?.myRole === 'gm'} holder={holder(e.holderMemberId)} campaign={campaign}
           players={campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? []}

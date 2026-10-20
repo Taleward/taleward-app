@@ -110,7 +110,6 @@ export function Overview() {
           )}
 
           <MusterBanner />
-          <BibleSearch campaignId={campaignId} />
           {campaign.archivedAt && (
             <div className="notice"><strong>{t('Abgeschlossen')}</strong>&nbsp;{t('– nur noch zum Nachlesen, keine neuen Kapitel.')}</div>
           )}
@@ -130,6 +129,8 @@ export function Overview() {
             ...(termsNotice ? [{ key: 'terms', label: t('Neue Nutzungsbedingungen bei „{name}“', { name: currentConnection().name }), detail: termsNotice, hideDetailTitle: true }] : []),
             ...nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)
           ]} />
+          {/* Suche nach „Jetzt dran“: erst die Antwort der Seite, dann das Werkzeug */}
+          <BibleSearch campaignId={campaignId} />
 
           {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
           {gm && working.length > 0 && needMe.length === 0 && (

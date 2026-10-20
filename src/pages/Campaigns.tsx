@@ -160,6 +160,8 @@ export function Campaigns() {
   const names = [...new Set(active.map((c) => c.user?.displayName).filter(Boolean))].join(', ');
   // Nur die Musterkampagne verbunden: kein echtes Konto – der nächste Schritt ist ein eigener Server
   const onlyMuster = active.length > 0 && active.every((c) => isMusterUrl(c.baseUrl));
+  // Ein Hauptknopf pro Ansicht: Gibt es schon Kampagnen, sind sie die Hauptsache – Anlegen/Verbinden nur als Umriss
+  const firstStep = !entries?.some(({ c }) => !c.archivedAt);
 
   return (
     <Screen overline={onlyMuster ? t('Musterkampagne') : names ? t('Angemeldet als {name}', { name: names }) : ' '} title={t('Deine Kampagnen')} nav={false}>
@@ -255,9 +257,9 @@ export function Campaigns() {
       {mode === 'none' ? (
         <>
           {onlyMuster ? (
-            <Link className="btn" to="/verbinden">{t('Mit einem Server verbinden')}</Link>
+            <Link className={firstStep ? 'btn' : 'btn outline'} to="/verbinden">{t('Mit einem Server verbinden')}</Link>
           ) : (
-            <button className="btn" type="button" onClick={() => { setMode('new'); setValue(''); }}>
+            <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={() => { setMode('new'); setValue(''); }}>
               {t('Neue Kampagne anlegen')}
             </button>
           )}
@@ -307,7 +309,7 @@ export function Campaigns() {
         </div>
       )}
 
-      <div className="row wrap" style={{ justifyContent: 'center', gap: 4 }}>
+      <div className="row wrap list-more" style={{ gap: 4 }}>
         {active.some(serverHasCharacters) || listCharacters().length > 0
           ? <Link className="btn ghost small" to="/charaktere">{t('Meine Charaktere')}</Link> : null}
         <Link className="btn ghost small" to="/konto">{t('Konten und Server')}</Link>

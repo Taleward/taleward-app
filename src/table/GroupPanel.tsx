@@ -92,7 +92,7 @@ export function GroupPanel({ campaign, onEntry, compact }: {
             {m.characterBackstory && (
               isOpen
                 ? <SecretBox><span style={{ whiteSpace: 'pre-wrap' }}>{m.characterBackstory}</span></SecretBox>
-                : <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(m.id)}>{t('Hintergrund zeigen')}</button>
+                : <button type="button" className="linklike small" style={{ alignSelf: 'flex-start', minHeight: 48 }} onClick={() => setOpen(m.id)}>{t('Hintergrund zeigen')}</button>
             )}
             {hooks.length > 0 && (
               <div className="small" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

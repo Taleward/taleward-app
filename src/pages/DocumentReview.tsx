@@ -4,7 +4,7 @@ import { p } from '../api/connections';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { CampaignDocument, Member, Proposal } from '../api/types';
+import type { CampaignDocument, Entry, Member, Proposal } from '../api/types';
 import { ProposalCard } from '../components/ProposalCard';
 import { ErrorBox, Screen } from '../components/Screen';
 import { t, tn } from '../i18n';
@@ -16,13 +16,19 @@ export function DocumentReview() {
   const [doc, setDoc] = useState<CampaignDocument | null>(null);
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [players, setPlayers] = useState<Member[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [applyWorld, setApplyWorld] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     Promise.all([api.document(documentId), api.documentProposals(documentId)])
-      .then(([d, p]) => { setDoc(d); setProposals(p); })
+      .then(([d, p]) => {
+        setDoc(d);
+        setProposals(p);
+        // Einträge für „Dort ergänzen?“ (wie sichtbar der vorhandene Eintrag ist)
+        if (p.some((x) => x.action === 'create' && x.match)) api.entries(campaignId).then(setEntries).catch(() => undefined);
+      })
       .catch(setError);
     api.campaign(campaignId).then((c) => setPlayers(c.members.filter((m) => m.role === 'player' && !isDeletedMember(m)))).catch(() => undefined);
   }, [documentId, campaignId]);
@@ -64,7 +70,7 @@ export function DocumentReview() {
 
       <div className="grid-cards">
       {proposals?.map((p) => (
-        <ProposalCard key={p.id} proposal={p} players={players} onError={setError}
+        <ProposalCard key={p.id} proposal={p} players={players} entries={entries} onError={setError}
           onChange={(u) => setProposals((list) => list?.map((x) => (x.id === u.id ? u : x)) ?? null)} />
       ))}
       </div>

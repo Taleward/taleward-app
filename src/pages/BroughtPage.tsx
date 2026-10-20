@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { isDeletedMember, type Campaign, type CharacterAnalysis, type Proposal } from '../api/types';
+import { isDeletedMember, type Campaign, type CharacterAnalysis, type Entry, type Proposal } from '../api/types';
 import { apiAtLeast } from '../api/connections';
 import { Avatar } from '../components/Avatar';
 import { ProposalCard } from '../components/ProposalCard';
@@ -17,11 +17,17 @@ export function BroughtPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [proposals, setProposals] = useState<Proposal[] | null>(null);
   const [analyses, setAnalyses] = useState<CharacterAnalysis[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     Promise.all([api.campaign(campaignId), api.characterProposals(campaignId)])
-      .then(([c, list]) => { setCampaign(c); setProposals(list); })
+      .then(([c, list]) => {
+        setCampaign(c);
+        setProposals(list);
+        // Einträge für „Dort ergänzen?“: wie sichtbar der vorhandene Eintrag ist (Geheimes nie in Sichtbareres)
+        if (list.some((x) => x.action === 'create' && x.match)) api.entries(campaignId).then(setEntries).catch(() => undefined);
+      })
       .catch(setError);
     // Ab 0.4.18: woher ein Vorschlag stammt (Hintergrund oder Charakterbogen)
     if (apiAtLeast('0.4.18')) api.characterAnalyses(campaignId).then(setAnalyses).catch(() => undefined);
@@ -69,7 +75,7 @@ export function BroughtPage() {
               <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {origin(p) && <span className="muted small">{origin(p)}</span>}
                 {p.relation && <span className="muted small">{t('Beziehung: {relation}', { relation: p.relation })}</span>}
-                <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
+                <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} entries={entries} onError={setError} onChange={update} />
               </div>
             ))}
           </section>

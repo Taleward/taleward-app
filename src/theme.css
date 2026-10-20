@@ -1201,6 +1201,9 @@ details.card[open] { padding-bottom: var(--space-4); }
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
+.grid-cards.even { align-items: stretch; }
+/* Knöpfe unten an der Karte, damit sie in einer Reihe auf gleicher Höhe stehen */
+.grid-cards.even > .card > :last-child:not(:first-child) { margin-top: auto; }
 
 @media (min-width: 700px) {
   .screen {
@@ -1365,6 +1368,12 @@ details.card[open] { padding-bottom: var(--space-4); }
   width: 100%;
   max-width: 560px;
   margin-inline: auto;
+}
+.list-more { justify-content: center; }
+/* Breit: Knöpfe an der linken Kante der Karten statt mittig darunter */
+@media (min-width: 700px) {
+  .list-actions { margin-inline: 0; }
+  .list-more { justify-content: flex-start; }
 }
 
 /* ---------- SL-Schirm (Tablet quer, Laptop): Spalten nebeneinander, jede scrollt für sich ---------- */
