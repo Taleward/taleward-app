@@ -568,6 +568,32 @@ function visibleLinks(links: Link[] | undefined, gm: boolean): Link[] {
   return (links ?? []).filter((l) => gm || l.shared);
 }
 
+/** 0.4.22 (S38): was ohne Zustimmung zu neuen Nutzungsbedingungen weiter geht – zurücknehmen, löschen, absichern */
+function termsAllowed(method: string, path: string, body: Record<string, unknown>): boolean {
+  const own = (id: string | undefined) => {
+    const c = campaigns.find((x) => path.startsWith(`/campaigns/${x.id}/`));
+    return !!id && !!c && (id === 'me' || myMember(c)?.id === id);
+  };
+  if (path.startsWith('/auth/') || path.startsWith('/uploads/') || path === '/me/terms') return true;
+  if (method === 'DELETE' && /^\/(me|me\/voice-profile|me\/email|me\/providers\/[^/]+|campaigns\/[^/]+\/members\/me\/character|campaigns\/[^/]+\/members\/[^/]+\/portrait|comments\/[^/]+|documents\/[^/]+)$/.test(path)) return true;
+  if (method === 'PUT' && path === '/me/password') return true;
+  if (method === 'PUT' && /\/(recording-consent|members\/me\/move-consent)$/.test(path)) return body.granted === false;
+  if (method === 'PATCH' && path === '/me/voice-profile') return body.learnFromSessions === false && Object.keys(body).length === 1;
+  if (method === 'PATCH' && /^\/campaigns\/[^/]+$/.test(path)) {
+    const keys = Object.keys(body);
+    return keys.length > 0 && keys.every((k) => ['allowExternalTranscription', 'allowCloudSummary', 'allowCharacterAnalysis'].includes(k) && body[k] === false);
+  }
+  const member = /^\/campaigns\/[^/]+\/members\/([^/]+)$/.exec(path);
+  if (member && own(member[1])) {
+    if (method === 'DELETE') return true;
+    if (method === 'PATCH') {
+      const keys = Object.keys(body);
+      return keys.length > 0 && keys.every((k) => ['characterBackstory', 'characterSummary'].includes(k) && !body[k]);
+    }
+  }
+  return false;
+}
+
 export const handlers = [
   http.post(`${B}/auth/login`, async ({ request }) => {
     await delay(300);
@@ -705,11 +731,7 @@ export const handlers = [
   http.all(`${B}/*`, async ({ request }) => {
     if (request.method === 'GET' || new URL(request.url).hostname === NACHBAR_HOST || !termsOutdated()) return undefined;
     const path = new URL(request.url).pathname.replace(/^.*\/api\/v1/, '');
-    if (path === '/me/terms' || (path === '/me' && request.method === 'DELETE') || path.startsWith('/uploads/')) return undefined;
-    if (/\/recording-consent$/.test(path)) {
-      const body = (await request.clone().json().catch(() => ({}))) as { granted?: boolean };
-      if (body.granted === false) return undefined;
-    }
+    if (termsAllowed(request.method, path, (await request.clone().json().catch(() => ({}))) as Record<string, unknown>)) return undefined;
     return err(403, 'terms_required', 'Die Nutzungsbedingungen haben sich geändert. Bis du zustimmst, kannst du nur lesen.');
   }),
 
