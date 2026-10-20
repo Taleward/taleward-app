@@ -4,7 +4,7 @@ import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnal
 import { DataSummary, openDataSummary } from '../components/DataSummary';
 import { NowList, type NowItem } from '../components/NowList';
 import { PrepCard } from '../components/PrepCard';
-import { TermsReminder } from '../components/Terms';
+import { useTermsNotice } from '../components/Terms';
 import { prepWhen } from '../prep/prep';
 import { isDeletedMember } from '../api/types';
 import { InviteBox } from '../components/InviteBox';
@@ -68,6 +68,8 @@ export function Overview() {
     api.characterAnalyses(campaignId).then(setAnalyses).catch(() => undefined);
   }, [campaignId, wantsAnalyses, campaign]);
   const { user } = useAuth();
+  // Neue Nutzungsbedingungen (ab 0.4.22): hier als Zeile in „Jetzt dran“, die Karte selbst steht auf der Kampagnenliste
+  const termsNotice = useTermsNotice(currentConnection());
   const me = campaign?.members.find((m) => m.userId === user?.id);
   const serverInfo = useServerInfo();
   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
@@ -108,7 +110,6 @@ export function Overview() {
           )}
 
           <MusterBanner />
-          <TermsReminder conn={currentConnection()} />
           <BibleSearch campaignId={campaignId} />
           {campaign.archivedAt && (
             <div className="notice"><strong>{t('Abgeschlossen')}</strong>&nbsp;{t('– nur noch zum Nachlesen, keine neuen Kapitel.')}</div>
@@ -125,7 +126,10 @@ export function Overview() {
           {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
           {prep === 'today' && prepCard}
-          <NowList items={nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)} />
+          <NowList items={[
+            ...(termsNotice ? [{ key: 'terms', label: t('Neue Nutzungsbedingungen bei „{name}“', { name: currentConnection().name }), detail: termsNotice, hideDetailTitle: true }] : []),
+            ...nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)
+          ]} />
 
           {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
           {gm && working.length > 0 && needMe.length === 0 && (

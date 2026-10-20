@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFor, isApiError } from '../api/client';
 import { hasValidToken, updateConnection, type Connection } from '../api/connections';
@@ -36,8 +36,15 @@ function useTerms(conn: Connection) {
   return { state, outdated, refresh: () => setReload((n) => n + 1), setUser: (user: User) => setState((s) => (s ? { ...s, user } : s)) };
 }
 
-/** Karte, solange eine neue Fassung auf Zustimmung wartet (Kampagnenliste, Übersicht) */
+/** Karte, solange eine neue Fassung auf Zustimmung wartet (Kampagnenliste) */
 export function TermsReminder({ conn }: { conn: Connection }) {
+  return useTermsNotice(conn);
+}
+
+/**
+ * Dieselbe Karte als Inhalt – null, solange nichts zuzustimmen ist. Die Übersicht zeigt sie als Zeile in „Jetzt dran“.
+ */
+export function useTermsNotice(conn: Connection): ReactNode {
   const { state, outdated, refresh, setUser } = useTerms(conn);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -68,12 +75,12 @@ export function TermsReminder({ conn }: { conn: Connection }) {
           ? t('{operator} hat die Nutzungsbedingungen geändert. Bis du zustimmst, kannst du auf diesem Server nur lesen.', { operator: info.operator })
           : t('{operator} hat jetzt Nutzungsbedingungen. Bis du zustimmst, kannst du auf diesem Server nur lesen.', { operator: info.operator })}
       </span>
-      <a className="small tap-link" href={info.termsUrl!} target="_blank" rel="noreferrer" style={{ alignSelf: 'flex-start' }}>{t('Nutzungsbedingungen lesen')}</a>
       <ErrorBox error={error} />
-      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
-        <button type="button" className="btn small outline" disabled={busy} onClick={accept}>{t('Zustimmen')}</button>
-        <Link className="linklike small tap-link" to="/konto">{t('Nicht einverstanden? Konto löschen')}</Link>
-      </div>
+      <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={accept}>{t('Zustimmen')}</button>
+      <span className="row wrap small" style={{ gap: '0 16px' }}>
+        <a className="tap-link" href={info.termsUrl!} target="_blank" rel="noreferrer">{t('Nutzungsbedingungen lesen')}</a>
+        <Link className="tap-link" to={`/konto?loeschen=${encodeURIComponent(conn.id)}`}>{t('Nicht einverstanden? Konto löschen')}</Link>
+      </span>
     </section>
   );
 }
@@ -92,10 +99,8 @@ export function ServerLegal({ conn }: { conn: Connection }) {
   ].filter((x): x is { href: string; label: string } => !!x);
   return (
     <div className="server-legal small">
-      <span>
-        {t('Betrieben von {operator}', { operator: info.operator })}
-        {info.contact ? ' · ' + info.contact : ''}
-      </span>
+      {/* Der Betreiber steht schon über der Karte; hier nur Kontakt und Rechtliches */}
+      {info.contact && <span>{t('Kontakt: {contact}', { contact: info.contact })}</span>}
       {links.length > 0 && (
         <span className="row wrap" style={{ gap: '0 16px' }}>
           {links.map((l) => <a key={l.label} className="tap-link" href={l.href} target="_blank" rel="noreferrer">{l.label}</a>)}

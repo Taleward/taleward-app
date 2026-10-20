@@ -5,8 +5,8 @@ import { ImportCampaign } from '../components/ImportCampaign';
 import { confirmDialog } from '../components/confirm';
 import { ThemeSwitch } from '../themeMode';
 import { NotifySettingsSection } from '../notify/NotifySettings';
-import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFor } from '../api/client';
 import { APP_VERSION, apiAtLeast, hasValidToken, isOutdated, removeConnection, type Connection } from '../api/connections';
 import { useAuth } from '../auth/AuthContext';
@@ -53,6 +53,13 @@ export function AccountPage() {
 
 function ConnectionCard({ conn }: { conn: Connection }) {
   const navigate = useNavigate();
+  // Aus der Karte „Neue Nutzungsbedingungen“: direkt zu „Daten und Konto löschen“ dieses Servers
+  const [params] = useSearchParams();
+  const openDelete = params.get('loeschen') === conn.id;
+  const deleteRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (openDelete) deleteRef.current?.scrollIntoView({ block: 'center' });
+  }, [openDelete]);
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [password, setPassword] = useState('');
@@ -168,7 +175,7 @@ function ConnectionCard({ conn }: { conn: Connection }) {
           ? <ImportCampaign servers={[conn]} onCancel={() => setImporting(false)} />
           : <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} onClick={() => setImporting(true)}>{t('Kampagne aus Datei übernehmen')}</button>)}
         {/* Selten gebraucht – eingeklappt */}
-        <details className="card" style={{ gap: 10 }}>
+        <details className="card" style={{ gap: 10 }} ref={deleteRef} open={openDelete || undefined}>
           <summary style={{ fontWeight: 700 }}>{t('Daten und Konto löschen')}</summary>
           <div className="row wrap" style={{ gap: 8 }}>
             <button type="button" className="btn small outline" onClick={exportData}>{t('Meine Daten herunterladen')}</button>

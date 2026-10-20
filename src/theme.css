@@ -2140,6 +2140,10 @@ button.table-group-face {
 .secret-warning > strong { color: var(--siegel-text); }
 .secret-warning ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 .secret-warning li > span { margin-right: 8px; }
+/* Absatz mit Geheimem (nur SL): Randstrich wie die übrigen Prüfstellen, ein Satz mit Schloss */
+.review-para.secret-para { border-left-color: var(--siegel); }
+.review-para .secret-note { display: flex; gap: 6px; align-items: baseline; color: var(--siegel-text); margin: 0; }
+.review-para .secret-note svg { flex-shrink: 0; position: relative; top: 2px; }
 
 /* Vorbereitung auf die nächste Runde (nur SL) */
 .prep-card { gap: 10px; }

@@ -16,26 +16,39 @@ export function secretNames(recap: Recap, entries: Entry[]): string[] {
   return [...names];
 }
 
+/** Ein Satz je Hinweis – für den Kasten oben und für die Markierung am Absatz */
+export function secretLines(recap: Recap, entries: Entry[]): { text: string; paragraphs: number[] }[] {
+  return (recap.gmWarnings ?? []).map((w) => {
+    const list = w.names?.filter(Boolean).length ? w.names! : w.entryIds.map((id) => entries.find((e) => e.id === id)?.name).filter((x): x is string => !!x);
+    const names = list.join(', ');
+    const text = w.code === 'secret_wording'
+      ? (names ? t('Übernimmt geheimen Text zu „{names}“.', { names }) : t('Übernimmt Text aus geheimen Notizen.'))
+      : (names ? t('Nennt „{names}“ (geheim).', { names }) : t('Nennt einen geheimen Eintrag.'));
+    return { text, paragraphs: (w.paragraphs ?? []).map((n) => Math.trunc(n)) };
+  });
+}
+
+/** Absatz → Satz, der dort am Rand steht */
+export function secretByParagraph(recap: Recap, entries: Entry[]): Map<number, string> {
+  const map = new Map<number, string>();
+  for (const l of secretLines(recap, entries)) {
+    for (const i of l.paragraphs) map.set(i, map.has(i) ? map.get(i) + ' ' + l.text : l.text);
+  }
+  return map;
+}
+
 export function SecretWarnings({ recap, entries, onJump }: { recap: Recap; entries: Entry[]; onJump: (paragraph: number) => void }) {
-  const warnings = recap.gmWarnings ?? [];
-  if (!warnings.length) return null;
-  const label = (ids: string[], names?: string[]) => {
-    const list = names?.filter(Boolean).length ? names! : ids.map((id) => entries.find((e) => e.id === id)?.name).filter((x): x is string => !!x);
-    return list.length ? list.join(', ') : t('ein geheimer Eintrag');
-  };
+  const lines = secretLines(recap, entries);
+  if (!lines.length) return null;
   return (
     <section className="secret-warning" role="note" aria-labelledby="secret-warning-title">
       <strong id="secret-warning-title" className="row" style={{ gap: 6 }}><IconLock size={16} /> {t('Bitte vor der Freigabe prüfen')}</strong>
       <ul>
-        {warnings.map((w, i) => (
+        {lines.map((l, i) => (
           <li key={i}>
-            <span>
-              {w.code === 'secret_wording'
-                ? t('Übernimmt Text aus geheimen Notizen: {names}', { names: label(w.entryIds, w.names) })
-                : t('Nennt den Namen eines geheimen Eintrags: {names}', { names: label(w.entryIds, w.names) })}
-            </span>
-            {w.paragraphs?.length ? (
-              <button type="button" className="linklike small tap-link" onClick={() => onJump(w.paragraphs![0])}>{t('Zur Stelle')}</button>
+            <span>{l.text}</span>
+            {l.paragraphs.length ? (
+              <button type="button" className="linklike small tap-link" onClick={() => onJump(l.paragraphs[0])}>{t('Zur Stelle')}</button>
             ) : null}
           </li>
         ))}

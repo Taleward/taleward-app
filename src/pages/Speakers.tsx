@@ -104,6 +104,13 @@ export function Speakers() {
     return m ? m.characterName ?? m.displayName : null;
   };
   const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match').length ?? 0;
+  // Zwei Stimmen, deren Hinweise denselben Tausch meinen (2 ↔ 3): den Hinweis nur bei der ersten zeigen
+  const shownHint = (s: Speaker) => {
+    if (!s.hint || mapping[s.id] === s.hint.memberId || !campaign?.members.some((m) => m.id === s.hint!.memberId)) return false;
+    const list = speakers ?? [];
+    const idx = list.indexOf(s);
+    return !list.slice(0, idx).some((o) => o.hint && o.hint.memberId === mapping[s.id] && s.hint!.memberId === mapping[o.id]);
+  };
 
   return (
     <Screen narrow back title={review ? t('Stimmen prüfen') : t('Stimmen zuordnen')}
@@ -126,37 +133,26 @@ export function Speakers() {
         const unsure = !mapping[s.id];
         return (
           <div key={s.id} className={unsure ? 'card warn' : 'card'}>
-            <div className="row">
-              {!s.samples?.length && (
-                <button type="button" className="icon-btn" aria-label={t('Hörprobe {label} abspielen', { label: s.label })} onClick={() => play(s.id)}>
-                  <IconPlay />
-                </button>
-              )}
-              <div style={{ flex: 1 }}>
-                <div className="card-title">{s.label}</div>
-                {/* Ab 0.4.21 bis zu drei Textproben, jede mit eigener Hörprobe; sonst die eine wie bisher */}
-                {s.samples?.length ? (
-                  <ul className="speaker-samples">
-                    {s.samples.slice(0, 3).map((x, i) => (
-                      <li key={i}>
-                        <button type="button" className="icon-btn" onClick={() => play(s.id, i)}
-                          aria-label={t('Hörprobe {n} von {label} abspielen', { n: i + 1, label: s.label })}>
-                          <IconPlay />
-                        </button>
-                        <span className="quote">{x.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <div className="quote">{s.sampleText}</div>}
-                {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
-                {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
-                {!review && s.suggestedMemberId && s.confidence < 0.8 && mapping[s.id] === s.suggestedMemberId && (
-                  <div className="small" style={{ color: 'var(--siegel-text)', fontWeight: 500 }}>{t('Unsicher – bitte prüfen.')}</div>
-                )}
-              </div>
-            </div>
+            {/* Immer gleich aufgebaut: Name oben, darunter die Textproben mit eigener Hörprobe (ab 0.4.21 bis zu drei) */}
+            <div className="card-title">{s.label}</div>
+            <ul className="speaker-samples">
+              {(s.samples?.length ? s.samples.slice(0, 3) : [{ text: s.sampleText }]).map((x, i, all) => (
+                <li key={i}>
+                  <button type="button" className="icon-btn" onClick={() => (s.samples?.length ? play(s.id, i) : play(s.id))}
+                    aria-label={all.length > 1 ? t('Hörprobe {n} von {label} abspielen', { n: i + 1, label: s.label }) : t('Hörprobe {label} abspielen', { label: s.label })}>
+                    <IconPlay />
+                  </button>
+                  <span className="quote">{x.text}</span>
+                </li>
+              ))}
+            </ul>
+            {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
+            {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
+            {!review && s.suggestedMemberId && s.confidence < 0.8 && mapping[s.id] === s.suggestedMemberId && (
+              <div className="small" style={{ color: 'var(--siegel-text)', fontWeight: 500 }}>{t('Unsicher – bitte prüfen.')}</div>
+            )}
             {/* Ab 0.4.21: Anrede oder Selbstnennung passt nicht zur Zuordnung – nur, solange sie noch nicht passt */}
-            {s.hint && mapping[s.id] !== s.hint.memberId && campaign?.members.some((m) => m.id === s.hint!.memberId) && (
+            {s.hint && shownHint(s) && (
               <div className="speaker-hint">
                 <span>
                   {(() => {

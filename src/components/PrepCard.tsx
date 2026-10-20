@@ -62,7 +62,8 @@ export function PrepCard({ campaign, sessions, phase }: { campaign: Campaign; se
           <h3 className="prep-head">{t('Zuletzt dabei')}</h3>
           <div className="prep-chips">
             {entries.map((e) => (
-              <Link key={e.id} className="btn small chip" to={bible(e.name)}>
+              <Link key={e.id} className="btn small chip" to={bible(e.name)}
+                aria-label={e.visibility === 'gm_only' ? t('{name}, nur für dich', { name: e.name }) : undefined}>
                 {e.visibility === 'gm_only' && <IconLock size={12} />}{e.name}
               </Link>
             ))}

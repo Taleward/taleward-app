@@ -11,7 +11,7 @@ import { IconLock } from '../components/Icons';
 import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
 import { fromEditText, toEditText } from '../review/parts';
 import { RecapReviewView, jumpToFirstFlagged, jumpToParagraph, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
-import { SecretWarnings, secretNames } from '../review/SecretWarnings';
+import { SecretWarnings, secretByParagraph, secretNames } from '../review/SecretWarnings';
 import { namesSkipped, serverHasNameCheck } from './NamesPage';
 import { ParagraphHint, RevisionBox, RevisionDraft, paragraphRef, revisionOpen } from '../review/Revision';
 import { mentions } from '../review/mentions';
@@ -154,7 +154,7 @@ export function Review() {
       {tools.length > 0 && <div className="review-tools">{tools}</div>}
       {recap && <SecretWarnings recap={recap} entries={entries} onJump={jumpToParagraph} />}
       {recap && <RecapEditor sessionId={sessionId} recap={recap} members={members} onSaved={setRecap} onError={setError}
-        alwaysOpen={wide} highlight={hoverTitle} />}
+        alwaysOpen={wide} highlight={hoverTitle} secretAt={secretByParagraph(recap, entries)} />}
       {/* Verwirft alle Änderungen – darum leise am Ende, nicht oben bei den Prüfwerkzeugen */}
       {canRewrite && proposals && (
         <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start', marginTop: 8 }} disabled={busy} onClick={rewrite}>
@@ -234,7 +234,7 @@ export function Review() {
  * Recap-Entwurf vor dem Veröffentlichen: lesen und bei Bedarf korrigieren (Titel, Text, offene Fäden) –
  * z. B. falsch geschriebene Namen. Der Server nimmt Änderungen nur bis zum Veröffentlichen an.
  */
-function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen = false, highlight = null }: {
+function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen = false, highlight = null, secretAt }: {
   sessionId: string;
   recap: Recap;
   members: Member[];
@@ -242,6 +242,8 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
   alwaysOpen?: boolean;
   /** Titel eines Vorschlags – Absätze, in denen er vorkommt, werden hervorgehoben */
   highlight?: string | null;
+  /** Absätze mit Geheimem (ab 0.4.21) */
+  secretAt?: Map<number, string>;
   onSaved: (r: Recap) => void;
   onError: (e: unknown) => void;
 }) {
@@ -326,7 +328,7 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
         {recap.revision?.state === 'ready'
           ? <RevisionDraft recap={recap} />
-          : <RecapReviewView sessionId={sessionId} recap={recap} members={members} showReport={false}
+          : <RecapReviewView sessionId={sessionId} recap={recap} members={members} showReport={false} secretAt={secretAt}
               highlight={highlight ? mentions(highlight) : undefined}
               onPick={canRevise && !revisionOpen(recap) ? pick : undefined}
               after={(i) => (canRevise && !revisionOpen(recap) && i in hints ? (

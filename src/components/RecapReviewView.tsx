@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { Member, Recap, ReviewVerdict, TranscriptSegment } from '../api/types';
 import { t, tn } from '../i18n';
 import { Dialog } from './Dialog';
+import { IconLock } from './Icons';
 import { ErrorBox } from './Screen';
 import { PartHeading } from './PartHeading';
 import { partTitles } from '../review/parts';
@@ -74,7 +75,7 @@ export function reviewNeedsAttention(recap: Recap): boolean {
   return flagged(recap).some((p) => p.verdict !== 'off_game');
 }
 
-export function RecapReviewView({ sessionId, recap, members = [], showReport = true, onPick, after, highlight }: {
+export function RecapReviewView({ sessionId, recap, members = [], showReport = true, onPick, after, highlight, secretAt }: {
   sessionId: string;
   recap: Recap;
   members?: Member[];
@@ -86,6 +87,8 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
   after?: (index: number) => ReactNode;
   /** Arbeitsplatz: Absätze hervorheben, in denen der gerade angesehene Vorschlag vorkommt */
   highlight?: ((paragraph: string) => boolean) | null;
+  /** Ab 0.4.21, nur SL: Absätze mit Geheimem (Index → Satz am Rand) */
+  secretAt?: Map<number, string>;
 }) {
   const review = recap.review;
   const paragraphs = recap.text.split(/\n\s*\n/);
@@ -110,7 +113,13 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
     }
   };
 
-  const hl = (para: string, cls: string) => (highlight && highlight(para) ? `${cls} hl` : cls);
+  const hl = (para: string, cls: string, i?: number) => {
+    const c = i !== undefined && secretAt?.has(i) ? `${cls} secret-para` : cls;
+    return highlight && highlight(para) ? `${c} hl` : c;
+  };
+  const secretNote = (i: number) => (secretAt?.has(i)
+    ? <p className="review-note small secret-note"><IconLock size={14} /> {secretAt.get(i)}</p>
+    : null);
 
   // Text eines Absatzes; mit onPick antippbar (nur Zeiger und Finger – mit Tastatur gibt es die Zeile am Ende)
   const text = (para: string, i: number) => (
@@ -120,7 +129,7 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
   if (!review || review.state === 'skipped') {
     return (
       <div className="review">
-        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>)}
+        {paragraphs.map((para, i) => <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para', i)}>{text(para, i)}{secretNote(i)}{after?.(i)}</div></Fragment>)}
       </div>
     );
   }
@@ -137,12 +146,13 @@ export function RecapReviewView({ sessionId, recap, members = [], showReport = t
       {paragraphs.map((para, i) => {
         const info = review.state === 'done' ? review.paragraphs.find((x) => x.index === i) : undefined;
         if (!info || !isFlagged(info)) {
-          return <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para')}>{text(para, i)}{after?.(i)}</div></Fragment>;
+          return <Fragment key={i}>{heading(i)}<div data-para={i} tabIndex={-1} className={hl(para, 'review-para', i)}>{text(para, i)}{secretNote(i)}{after?.(i)}</div></Fragment>;
         }
         const evidence = info.evidence.slice(0, MAX_EVIDENCE);
         return (
-          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} data-para={i} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`)}>
+          <Fragment key={i}>{heading(i)}<div id={`stelle-${i}`} data-para={i} tabIndex={-1} className={hl(para, `review-para flagged v-${info.verdict}`, i)}>
             {text(para, i)}
+            {secretNote(i)}
             <p className="review-note small">
               {/* Die Begründung des Prüfers genügt; ohne sie ein kurzes Wort zur Art */}
               {info.note ? info.note : <strong>{flagLabel(info.verdict)}</strong>}
