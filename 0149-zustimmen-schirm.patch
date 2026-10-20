@@ -1,0 +1,332 @@
+From f7144094dcf93e27af96d9edd80ac77d17396618 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 14:08:08 +0200
+Subject: [PATCH 149/150] =?UTF-8?q?Nutzungsbedingungen=20=C3=BCberall=20zu?=
+ =?UTF-8?q?stimmbar,=20SL-Schirm:=20Kampagne=20wechseln?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Meldet der Server irgendwo, dass erst zugestimmt werden muss, zeigt die
+App dieselbe Karte als Fenster. Nennt der Server keine lesbare Adresse,
+sagt sie das statt still zuzustimmen. SL-Schirm: „Kampagne wechseln“
+und die feste Adresse #/schirm für die zuletzt geöffnete eigene
+Kampagne.
+---
+ scripts/tests/last-table.test.mjs | 11 ++++++
+ src/App.tsx                       |  5 +++
+ src/api/client.ts                 |  4 +++
+ src/components/Screen.tsx         |  3 ++
+ src/components/Terms.tsx          | 58 +++++++++++++++++++++++++++++--
+ src/i18n/en.ts                    |  4 +++
+ src/pages/ConnectPage.tsx         |  2 ++
+ src/pages/TablePage.tsx           | 37 ++++++++++++++++++--
+ src/table/LastTableRedirect.tsx   | 10 ++++++
+ src/table/lastTable.ts            | 34 ++++++++++++++++++
+ 10 files changed, 163 insertions(+), 5 deletions(-)
+ create mode 100644 scripts/tests/last-table.test.mjs
+ create mode 100644 src/table/LastTableRedirect.tsx
+ create mode 100644 src/table/lastTable.ts
+
+diff --git a/scripts/tests/last-table.test.mjs b/scripts/tests/last-table.test.mjs
+new file mode 100644
+index 0000000..2fc3707
+--- /dev/null
++++ b/scripts/tests/last-table.test.mjs
+@@ -0,0 +1,11 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { parseLastTable } from '../../src/table/lastTable.ts';
++
++test('Gemerkter SL-Schirm: nur gültige Kennungen', () => {
++  assert.deepEqual(parseLastTable('{"conn":"verein","campaignId":"c-grau"}'), { conn: 'verein', campaignId: 'c-grau' });
++  assert.equal(parseLastTable(null), null);
++  assert.equal(parseLastTable('kaputt'), null);
++  assert.equal(parseLastTable('{"conn":"verein","campaignId":"../x"}'), null);
++  assert.equal(parseLastTable('{"conn":"verein"}'), null);
++});
+diff --git a/src/App.tsx b/src/App.tsx
+index b1bc838..83deffc 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,2 +1,4 @@
++import { TermsGate } from './components/Terms';
++import { LastTableRedirect } from './table/LastTableRedirect';
+ import { BackButton } from './components/BackButton';
+ import { AuthReturn } from './pages/AuthReturn';
+@@ -67,4 +69,6 @@ function Routed() {
+       <Route path="/verbinden" element={<ConnectRoute />} />
+       <Route path="/konto" element={<AccountPage />} />
++      {/* Feste Adresse für Taleward Desktop: SL-Schirm der zuletzt geöffneten eigenen Kampagne */}
++      <Route path="/schirm" element={<LastTableRedirect />} />
+       <Route path="/charaktere" element={<CharactersPage />} />
+       <Route path="/charaktere/:characterId" element={<MyCharacterPage />} />
+@@ -105,4 +109,5 @@ export function App() {
+       {/* HashRouter: funktioniert ohne Server-Konfiguration im Browser und in der APK */}
+       <HashRouter>
++        <TermsGate />
+         <Routed />
+       </HashRouter>
+diff --git a/src/api/client.ts b/src/api/client.ts
+index e6aaf79..db7bc98 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -172,4 +172,8 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
+       (campaign ? removeCopiesOfCampaign(conn.id, campaign) : saveCopy(conn.id, copyUser, path, null)).catch(() => undefined);
+     }
++    // Neue Nutzungsbedingungen: die App zeigt den Weg zum Zustimmen, egal wo es passiert
++    if (res.status === 403 && err.code === 'terms_required' && conn.id !== '_probe' && typeof window !== 'undefined') {
++      window.dispatchEvent(new CustomEvent('taleward:terms-required', { detail: conn.id }));
++    }
+     throw new ApiRequestError(res.status, err);
+   }
+diff --git a/src/components/Screen.tsx b/src/components/Screen.tsx
+index 31f526b..168d1d4 100644
+--- a/src/components/Screen.tsx
++++ b/src/components/Screen.tsx
+@@ -1,2 +1,3 @@
++import { rememberTable } from '../table/lastTable';
+ import { currentConnectionId, getConnection, p } from '../api/connections';
+ import { isMusterUrl } from '../api/muster';
+@@ -145,4 +146,6 @@ const scopedKey = (name: string, campaignId: string) => `${name}.${currentConnec
+ export function rememberCampaign(c: { id: string; myRole: string; unread?: Unread }): void {
+   sessionStorageSet('lastCampaign.' + (currentConnectionId() ?? '-'), c.id);
++  const conn = currentConnectionId();
++  if (conn && c.myRole === 'gm') rememberTable(conn, c.id);
+   sessionStorageSet(scopedKey('role', c.id), c.myRole);
+   if (c.unread) sessionStorageSet(scopedKey('unread', c.id), JSON.stringify(c.unread));
+diff --git a/src/components/Terms.tsx b/src/components/Terms.tsx
+index cfd8c4f..c7077ec 100644
+--- a/src/components/Terms.tsx
++++ b/src/components/Terms.tsx
+@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react';
+ import { Link } from 'react-router-dom';
+ import { apiFor, isApiError } from '../api/client';
+-import { hasValidToken, updateConnection, type Connection } from '../api/connections';
++import { getConnection, hasValidToken, updateConnection, type Connection } from '../api/connections';
+ import type { ServerInfo, User } from '../api/types';
+ import { t } from '../i18n';
+ import { ErrorBox } from './Screen';
++import { Dialog } from './Dialog';
+ 
+ /*
+@@ -27,5 +28,6 @@ function useTerms(conn: Connection) {
+     const api = apiFor(conn);
+     api.info().then(async (info) => {
+-      if (!info.termsUrl || !info.termsVersion) return;
++      // Ohne Fassung: keine Nutzungsbedingungen. Mit Fassung, aber ohne (lesbare) Adresse: unten als Hinweis
++      if (!info.termsVersion) return;
+       const user = await api.me();
+       if (!gone) setState({ info, user });
+@@ -42,8 +44,48 @@ export function TermsReminder({ conn }: { conn: Connection }) {
+ }
+ 
++/** Meldet der Server 403 terms_required (irgendwo in der App), kommt dieselbe Karte als Fenster */
++export const TERMS_REQUIRED_EVENT = 'taleward:terms-required';
++
++// Nach „Später“ eine Weile Ruhe: Auch Hintergrund-Anfragen (z. B. „gelesen“) melden terms_required
++const quietUntil = new Map<string, number>();
++const QUIET_MS = 10 * 60_000;
++
++export function TermsGate() {
++  const [connId, setConnId] = useState<string | null>(null);
++  useEffect(() => {
++    const on = (e: Event) => {
++      const id = (e as CustomEvent<string>).detail;
++      if ((quietUntil.get(id) ?? 0) > Date.now()) return;
++      setConnId(id);
++    };
++    window.addEventListener(TERMS_REQUIRED_EVENT, on);
++    return () => window.removeEventListener(TERMS_REQUIRED_EVENT, on);
++  }, []);
++  const conn = connId ? getConnection(connId) : undefined;
++  if (!conn) return null;
++  const later = () => {
++    quietUntil.set(conn.id, Date.now() + QUIET_MS);
++    setConnId(null);
++  };
++  return <TermsDialog key={conn.id} conn={conn} onClose={later} onDone={() => setConnId(null)} />;
++}
++
++function TermsDialog({ conn, onClose, onDone }: { conn: Connection; onClose: () => void; onDone: () => void }) {
++  const notice = useTermsNotice(conn, onDone);
++  // Schon zugestimmt (z. B. auf einem anderen Gerät): nichts zu zeigen
++  const { state, outdated } = useTerms(conn);
++  useEffect(() => { if (state && !outdated) onDone(); }, [state, outdated]); // eslint-disable-line react-hooks/exhaustive-deps
++  return (
++    <Dialog title={t('Nutzungsbedingungen')} onClose={onClose}>
++      {notice ?? <span className="muted">{t('Lade …')}</span>}
++      <button type="button" className="linklike small tap-link" style={{ alignSelf: 'flex-start' }} onClick={onClose}>{t('Später')}</button>
++    </Dialog>
++  );
++}
++
+ /**
+  * Dieselbe Karte als Inhalt – null, solange nichts zuzustimmen ist. Die Übersicht zeigt sie als Zeile in „Jetzt dran“.
+  */
+-export function useTermsNotice(conn: Connection): ReactNode {
++export function useTermsNotice(conn: Connection, onAccepted?: () => void): ReactNode {
+   const { state, outdated, refresh, setUser } = useTerms(conn);
+   const [busy, setBusy] = useState(false);
+@@ -51,4 +93,13 @@ export function useTermsNotice(conn: Connection): ReactNode {
+   if (!state || !outdated) return null;
+   const { info } = state;
++  // Der Server meldet eine Fassung, aber keine Adresse, die die App öffnen darf: nicht still zustimmen
++  if (!info.termsUrl) {
++    return (
++      <section className="card task terms-reminder" aria-labelledby={`terms-${conn.id}`}>
++        <strong id={`terms-${conn.id}`}>{t('Neue Nutzungsbedingungen bei „{name}“', { name: conn.name })}</strong>
++        <span className="small">{t('Der Server nennt keine Adresse, unter der du sie lesen kannst. Bis du zustimmst, kannst du hier nur lesen. Sag deiner SL oder {operator} Bescheid.', { operator: info.operator })}</span>
++      </section>
++    );
++  }
+ 
+   const accept = async () => {
+@@ -59,4 +110,5 @@ export function useTermsNotice(conn: Connection): ReactNode {
+       updateConnection(conn.id, { user: { ...(conn.user ?? user), ...user } });
+       setUser(user);
++      onAccepted?.();
+     } catch (e) {
+       // Inzwischen gibt es schon wieder eine neuere Fassung: neu laden und noch einmal zeigen
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index eed6bd0..545afe1 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1349,3 +1349,7 @@ export const en: Record<string, string> = {
+   "Nennt „{names}“ (geheim).": "Names “{names}” (secret).",
+   "Nennt einen geheimen Eintrag.": "Names a secret entry.",
++  "Der Server nennt keine Adresse, unter der du sie lesen kannst. Bis du zustimmst, kannst du hier nur lesen. Sag deiner SL oder {operator} Bescheid.": "The server doesn't give an address where you can read them. Until you agree, you can only read here. Let your GM or {operator} know.",
++  "Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.": "The server doesn't give an address for its terms of use. You can only create an account here once they can be read – let your GM know.",
++  "Kampagne wechseln": "Switch campaign",
++  "Du leitest auf diesem Server keine weitere Kampagne.": "You don't run any other campaign on this server.",
+ };
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index d5f4825..0c082ed 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -173,4 +173,5 @@ export function ConnectPage() {
+     : password !== password2 ? t('Die Passwörter stimmen nicht überein.')
+     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
++    : info?.termsVersion && !info?.termsUrl ? t('Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.')
+     : info?.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
+     : !age ? t('Bitte bestätige das Mindestalter.')
+@@ -418,4 +419,5 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
+     : !displayName.trim() ? t('Bitte deinen Namen eingeben.')
+     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
++    : info.termsVersion && !info.termsUrl ? t('Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.')
+     : info.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
+     : !age ? t('Bitte bestätige das Mindestalter.')
+diff --git a/src/pages/TablePage.tsx b/src/pages/TablePage.tsx
+index d775981..ec1c068 100644
+--- a/src/pages/TablePage.tsx
++++ b/src/pages/TablePage.tsx
+@@ -1,7 +1,8 @@
+ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+-import { Link, useParams } from 'react-router-dom';
++import { Link, useNavigate, useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+ import { apiAtLeast, p } from '../api/connections';
+-import type { Campaign } from '../api/types';
++import type { Campaign, CampaignSummary } from '../api/types';
++import { Dialog } from '../components/Dialog';
+ import { IconBack } from '../components/Icons';
+ import { ErrorBox, rememberCampaign } from '../components/Screen';
+@@ -79,4 +80,35 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
+ }
+ 
++/** „Kampagne wechseln“: andere Kampagnen dieses Servers, die man leitet – direkt zu deren SL-Schirm */
++function SwitchCampaign({ current }: { current: string }) {
++  const navigate = useNavigate();
++  const [open, setOpen] = useState(false);
++  const [list, setList] = useState<CampaignSummary[] | null>(null);
++  const [error, setError] = useState<unknown>(null);
++  useEffect(() => {
++    if (!open || list) return;
++    api.campaigns().then((all) => setList(all.filter((c) => c.myRole === 'gm' && !c.archivedAt && c.id !== current))).catch(setError);
++  }, [open, list, current]);
++  return (
++    <>
++      <button type="button" className="btn small ghost" onClick={() => setOpen(true)}>{t('Kampagne wechseln')}</button>
++      {open && (
++        <Dialog title={t('Kampagne wechseln')} onClose={() => setOpen(false)}>
++          <ErrorBox error={error} />
++          {!list && !error && <span className="muted">{t('Lade …')}</span>}
++          {list?.length === 0 && <span className="muted">{t('Du leitest auf diesem Server keine weitere Kampagne.')}</span>}
++          {list?.map((c) => (
++            <button key={c.id} type="button" className="btn outline" style={{ justifyContent: 'flex-start' }}
++              onClick={() => { setOpen(false); navigate(p(`/k/${c.id}/tisch`)); }}>
++              {c.title}
++            </button>
++          ))}
++          <Link className="tap-link small" to="/" onClick={() => setOpen(false)}>{t('Alle Kampagnen')}</Link>
++        </Dialog>
++      )}
++    </>
++  );
++}
++
+ /** Eine Karte auf dem Schirm; misst selbst, ob sie für die volle Ansicht groß genug ist */
+ function Card({ id, forceCompact, onCompact, onExpand, style, children }: {
+@@ -319,4 +351,5 @@ export function TablePage() {
+           <h1 className="table-title">{t('SL-Schirm')}</h1>
+         </div>
++        {gm && !editing && <SwitchCampaign current={campaignId} />}
+         {gm && wide && !editing && (
+           <button type="button" className="btn small outline" onClick={() => setEditing(true)}>{t('Schirm einrichten')}</button>
+diff --git a/src/table/LastTableRedirect.tsx b/src/table/LastTableRedirect.tsx
+new file mode 100644
+index 0000000..513362b
+--- /dev/null
++++ b/src/table/LastTableRedirect.tsx
+@@ -0,0 +1,10 @@
++import { Navigate } from 'react-router-dom';
++import { getConnection } from '../api/connections';
++import { lastTable } from './lastTable';
++
++/** #/schirm → SL-Schirm der zuletzt geöffneten Kampagne, die man leitet; sonst zur Kampagnenliste */
++export function LastTableRedirect() {
++  const last = lastTable();
++  if (!last || !getConnection(last.conn)) return <Navigate to="/" replace />;
++  return <Navigate to={`/v/${last.conn}/k/${last.campaignId}/tisch`} replace />;
++}
+diff --git a/src/table/lastTable.ts b/src/table/lastTable.ts
+new file mode 100644
+index 0000000..e801cd5
+--- /dev/null
++++ b/src/table/lastTable.ts
+@@ -0,0 +1,34 @@
++/*
++ * Zuletzt geöffnete Kampagne, die man leitet – für die feste Adresse #/schirm (Taleward Desktop öffnet sie im Bereich
++ * „SL-Schirm“, ohne die Kampagnen zu kennen). Nur Kennungen, keine Inhalte; geht verloren, wenn der Speicher fehlt.
++ */
++const KEY = 'taleward.lastTable';
++
++export interface LastTable { conn: string; campaignId: string }
++
++export function parseLastTable(raw: string | null): LastTable | null {
++  if (!raw) return null;
++  try {
++    const v = JSON.parse(raw) as Partial<LastTable>;
++    const ok = (x: unknown): x is string => typeof x === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(x);
++    return ok(v.conn) && ok(v.campaignId) ? { conn: v.conn, campaignId: v.campaignId } : null;
++  } catch {
++    return null;
++  }
++}
++
++export function rememberTable(conn: string, campaignId: string): void {
++  try {
++    localStorage.setItem(KEY, JSON.stringify({ conn, campaignId }));
++  } catch {
++    /* ohne Speicher eben nicht */
++  }
++}
++
++export function lastTable(): LastTable | null {
++  try {
++    return parseLastTable(localStorage.getItem(KEY));
++  } catch {
++    return null;
++  }
++}
