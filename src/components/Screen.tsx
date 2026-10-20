@@ -1,3 +1,4 @@
+import { rememberTable } from '../table/lastTable';
 import { currentConnectionId, getConnection, p } from '../api/connections';
 import { isMusterUrl } from '../api/muster';
 import { t } from '../i18n';
@@ -144,6 +145,8 @@ const scopedKey = (name: string, campaignId: string) => `${name}.${currentConnec
 
 export function rememberCampaign(c: { id: string; myRole: string; unread?: Unread }): void {
   sessionStorageSet('lastCampaign.' + (currentConnectionId() ?? '-'), c.id);
+  const conn = currentConnectionId();
+  if (conn && c.myRole === 'gm') rememberTable(conn, c.id);
   sessionStorageSet(scopedKey('role', c.id), c.myRole);
   if (c.unread) sessionStorageSet(scopedKey('unread', c.id), JSON.stringify(c.unread));
 }

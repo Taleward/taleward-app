@@ -172,6 +172,7 @@ export function ConnectPage() {
     : password.length < 8 ? t('Das Passwort braucht mindestens 8 Zeichen.')
     : password !== password2 ? t('Die Passwörter stimmen nicht überein.')
     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
+    : info?.termsVersion && !info?.termsUrl ? t('Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.')
     : info?.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
     : !age ? t('Bitte bestätige das Mindestalter.')
     : null;
@@ -417,6 +418,7 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
   const missing = !code.trim() ? t('Bitte den Einladungscode eingeben.')
     : !displayName.trim() ? t('Bitte deinen Namen eingeben.')
     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
+    : info.termsVersion && !info.termsUrl ? t('Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.')
     : info.termsUrl && !terms ? t('Bitte stimme den Nutzungsbedingungen zu.')
     : !age ? t('Bitte bestätige das Mindestalter.')
     : null;

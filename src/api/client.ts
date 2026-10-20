@@ -171,6 +171,10 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
       const campaign = /^\/campaigns\/[^/?]+$/.test(path.split('?')[0]) ? campaignOfPath(path, null) : null;
       (campaign ? removeCopiesOfCampaign(conn.id, campaign) : saveCopy(conn.id, copyUser, path, null)).catch(() => undefined);
     }
+    // Neue Nutzungsbedingungen: die App zeigt den Weg zum Zustimmen, egal wo es passiert
+    if (res.status === 403 && err.code === 'terms_required' && conn.id !== '_probe' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('taleward:terms-required', { detail: conn.id }));
+    }
     throw new ApiRequestError(res.status, err);
   }
   if (res.status === 204) return undefined as T;

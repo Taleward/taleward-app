@@ -1,3 +1,5 @@
+import { TermsGate } from './components/Terms';
+import { LastTableRedirect } from './table/LastTableRedirect';
 import { BackButton } from './components/BackButton';
 import { AuthReturn } from './pages/AuthReturn';
 import { DeepLinks } from './components/DeepLinks';
@@ -66,6 +68,8 @@ function Routed() {
       <Route path="/" element={<Campaigns />} />
       <Route path="/verbinden" element={<ConnectRoute />} />
       <Route path="/konto" element={<AccountPage />} />
+      {/* Feste Adresse für Taleward Desktop: SL-Schirm der zuletzt geöffneten eigenen Kampagne */}
+      <Route path="/schirm" element={<LastTableRedirect />} />
       <Route path="/charaktere" element={<CharactersPage />} />
       <Route path="/charaktere/:characterId" element={<MyCharacterPage />} />
       <Route path="/v/:conn/k/:campaignId" element={scoped(<Overview />)} />
@@ -104,6 +108,7 @@ export function App() {
       <BackButton />
       {/* HashRouter: funktioniert ohne Server-Konfiguration im Browser und in der APK */}
       <HashRouter>
+        <TermsGate />
         <Routed />
       </HashRouter>
     </AuthProvider>

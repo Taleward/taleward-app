@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { apiAtLeast, p } from '../api/connections';
-import type { Campaign } from '../api/types';
+import type { Campaign, CampaignSummary } from '../api/types';
+import { Dialog } from '../components/Dialog';
 import { IconBack } from '../components/Icons';
 import { ErrorBox, rememberCampaign } from '../components/Screen';
 import { t, tk, tn } from '../i18n';
@@ -75,6 +76,37 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
       <button type="button" className="btn small outline" onClick={toggle}>{paused ? t('Weiter') : t('Pause')}</button>
       <Link className="btn small ghost" to={p(`/k/${campaignId}/aufnahme`)}>{t('Zur Aufnahme')}</Link>
     </div>
+  );
+}
+
+/** „Kampagne wechseln“: andere Kampagnen dieses Servers, die man leitet – direkt zu deren SL-Schirm */
+function SwitchCampaign({ current }: { current: string }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<CampaignSummary[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    if (!open || list) return;
+    api.campaigns().then((all) => setList(all.filter((c) => c.myRole === 'gm' && !c.archivedAt && c.id !== current))).catch(setError);
+  }, [open, list, current]);
+  return (
+    <>
+      <button type="button" className="btn small ghost" onClick={() => setOpen(true)}>{t('Kampagne wechseln')}</button>
+      {open && (
+        <Dialog title={t('Kampagne wechseln')} onClose={() => setOpen(false)}>
+          <ErrorBox error={error} />
+          {!list && !error && <span className="muted">{t('Lade …')}</span>}
+          {list?.length === 0 && <span className="muted">{t('Du leitest auf diesem Server keine weitere Kampagne.')}</span>}
+          {list?.map((c) => (
+            <button key={c.id} type="button" className="btn outline" style={{ justifyContent: 'flex-start' }}
+              onClick={() => { setOpen(false); navigate(p(`/k/${c.id}/tisch`)); }}>
+              {c.title}
+            </button>
+          ))}
+          <Link className="tap-link small" to="/" onClick={() => setOpen(false)}>{t('Alle Kampagnen')}</Link>
+        </Dialog>
+      )}
+    </>
   );
 }
 
@@ -318,6 +350,7 @@ export function TablePage() {
           <div className="overline">{campaign?.title ?? ' '}</div>
           <h1 className="table-title">{t('SL-Schirm')}</h1>
         </div>
+        {gm && !editing && <SwitchCampaign current={campaignId} />}
         {gm && wide && !editing && (
           <button type="button" className="btn small outline" onClick={() => setEditing(true)}>{t('Schirm einrichten')}</button>
         )}

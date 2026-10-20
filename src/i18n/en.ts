@@ -1348,4 +1348,8 @@ export const en: Record<string, string> = {
   "Übernimmt Text aus geheimen Notizen.": "Uses wording from secret notes.",
   "Nennt „{names}“ (geheim).": "Names “{names}” (secret).",
   "Nennt einen geheimen Eintrag.": "Names a secret entry.",
+  "Der Server nennt keine Adresse, unter der du sie lesen kannst. Bis du zustimmst, kannst du hier nur lesen. Sag deiner SL oder {operator} Bescheid.": "The server doesn't give an address where you can read them. Until you agree, you can only read here. Let your GM or {operator} know.",
+  "Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.": "The server doesn't give an address for its terms of use. You can only create an account here once they can be read – let your GM know.",
+  "Kampagne wechseln": "Switch campaign",
+  "Du leitest auf diesem Server keine weitere Kampagne.": "You don't run any other campaign on this server.",
 };

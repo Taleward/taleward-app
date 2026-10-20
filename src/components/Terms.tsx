@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFor, isApiError } from '../api/client';
-import { hasValidToken, updateConnection, type Connection } from '../api/connections';
+import { getConnection, hasValidToken, updateConnection, type Connection } from '../api/connections';
 import type { ServerInfo, User } from '../api/types';
 import { t } from '../i18n';
 import { ErrorBox } from './Screen';
+import { Dialog } from './Dialog';
 
 /*
  * Nutzungsbedingungen und Impressum je Server (ab Schnittstelle 0.4.22). Jeder Server hat eigene Bedingungen; ändert
@@ -26,7 +27,8 @@ function useTerms(conn: Connection) {
     let gone = false;
     const api = apiFor(conn);
     api.info().then(async (info) => {
-      if (!info.termsUrl || !info.termsVersion) return;
+      // Ohne Fassung: keine Nutzungsbedingungen. Mit Fassung, aber ohne (lesbare) Adresse: unten als Hinweis
+      if (!info.termsVersion) return;
       const user = await api.me();
       if (!gone) setState({ info, user });
     }).catch(() => undefined);
@@ -41,15 +43,64 @@ export function TermsReminder({ conn }: { conn: Connection }) {
   return useTermsNotice(conn);
 }
 
+/** Meldet der Server 403 terms_required (irgendwo in der App), kommt dieselbe Karte als Fenster */
+export const TERMS_REQUIRED_EVENT = 'taleward:terms-required';
+
+// Nach „Später“ eine Weile Ruhe: Auch Hintergrund-Anfragen (z. B. „gelesen“) melden terms_required
+const quietUntil = new Map<string, number>();
+const QUIET_MS = 10 * 60_000;
+
+export function TermsGate() {
+  const [connId, setConnId] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if ((quietUntil.get(id) ?? 0) > Date.now()) return;
+      setConnId(id);
+    };
+    window.addEventListener(TERMS_REQUIRED_EVENT, on);
+    return () => window.removeEventListener(TERMS_REQUIRED_EVENT, on);
+  }, []);
+  const conn = connId ? getConnection(connId) : undefined;
+  if (!conn) return null;
+  const later = () => {
+    quietUntil.set(conn.id, Date.now() + QUIET_MS);
+    setConnId(null);
+  };
+  return <TermsDialog key={conn.id} conn={conn} onClose={later} onDone={() => setConnId(null)} />;
+}
+
+function TermsDialog({ conn, onClose, onDone }: { conn: Connection; onClose: () => void; onDone: () => void }) {
+  const notice = useTermsNotice(conn, onDone);
+  // Schon zugestimmt (z. B. auf einem anderen Gerät): nichts zu zeigen
+  const { state, outdated } = useTerms(conn);
+  useEffect(() => { if (state && !outdated) onDone(); }, [state, outdated]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <Dialog title={t('Nutzungsbedingungen')} onClose={onClose}>
+      {notice ?? <span className="muted">{t('Lade …')}</span>}
+      <button type="button" className="linklike small tap-link" style={{ alignSelf: 'flex-start' }} onClick={onClose}>{t('Später')}</button>
+    </Dialog>
+  );
+}
+
 /**
  * Dieselbe Karte als Inhalt – null, solange nichts zuzustimmen ist. Die Übersicht zeigt sie als Zeile in „Jetzt dran“.
  */
-export function useTermsNotice(conn: Connection): ReactNode {
+export function useTermsNotice(conn: Connection, onAccepted?: () => void): ReactNode {
   const { state, outdated, refresh, setUser } = useTerms(conn);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   if (!state || !outdated) return null;
   const { info } = state;
+  // Der Server meldet eine Fassung, aber keine Adresse, die die App öffnen darf: nicht still zustimmen
+  if (!info.termsUrl) {
+    return (
+      <section className="card task terms-reminder" aria-labelledby={`terms-${conn.id}`}>
+        <strong id={`terms-${conn.id}`}>{t('Neue Nutzungsbedingungen bei „{name}“', { name: conn.name })}</strong>
+        <span className="small">{t('Der Server nennt keine Adresse, unter der du sie lesen kannst. Bis du zustimmst, kannst du hier nur lesen. Sag deiner SL oder {operator} Bescheid.', { operator: info.operator })}</span>
+      </section>
+    );
+  }
 
   const accept = async () => {
     setBusy(true);
@@ -58,6 +109,7 @@ export function useTermsNotice(conn: Connection): ReactNode {
       const user = await apiFor(conn).acceptTerms(info.termsVersion!);
       updateConnection(conn.id, { user: { ...(conn.user ?? user), ...user } });
       setUser(user);
+      onAccepted?.();
     } catch (e) {
       // Inzwischen gibt es schon wieder eine neuere Fassung: neu laden und noch einmal zeigen
       if (isApiError(e, 'terms_changed')) refresh();
