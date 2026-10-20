@@ -1,3 +1,4 @@
+import { LiveRecordingNotice } from './LiveRecordingNotice';
 import { rememberTable } from '../table/lastTable';
 import { currentConnectionId, getConnection, p } from '../api/connections';
 import { isMusterUrl } from '../api/muster';
@@ -54,6 +55,7 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
             <span className="ribbon" aria-hidden />
           </div>
           <OfflineNotice connId={connId} />
+          <LiveRecordingNotice />
           {children}
         </main>
         {nav && <BottomNav />}
@@ -76,7 +78,8 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
         {overline && <div className="overline">{overline}</div>}
         <h1>{title}</h1>
       </header>
-      <main className="screen-main"><OfflineNotice connId={connId} />{children}</main>
+      <main className="screen-main"><OfflineNotice connId={connId} />
+          <LiveRecordingNotice />{children}</main>
       {nav && <BottomNav />}
     </div>
   );

@@ -1,4 +1,5 @@
 import { setRecordingActive } from '../recorder/activity';
+import { getLive, setLive } from '../recorder/live';
 import { cloudUse, useServerInfo } from '../components/CloudNotice';
 import { isDeletedMember } from '../api/types';
 import { confirmDialog } from '../components/confirm';
@@ -53,8 +54,9 @@ export function Recording() {
   const [phase, setPhase] = useState<Phase>('prepare');
   // Zurück-Taste warnt, solange aufgenommen wird
   useEffect(() => {
-    setRecordingActive(phase === 'recording');
-    return () => setRecordingActive(false);
+    setRecordingActive(phase === 'recording' || !!getLive());
+    // Läuft die Browser-Aufnahme weiter (Seite verlassen), bleibt die Warnung an
+    return () => setRecordingActive(!!getLive());
   }, [phase]);
   const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -75,12 +77,13 @@ export function Recording() {
     setPresent(Object.fromEntries(campaign.members.filter((m) => !isDeletedMember(m)).map((m) => [m.id, true])));
   }, [campaign]);
 
-  // Web: Zeit selbst zählen. Nativ: Zustand vom Aufnahmedienst holen (auch Pause über die Benachrichtigung)
+  // Web: Zeit vom Recorder (läuft auch weiter, wenn man die Seite verlässt). Nativ: Zustand vom Aufnahmedienst holen
   useEffect(() => {
     if (phase !== 'recording') return;
     if (!native) {
-      if (paused) return;
-      const t = setInterval(() => setElapsed((e) => e + 1), 1000);
+      const tick = () => setElapsed(Math.floor((recorder.current?.elapsedMs() ?? 0) / 1000));
+      tick();
+      const t = setInterval(tick, 1000);
       return () => clearInterval(t);
     }
     const t = setInterval(async () => {
@@ -126,21 +129,25 @@ export function Recording() {
     leftoverRecordings(currentConnection().id).then((list) => setWebLeftover(list[0] ?? null)).catch(() => undefined);
   }, []);
 
-  // Browser: Verlässt jemand die Seite während der Aufnahme (z. B. Zurück), Aufnahme sauber beenden – sie bleibt im
-  // Gerät und wird beim nächsten Öffnen zum Hochladen angeboten
+  // Browser: Läuft schon eine Aufnahme dieser Kampagne (Seite verlassen, z. B. zum SL-Schirm), wieder anhängen
+  useEffect(() => {
+    if (native) return;
+    const l = getLive();
+    if (!l || l.connId !== currentConnection().id || l.campaignId !== campaignId) return;
+    recorder.current = l.recorder;
+    sessionId.current = l.sessionId;
+    setPaused(l.recorder.state === 'paused');
+    setElapsed(Math.floor(l.recorder.elapsedMs() / 1000));
+    setPhase('recording');
+  }, [campaignId]);
+
+  // Browser: Verlassen der Seite beendet die Aufnahme nicht mehr (sie läuft app-weit weiter, siehe recorder/live.ts).
+  // Nur ein Recorder, der nie als laufend gemeldet wurde, wird hier sauber beendet.
   useEffect(() => () => {
     const r = recorder.current;
     recorder.current = null;
-    if (r && r.state !== 'idle') r.stop().catch(() => undefined);
+    if (r && r.state !== 'idle' && getLive()?.recorder !== r) r.stop().catch(() => undefined);
   }, []);
-
-  // Browser: Schließen des Fensters während der Aufnahme nachfragen (der Ton bis hierher bleibt trotzdem im Gerät)
-  useEffect(() => {
-    if (native || phase !== 'recording') return;
-    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [phase]);
 
   if (loadError) return <Screen narrow title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
   if (!campaign) return <Screen narrow title={t('Aufnahme')}><div className="empty">{t('Lade …')}</div></Screen>;
@@ -256,8 +263,11 @@ export function Recording() {
           labels: [t('Aufnahme läuft'), t('Aufnahme pausiert'), t('Pausieren'), t('Fortsetzen')]
         });
       } else {
+        const other = getLive();
+        if (other && other.recorder.state !== 'idle') throw new Error(t('Es läuft schon eine Aufnahme. Beende sie zuerst.'));
         recorder.current = createRecorder({ connId: currentConnection().id, sessionId: id, campaignId, title: campaign.title });
         await recorder.current.start();
+        setLive({ recorder: recorder.current, connId: currentConnection().id, campaignId, sessionId: id, consented: attendees.filter((a) => a.consent).length });
       }
       setElapsed(0);
       setPaused(false);
@@ -276,9 +286,10 @@ export function Recording() {
       return;
     }
     if (!recorder.current) return;
-    if (paused) recorder.current.resume();
+    // Pause kann auch aus der Leiste im SL-Schirm kommen: am Recorder ablesen, nicht am eigenen Zustand
+    if (recorder.current.state === 'paused') recorder.current.resume();
     else recorder.current.pause();
-    setPaused(!paused);
+    setPaused(recorder.current.state === 'paused');
   };
 
   const stop = async () => {
@@ -297,6 +308,7 @@ export function Recording() {
     const storedId = recorder.current.storedId;
     const blob = await recorder.current.stop();
     recorder.current = null;
+    setLive(null);
     await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId);
   };
 

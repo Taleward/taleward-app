@@ -1352,4 +1352,7 @@ export const en: Record<string, string> = {
   "Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.": "The server doesn't give an address for its terms of use. You can only create an account here once they can be read – let your GM know.",
   "Kampagne wechseln": "Switch campaign",
   "Du leitest auf diesem Server keine weitere Kampagne.": "You don't run any other campaign on this server.",
+  "Es läuft schon eine Aufnahme. Beende sie zuerst.": "A recording is already running. Finish it first.",
+  "am Mikrofon dieses Geräts": "on this device's microphone",
+  "{n} von {n} haben zugestimmt": "{n} of {n} have agreed",
 };

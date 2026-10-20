@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import { apiAtLeast, p } from '../api/connections';
+import { apiAtLeast, currentConnectionId, p } from '../api/connections';
+import { useLive } from '../recorder/useLive';
 import type { Campaign, CampaignSummary } from '../api/types';
 import { Dialog } from '../components/Dialog';
 import { IconBack } from '../components/Icons';
@@ -59,6 +60,8 @@ function useWide(): boolean {
 /** Schmale Leiste, wenn dieses Gerät gerade aufnimmt. Sonst nichts. */
 function RecordingBar({ campaignId }: { campaignId: string }) {
   const [st, setSt] = useState<NativeStatus | null>(null);
+  // Browser (z. B. Taleward am PC): Aufnahme und Schirm im selben Fenster
+  const live = useLive(true);
   useEffect(() => {
     if (!native) return;
     const poll = () => BackgroundRecorder.getStatus().then(setSt).catch(() => setSt(null));
@@ -66,15 +69,28 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
     const id = window.setInterval(poll, 1000);
     return () => window.clearInterval(id);
   }, []);
-  if (!st || (st.state !== 'recording' && st.state !== 'paused')) return null;
-  const paused = st.state === 'paused';
-  const toggle = async () => setSt(paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause());
+  const web = !native && live && live.connId === currentConnectionId() && live.recorder.state !== 'idle' ? live : null;
+  if (!web && (!st || (st.state !== 'recording' && st.state !== 'paused'))) return null;
+  const paused = web ? web.recorder.state === 'paused' : st!.state === 'paused';
+  const elapsedMs = web ? web.recorder.elapsedMs() : st!.elapsedMs;
+  const toggle = async () => {
+    if (web) {
+      if (paused) web.recorder.resume();
+      else web.recorder.pause();
+      return;
+    }
+    setSt(paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause());
+  };
+  const target = web ? web.campaignId : campaignId;
   return (
     <div className="table-rec" role="status">
       <span className={paused ? 'table-rec-dot paused' : 'table-rec-dot'} aria-hidden />
-      <span style={{ flex: 1 }}>{paused ? t('Aufnahme pausiert') : t('Aufnahme läuft')} · {clock(st.elapsedMs)}</span>
+      <span style={{ flex: 1 }}>
+        {paused ? t('Aufnahme pausiert') : t('Aufnahme läuft')} · {clock(elapsedMs)}
+        {web && <> · {t('am Mikrofon dieses Geräts')} · {t('{n} von {n} haben zugestimmt', { n: web.consented })}</>}
+      </span>
       <button type="button" className="btn small outline" onClick={toggle}>{paused ? t('Weiter') : t('Pause')}</button>
-      <Link className="btn small ghost" to={p(`/k/${campaignId}/aufnahme`)}>{t('Zur Aufnahme')}</Link>
+      <Link className="btn small ghost" to={p(`/k/${target}/aufnahme`)}>{t('Zur Aufnahme')}</Link>
     </div>
   );
 }

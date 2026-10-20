@@ -18,6 +18,8 @@ export interface Recorder {
   level?(): number;
   /** Kennung im Zwischenspeicher des Geräts (null: nur im Arbeitsspeicher) */
   readonly storedId?: string | null;
+  /** Aufgenommene Zeit ohne Pausen, in Millisekunden */
+  elapsedMs(): number;
 }
 
 /** Wohin die Aufnahme gehört – damit sie nach einem Absturz der richtigen Runde zugeordnet werden kann */
@@ -69,7 +71,7 @@ export class WebRecorder implements Recorder {
     return this.id;
   }
 
-  private elapsedMs(): number {
+  elapsedMs(): number {
     return this.accumulatedMs + (this.rec?.state === 'recording' ? Date.now() - this.runningSince : 0);
   }
 
