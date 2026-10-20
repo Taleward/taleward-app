@@ -47,6 +47,11 @@ Zoom, Google Meet, WhatsApp, Signal, Telegram, YouTube, Twitch, Spotify, Google 
 Obsidian, Notion, Roll20, Foundry Virtual Tabletop). Taleward zeigt sie nur, um kenntlich zu machen, wohin ein Link
 führt; es besteht keine Verbindung zu diesen Unternehmen.
 
+Die Zeichen auf den Knöpfen „Mit … anmelden“ sind die offiziellen Zeichen der Anbieter: Google aus dem Paket
+„Sign in with Google“ (`src/assets/providers/google.svg`, ohne den Knopfrahmen), Microsoft „MS-SymbolLockup“
+(`src/assets/providers/microsoft.svg`), Discord aus `simple-icons` (siehe oben). Sie gehören Google LLC, Microsoft
+Corporation und Discord Inc. und werden nur für die Anmeldung mit dem jeweiligen Dienst gezeigt.
+
 Die Formen von calendar, check, chevron-left, info, search und arrow-up stammen aus dem Projekt Feather:
 
 > The MIT License (MIT) (for the icons listed above)

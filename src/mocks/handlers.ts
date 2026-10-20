@@ -607,7 +607,7 @@ export const handlers = [
       termsVersion: nachbar ? undefined : termsVersion(),
       minAge: 16,
       audioRetention: nachbar ? { mode: 'immediate', maxDays: null } : { mode: 'until_release', maxDays: 7 },
-      authProviders: nachbar ? [] : [{ id: 'google', name: 'Google' }, { id: 'discord', name: 'Discord' }, { id: 'apple', name: 'Apple' }],
+      authProviders: nachbar ? [] : [{ id: 'google', name: 'Google' }, { id: 'discord', name: 'Discord' }, { id: 'apple', name: 'Apple' }, { id: 'microsoft', name: 'Microsoft' }],
       passwordReset: !nachbar,
       externalTranscription: nachbar ? null : 'mistral',
       externalTranscriptionMode: nachbar ? null : 'fallback',
