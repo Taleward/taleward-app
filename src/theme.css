@@ -27,8 +27,12 @@
   --salbei: #3d6a48;
   --on-salbei: #ffffff;
   --focus-ring: var(--siegel);
-  --shadow-card: 0 1px 0 rgba(90, 62, 30, 0.08), 0 8px 20px -12px rgba(90, 62, 30, 0.45);
-  --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 2px 6px -2px rgba(23, 49, 59, 0.5);
+  /* Flach (Benjamin 20.10.): ruhende Karten und Knöpfe ohne Schatten, Flächen trennen sich über Farbstufe und Rand.
+     Schatten nur noch für Schwebendes (Rückfragen, Fenster über der Seite). Leer als 0 0 #0000, damit zusammengesetzte
+     Werte wie „inset 4px 0 0 var(--tinte), var(--shadow-card)“ gültig bleiben und die Leiste behalten. */
+  --shadow-card: 0 0 #0000;
+  --shadow-button: 0 0 #0000;
+  --shadow-float: 0 1px 0 rgba(90, 62, 30, 0.08), 0 8px 20px -12px rgba(90, 62, 30, 0.45);
   /* feines Papierkorn */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --vignette: radial-gradient(120% 80% at 50% 0%, rgba(255, 250, 238, 0.55), rgba(255, 250, 238, 0) 60%), radial-gradient(140% 100% at 50% 100%, rgba(120, 84, 40, 0.10), rgba(120, 84, 40, 0) 55%);
@@ -54,8 +58,7 @@
   --salbei: #8cc096;
   --on-salbei: #0c1518;
   --focus-ring: var(--siegel);
-  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
-  --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 8px -2px rgba(0, 0, 0, 0.6);
+  --shadow-float: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
     --grain: none;
     --vignette: radial-gradient(120% 70% at 50% 0%, rgba(60, 100, 115, 0.18), rgba(60, 100, 115, 0) 60%);
     color-scheme: dark;
@@ -81,8 +84,7 @@
     --salbei: #8cc096;
     --on-salbei: #0c1518;
     --focus-ring: var(--siegel);
-    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
-    --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 8px -2px rgba(0, 0, 0, 0.6);
+    --shadow-float: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
     --grain: none;
     --vignette: radial-gradient(120% 70% at 50% 0%, rgba(60, 100, 115, 0.18), rgba(60, 100, 115, 0) 60%);
     color-scheme: dark;
@@ -280,6 +282,9 @@ h2 {
   text-decoration: none;
 }
 
+/* Schwebt über der Seite (Rückfragen): behält den Schatten */
+.card.floating { box-shadow: var(--shadow-float); }
+
 /* Hier muss jemand etwas tun (Achtung) */
 .card.warn {
   box-shadow: inset 0 0 0 2px var(--siegel), var(--shadow-card);
@@ -347,7 +352,7 @@ h2 {
   padding: var(--space-3) 20px;
   border-radius: var(--radius-md);
   border: 1.5px solid var(--tinte);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0)) var(--tinte);
+  background: var(--tinte);
   color: var(--on-tinte);
   box-shadow: var(--shadow-button);
   font: 700 calc(16px * var(--ts))/1.5 var(--font-sans);
@@ -378,7 +383,7 @@ h2 {
   background: var(--paper-raised);
   color: var(--ink);
   border-color: var(--line-strong);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
 }
 
 /* Leiser Knopf für Nebenwege – trotzdem als Knopf erkennbar */
@@ -1047,6 +1052,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   gap: var(--space-1) var(--space-4);
   padding: var(--space-4);
   background: var(--paper-raised);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
   color: var(--ink);
@@ -1623,7 +1629,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   max-width: 860px;
   height: 100%;
   max-height: 900px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-float);
 }
 
 /* Schirm einrichten: Raster sichtbar, Karten ziehen und an der Ecke vergrößern */
