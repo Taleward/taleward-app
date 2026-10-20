@@ -1,0 +1,96 @@
+From 14ad709c2eb7ece125111cbf81b29e77ffe1dfe8 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 22:29:55 +0200
+Subject: [PATCH] =?UTF-8?q?Flach:=20Karten=20und=20Kn=C3=B6pfe=20ohne=20Sc?=
+ =?UTF-8?q?hatten=20und=20Glanz?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Ruhende Flächen trennen sich über Farbstufe und Rand. Schatten nur noch für
+Schwebendes (Rückfragen, Fenster über dem SL-Schirm).
+---
+ src/components/Dialog.tsx |  2 +-
+ src/theme.css             | 24 +++++++++++++++---------
+ 2 files changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/src/components/Dialog.tsx b/src/components/Dialog.tsx
+index 9b5a93c..c352352 100644
+--- a/src/components/Dialog.tsx
++++ b/src/components/Dialog.tsx
+@@ -15,5 +15,5 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
+       alignItems: 'flex-end', justifyContent: 'center', padding: '16px 12px calc(var(--safe-bottom) + 16px)'
+     }}>
+-      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className="card"
++      <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className="card floating"
+         style={{ width: '100%', maxWidth: 480, gap: 12, maxHeight: '85vh', overflowY: 'auto' }}>
+         <h2>{title}</h2>
+diff --git a/src/theme.css b/src/theme.css
+index 66d8371..b3f16a2 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -28,6 +28,10 @@
+   --on-salbei: #ffffff;
+   --focus-ring: var(--siegel);
+-  --shadow-card: 0 1px 0 rgba(90, 62, 30, 0.08), 0 8px 20px -12px rgba(90, 62, 30, 0.45);
+-  --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 2px 6px -2px rgba(23, 49, 59, 0.5);
++  /* Flach (Benjamin 20.10.): ruhende Karten und Knöpfe ohne Schatten, Flächen trennen sich über Farbstufe und Rand.
++     Schatten nur noch für Schwebendes (Rückfragen, Fenster über der Seite). Leer als 0 0 #0000, damit zusammengesetzte
++     Werte wie „inset 4px 0 0 var(--tinte), var(--shadow-card)“ gültig bleiben und die Leiste behalten. */
++  --shadow-card: 0 0 #0000;
++  --shadow-button: 0 0 #0000;
++  --shadow-float: 0 1px 0 rgba(90, 62, 30, 0.08), 0 8px 20px -12px rgba(90, 62, 30, 0.45);
+   /* feines Papierkorn */
+   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .12 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+@@ -55,6 +59,5 @@
+   --on-salbei: #0c1518;
+   --focus-ring: var(--siegel);
+-  --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+-  --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 8px -2px rgba(0, 0, 0, 0.6);
++  --shadow-float: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+     --grain: none;
+     --vignette: radial-gradient(120% 70% at 50% 0%, rgba(60, 100, 115, 0.18), rgba(60, 100, 115, 0) 60%);
+@@ -82,6 +85,5 @@
+     --on-salbei: #0c1518;
+     --focus-ring: var(--siegel);
+-    --shadow-card: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+-    --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 2px 8px -2px rgba(0, 0, 0, 0.6);
++    --shadow-float: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+     --grain: none;
+     --vignette: radial-gradient(120% 70% at 50% 0%, rgba(60, 100, 115, 0.18), rgba(60, 100, 115, 0) 60%);
+@@ -281,4 +283,7 @@ h2 {
+ }
+ 
++/* Schwebt über der Seite (Rückfragen): behält den Schatten */
++.card.floating { box-shadow: var(--shadow-float); }
++
+ /* Hier muss jemand etwas tun (Achtung) */
+ .card.warn {
+@@ -348,5 +353,5 @@ h2 {
+   border-radius: var(--radius-md);
+   border: 1.5px solid var(--tinte);
+-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0)) var(--tinte);
++  background: var(--tinte);
+   color: var(--on-tinte);
+   box-shadow: var(--shadow-button);
+@@ -379,5 +384,5 @@ h2 {
+   color: var(--ink);
+   border-color: var(--line-strong);
+-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
++  box-shadow: none;
+ }
+ 
+@@ -1048,4 +1053,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+   padding: var(--space-4);
+   background: var(--paper-raised);
++  border: 1px solid var(--line);
+   border-radius: var(--radius-md);
+   box-shadow: var(--shadow-card);
+@@ -1624,5 +1630,5 @@ details.card[open] { padding-bottom: var(--space-4); }
+   height: 100%;
+   max-height: 900px;
+-  box-shadow: var(--shadow-card);
++  box-shadow: var(--shadow-float);
+ }
+ 
