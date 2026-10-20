@@ -2089,7 +2089,8 @@ paths:
                   description: |
                     Ab 0.4.21, nur bei action create: bei diesem Eintrag ergänzen statt neu anlegen (meist match.entryId,
                     jeder Eintrag der Kampagne ist erlaubt); null nimmt es zurück. Anderer Eintrag oder andere action → 400
-                    `invalid_input`. Die App schickt dabei in der Regel decision accepted mit.
+                    `invalid_input`. Die App schickt dabei in der Regel decision accepted mit. Ist der Vorschlag weniger
+                    sichtbar als der Eintrag, gilt die Umleitung in gmNotes (siehe Proposal.mergeIntoEntryId).
       responses:
         "200":
           description: OK
@@ -3826,7 +3827,10 @@ components:
             Ab 0.4.21: Die SL hat entschieden, den create-Vorschlag bei diesem Eintrag zu ergänzen (PATCH). Gesetzt wirkt er
             wie update auf diesen Eintrag (beim Veröffentlichen bzw. Übernehmen wie bei update angehängt); der Titel des
             Vorschlags kommt zu aliases, wenn er weder Name noch Alias ist. Die Sichtbarkeit des Eintrags ändert sich
-            dadurch nicht. null = als neuer Eintrag.
+            dadurch nicht. Ausnahme: Ist der Vorschlag weniger sichtbar als der Eintrag (Vorschlag gm_only, Eintrag
+            public; oder der Vorschlag ist vor Mitgliedern verborgen, die den Eintrag sehen), kommen Titel und Text nur
+            in die gmNotes des Eintrags – kein Alias, kein öffentlicher Text, keine Erwähnung für Spieler. Die App sagt
+            das in der Rückfrage. null = als neuer Eintrag.
         title: { type: string }
         detail: { type: string, description: "Spielerwissen (öffentlicher Teil)" }
         gmNotes: { type: [string, "null"], description: "Geheimer Teil, nur für die SL" }
