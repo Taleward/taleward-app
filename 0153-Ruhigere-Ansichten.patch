@@ -1,0 +1,247 @@
+From 5f0409f71f1378b573177f15aecc098b57ce2185 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 22:24:21 +0200
+Subject: [PATCH 153/154] Ruhigere Ansichten: Jetzt dran vor der Suche, nur
+ Nur-SL markiert, Bibel-Karten gleich hoch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Übersicht: Suche steht unter „Jetzt dran“
+- SL-Schirm: Öffentliches ohne Marke, „Hintergrund zeigen“ als Textlink
+- Kampagnenliste: Anlegen/Verbinden nur ohne Kampagne als Hauptknopf, breit an der linken Kante
+- Bibel: Karten einer Reihe gleich hoch, Knöpfe unten
+- Vorschläge aus Hintergründen und Unterlagen kennen die vorhandenen Einträge
+- YAML: Aufbewahrung der Hörproben an einer Stelle beschrieben
+---
+ docs/session-chronik-api.yaml | 16 ++++++++++++----
+ src/pages/Bible.tsx           |  3 ++-
+ src/pages/BroughtPage.tsx     | 12 +++++++++---
+ src/pages/Campaigns.tsx       |  8 +++++---
+ src/pages/DocumentReview.tsx  | 12 +++++++++---
+ src/pages/Overview.tsx        |  3 ++-
+ src/table/BiblePanel.tsx      |  3 ++-
+ src/table/GroupPanel.tsx      |  2 +-
+ src/theme.css                 |  9 +++++++++
+ 9 files changed, 51 insertions(+), 17 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index e95eb5e..4bc835c 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -225,4 +225,6 @@ info:
+     das Hochladen laufender Aufnahmen und das Herunterladen der eigenen Daten. Das gilt auch für Konten, die vor dem
+     Update angelegt wurden (termsAcceptedVersion null).
++    Präzisiert in 0.4.22 (nur Text, keine neue Fassungsnummer): Aufbewahrung der Hörproben einheitlich bei
++    ServerInfo.audioRetention beschrieben.
+ 
+ servers:
+@@ -2025,5 +2027,5 @@ paths:
+     get:
+       tags: [Stimmen]
+-      summary: Kurze Hörprobe (wenige Sekunden, wird mit dem Audio gelöscht)
++      summary: Kurze Hörprobe (wenige Sekunden; Aufbewahrung siehe ServerInfo.audioRetention)
+       parameters:
+         - name: index
+@@ -2041,5 +2043,7 @@ paths:
+               schema: { type: string, format: binary }
+         "410":
+-          description: Hörprobe bereits gelöscht (`audio_deleted`)
++          description: |
++            Hörprobe bereits gelöscht (`audio_deleted`) – nach der Frist aus ServerInfo.audioRetention oder nach dem
++            Bestätigen der Stimmen. Die Textproben (sampleText, samples) bleiben.
+           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+         "401": { $ref: "#/components/responses/Unauthorized" }
+@@ -3153,5 +3157,9 @@ components:
+             bis die SL den Recap veröffentlicht, höchstens maxDays Tage (Standard für neue Server: 7), danach löscht ein
+             geplanter Job es und setzt audioDeletedAt. immediate = gleich nach der Transkription (maxDays null).
+-            Hörproben pro Sprecher und Stimmprofile sind davon unabhängig. Ab 0.4.4 immer vorhanden; fehlt das Feld
++            Hörproben pro Sprecher (auch die zu Speaker.samples) bleiben, bis die SL die Stimmen bestätigt, höchstens so
++            lange, wie die Aufnahme bleiben dürfte: bei until_release maxDays Tage ab dem Hochladen, bei immediate die Frist
++            des Servers für fehlgeschlagene Aufnahmen (Standard 7 Tage) – auch wenn die Aufnahme selbst schon gelöscht ist.
++            Danach GET …/sample → 410 `audio_deleted`; die Textproben bleiben. Stimmprofile sind davon unabhängig.
++            Ab 0.4.4 immer vorhanden; fehlt das Feld
+             (ältere Server), geht die App von immediate aus. Wird die Aufbewahrung verlängert (immediate → until_release
+             oder mehr Tage), setzt der Server recordingConsentAt aller Mitglieder zurück.
+@@ -3731,5 +3739,5 @@ components:
+             Ab 0.4.21: bis zu drei Textproben dieser Stimme, über die Runde verteilt, je mindestens einige Wörter, bevorzugt
+             Sätze mit Figurennamen; aufsteigend nach start. Die Hörprobe zu samples[i] liefert GET …/sample?index=i,
+-            solange das Audio da ist. sampleText bleibt für ältere Apps (in der Regel gleich samples[0].text). Fehlt das
++            so lange wie bei ServerInfo.audioRetention beschrieben (danach 410, der Text bleibt). sampleText bleibt für ältere Apps (in der Regel gleich samples[0].text). Fehlt das
+             Feld oder ist es leer, zeigt die App nur sampleText.
+           items:
+diff --git a/src/pages/Bible.tsx b/src/pages/Bible.tsx
+index 3a05abf..38c609e 100644
+--- a/src/pages/Bible.tsx
++++ b/src/pages/Bible.tsx
+@@ -95,5 +95,6 @@ export function Bible() {
+       )}
+ 
+-      <div className="grid-cards">
++      {/* Karten einer Reihe gleich hoch – sonst enden sie mit Löchern darunter */}
++      <div className="grid-cards even">
+       {entries?.map((e) => (
+         <EntryCard key={e.id} entry={e} gm={campaign?.myRole === 'gm'} holder={holder(e.holderMemberId)} campaign={campaign}
+diff --git a/src/pages/BroughtPage.tsx b/src/pages/BroughtPage.tsx
+index 4c7260e..5df186e 100644
+--- a/src/pages/BroughtPage.tsx
++++ b/src/pages/BroughtPage.tsx
+@@ -2,5 +2,5 @@ import { useEffect, useState } from 'react';
+ import { useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+-import { isDeletedMember, type Campaign, type CharacterAnalysis, type Proposal } from '../api/types';
++import { isDeletedMember, type Campaign, type CharacterAnalysis, type Entry, type Proposal } from '../api/types';
+ import { apiAtLeast } from '../api/connections';
+ import { Avatar } from '../components/Avatar';
+@@ -18,9 +18,15 @@ export function BroughtPage() {
+   const [proposals, setProposals] = useState<Proposal[] | null>(null);
+   const [analyses, setAnalyses] = useState<CharacterAnalysis[]>([]);
++  const [entries, setEntries] = useState<Entry[]>([]);
+   const [error, setError] = useState<unknown>(null);
+ 
+   useEffect(() => {
+     Promise.all([api.campaign(campaignId), api.characterProposals(campaignId)])
+-      .then(([c, list]) => { setCampaign(c); setProposals(list); })
++      .then(([c, list]) => {
++        setCampaign(c);
++        setProposals(list);
++        // Einträge für „Dort ergänzen?“: wie sichtbar der vorhandene Eintrag ist (Geheimes nie in Sichtbareres)
++        if (list.some((x) => x.action === 'create' && x.match)) api.entries(campaignId).then(setEntries).catch(() => undefined);
++      })
+       .catch(setError);
+     // Ab 0.4.18: woher ein Vorschlag stammt (Hintergrund oder Charakterbogen)
+@@ -70,5 +76,5 @@ export function BroughtPage() {
+                 {origin(p) && <span className="muted small">{origin(p)}</span>}
+                 {p.relation && <span className="muted small">{t('Beziehung: {relation}', { relation: p.relation })}</span>}
+-                <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} onError={setError} onChange={update} />
++                <ProposalCard proposal={p} players={players.filter((x) => x.id !== p.submittedByMemberId)} entries={entries} onError={setError} onChange={update} />
+               </div>
+             ))}
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index e4342e6..009905b 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -161,4 +161,6 @@ export function Campaigns() {
+   // Nur die Musterkampagne verbunden: kein echtes Konto – der nächste Schritt ist ein eigener Server
+   const onlyMuster = active.length > 0 && active.every((c) => isMusterUrl(c.baseUrl));
++  // Ein Hauptknopf pro Ansicht: Gibt es schon Kampagnen, sind sie die Hauptsache – Anlegen/Verbinden nur als Umriss
++  const firstStep = !entries?.some(({ c }) => !c.archivedAt);
+ 
+   return (
+@@ -256,7 +258,7 @@ export function Campaigns() {
+         <>
+           {onlyMuster ? (
+-            <Link className="btn" to="/verbinden">{t('Mit einem Server verbinden')}</Link>
++            <Link className={firstStep ? 'btn' : 'btn outline'} to="/verbinden">{t('Mit einem Server verbinden')}</Link>
+           ) : (
+-            <button className="btn" type="button" onClick={() => { setMode('new'); setValue(''); }}>
++            <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={() => { setMode('new'); setValue(''); }}>
+               {t('Neue Kampagne anlegen')}
+             </button>
+@@ -308,5 +310,5 @@ export function Campaigns() {
+       )}
+ 
+-      <div className="row wrap" style={{ justifyContent: 'center', gap: 4 }}>
++      <div className="row wrap list-more" style={{ gap: 4 }}>
+         {active.some(serverHasCharacters) || listCharacters().length > 0
+           ? <Link className="btn ghost small" to="/charaktere">{t('Meine Charaktere')}</Link> : null}
+diff --git a/src/pages/DocumentReview.tsx b/src/pages/DocumentReview.tsx
+index bae1986..bfe4404 100644
+--- a/src/pages/DocumentReview.tsx
++++ b/src/pages/DocumentReview.tsx
+@@ -5,5 +5,5 @@ import { useEffect, useState } from 'react';
+ import { useNavigate, useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+-import type { CampaignDocument, Member, Proposal } from '../api/types';
++import type { CampaignDocument, Entry, Member, Proposal } from '../api/types';
+ import { ProposalCard } from '../components/ProposalCard';
+ import { ErrorBox, Screen } from '../components/Screen';
+@@ -17,4 +17,5 @@ export function DocumentReview() {
+   const [proposals, setProposals] = useState<Proposal[] | null>(null);
+   const [players, setPlayers] = useState<Member[]>([]);
++  const [entries, setEntries] = useState<Entry[]>([]);
+   const [applyWorld, setApplyWorld] = useState(false);
+   const [busy, setBusy] = useState(false);
+@@ -23,5 +24,10 @@ export function DocumentReview() {
+   useEffect(() => {
+     Promise.all([api.document(documentId), api.documentProposals(documentId)])
+-      .then(([d, p]) => { setDoc(d); setProposals(p); })
++      .then(([d, p]) => {
++        setDoc(d);
++        setProposals(p);
++        // Einträge für „Dort ergänzen?“ (wie sichtbar der vorhandene Eintrag ist)
++        if (p.some((x) => x.action === 'create' && x.match)) api.entries(campaignId).then(setEntries).catch(() => undefined);
++      })
+       .catch(setError);
+     api.campaign(campaignId).then((c) => setPlayers(c.members.filter((m) => m.role === 'player' && !isDeletedMember(m)))).catch(() => undefined);
+@@ -65,5 +71,5 @@ export function DocumentReview() {
+       <div className="grid-cards">
+       {proposals?.map((p) => (
+-        <ProposalCard key={p.id} proposal={p} players={players} onError={setError}
++        <ProposalCard key={p.id} proposal={p} players={players} entries={entries} onError={setError}
+           onChange={(u) => setProposals((list) => list?.map((x) => (x.id === u.id ? u : x)) ?? null)} />
+       ))}
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index e5dce03..92bce8c 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -111,5 +111,4 @@ export function Overview() {
+ 
+           <MusterBanner />
+-          <BibleSearch campaignId={campaignId} />
+           {campaign.archivedAt && (
+             <div className="notice"><strong>{t('Abgeschlossen')}</strong>&nbsp;{t('– nur noch zum Nachlesen, keine neuen Kapitel.')}</div>
+@@ -131,4 +130,6 @@ export function Overview() {
+             ...nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)
+           ]} />
++          {/* Suche nach „Jetzt dran“: erst die Antwort der Seite, dann das Werkzeug */}
++          <BibleSearch campaignId={campaignId} />
+ 
+           {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
+diff --git a/src/table/BiblePanel.tsx b/src/table/BiblePanel.tsx
+index cdd7639..d220610 100644
+--- a/src/table/BiblePanel.tsx
++++ b/src/table/BiblePanel.tsx
+@@ -179,5 +179,6 @@ export function BiblePanel({ campaignId, members, query, onQuery, focusEntryId,
+                 <span className="muted small"> · {t(ENTRY_KIND[e.type])}{e.lastSessionNumber ? ' · ' + t('zuletzt in Kapitel {n}', { n: e.lastSessionNumber }) : ''}</span>
+               </span>
+-              <VisTag gm={secret} />
++              {/* Nur das Seltene markieren: Öffentliches bleibt ohne Marke */}
++              {secret && <VisTag gm />}
+             </button>
+             {isOpen && (
+diff --git a/src/table/GroupPanel.tsx b/src/table/GroupPanel.tsx
+index cf5624b..e919621 100644
+--- a/src/table/GroupPanel.tsx
++++ b/src/table/GroupPanel.tsx
+@@ -93,5 +93,5 @@ export function GroupPanel({ campaign, onEntry, compact }: {
+               isOpen
+                 ? <SecretBox><span style={{ whiteSpace: 'pre-wrap' }}>{m.characterBackstory}</span></SecretBox>
+-                : <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(m.id)}>{t('Hintergrund zeigen')}</button>
++                : <button type="button" className="linklike small" style={{ alignSelf: 'flex-start', minHeight: 48 }} onClick={() => setOpen(m.id)}>{t('Hintergrund zeigen')}</button>
+             )}
+             {hooks.length > 0 && (
+diff --git a/src/theme.css b/src/theme.css
+index 53f986f..66d8371 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -1202,4 +1202,7 @@ details.card[open] { padding-bottom: var(--space-4); }
+   align-items: start;
+ }
++.grid-cards.even { align-items: stretch; }
++/* Knöpfe unten an der Karte, damit sie in einer Reihe auf gleicher Höhe stehen */
++.grid-cards.even > .card > :last-child:not(:first-child) { margin-top: auto; }
+ 
+ @media (min-width: 700px) {
+@@ -1367,4 +1370,10 @@ details.card[open] { padding-bottom: var(--space-4); }
+   margin-inline: auto;
+ }
++.list-more { justify-content: center; }
++/* Breit: Knöpfe an der linken Kante der Karten statt mittig darunter */
++@media (min-width: 700px) {
++  .list-actions { margin-inline: 0; }
++  .list-more { justify-content: flex-start; }
++}
+ 
+ /* ---------- SL-Schirm (Tablet quer, Laptop): Spalten nebeneinander, jede scrollt für sich ---------- */
