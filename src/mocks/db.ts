@@ -227,6 +227,10 @@ export function proposalsFor(sessionId: string): Proposal[] {
     // Klingt wie „Meister Orrin Kalk“ (0.4.21: Vorschlag wird dort ergänzt statt doppelt angelegt)
     base('p7', { title: 'Orin Kalk', detail: 'Soll im Hafenviertel von Kaltenfurt gesehen worden sein.',
       evidence: [{ start: 6630, quote: 'Ein Glockengießer namens Orin? Der war letzte Woche am Hafen.' }] }),
+    // Geheimer Vorschlag, der wie ein öffentlicher Eintrag klingt: beim Ergänzen nur in dessen SL-Notizen
+    base('p8', { entryType: 'location', title: 'Weidenkrug', suggestedVisibility: 'gm_only',
+      detail: 'Im Keller treffen sich nachts Leute des Rabenzirkels.',
+      evidence: [{ start: 7020, quote: 'Unten im Keller vom Weidenkrug brennt nachts immer Licht.' }] }),
     base('p5', { entryType: 'other', title: 'Bruder Anselm ist ein Vampir', detail: 'Wahrscheinlich ein Scherz am Tisch – an dieser Stelle wurde gelacht.',
       confidence: 0.2, flags: ['joke_suspected', 'low_confidence'], evidence: [{ start: 8030, quote: 'Anselm trinkt ja auch nie Wein … verdächtig!' }] })
   ];

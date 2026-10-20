@@ -46,7 +46,10 @@ export function Review() {
           setPlayers(c.members.filter((m) => m.role === 'player' && !isDeletedMember(m)));
         }).catch(() => undefined);
         setRecap(r);
-        if (r?.gmWarnings?.some((w) => !w.names?.length)) api.entries(s.campaignId).then(setEntries).catch(() => undefined);
+        // Einträge auch für „Dort ergänzen?“ (wie sichtbar der vorhandene Eintrag ist)
+        if (r?.gmWarnings?.some((w) => !w.names?.length) || p.some((x) => x.action === 'create' && x.match)) {
+          api.entries(s.campaignId).then(setEntries).catch(() => undefined);
+        }
         setProposals(p);
         setNote(n.text);
       })
@@ -179,7 +182,7 @@ export function Review() {
       {proposals?.map((p) => (
         <div key={p.id} onMouseEnter={() => setHoverTitle(p.title)} onMouseLeave={() => setHoverTitle(null)}
           onFocus={() => setHoverTitle(p.title)} onBlur={() => setHoverTitle(null)}>
-          <ProposalCard proposal={p} players={players} onError={setError}
+          <ProposalCard proposal={p} players={players} entries={entries} onError={setError}
             onChange={(u) => setProposals((list) => list?.map((x) => (x.id === u.id ? u : x)) ?? null)} />
         </div>
       ))}

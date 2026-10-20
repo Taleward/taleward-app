@@ -2033,6 +2033,15 @@ export const handlers = [
       if (p.decision !== 'accepted') continue;
       const merge = p.action === 'create' && p.mergeIntoEntryId ? entries.find((e) => e.id === p.mergeIntoEntryId) : undefined;
       if (merge) {
+        // Wie der Server: Ist der Vorschlag weniger sichtbar als der Eintrag, kommen Titel und Text nur in die SL-Notizen
+        const lessVisible = merge.visibility === 'public' && (p.suggestedVisibility !== 'public'
+          || (p.hiddenFromMemberIds ?? []).some((id) => !(merge.hiddenFromMemberIds ?? []).includes(id)));
+        if (lessVisible) {
+          const note = [`${p.title}: ${p.detail}`.replace(/: $/, ''), p.gmNotes].filter(Boolean).join('\n\n');
+          merge.gmNotes = merge.gmNotes ? `${merge.gmNotes}\n\n${note}` : note;
+          merge.updatedAt = new Date().toISOString();
+          continue;
+        }
         // 0.4.21: wie update anhängen, abweichende Schreibweise zu „Auch genannt“; Sichtbarkeit bleibt
         if (p.detail && !merge.summary.includes(p.detail)) merge.summary = merge.summary ? `${merge.summary}\n\n${p.detail}` : p.detail;
         if (p.gmNotes) merge.gmNotes = merge.gmNotes ? `${merge.gmNotes}\n\n${p.gmNotes}` : p.gmNotes;
