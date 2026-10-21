@@ -12,10 +12,12 @@ dieser Fassung zugänglich machen (AGPL §13). Die App verlinkt ihren Quellcode 
 
 ## Name und Zeichen
 
+„Taleward“ ist beim Deutschen Patent- und Markenamt als Wortmarke angemeldet (Aktenzeichen 302026258979.0).
+
 Name „Taleward“, das Taleward-Zeichen, die Wortmarke und das App-Symbol (`src/assets/taleward/logos`,
 `native-android/res`, `public/icons`, `docs/marke`) sind **nicht** Teil der AGPL-Lizenz. Sie dürfen nicht für eigene, veränderte Fassungen
 verwendet werden, die nicht vom Rechteinhaber stammen. Wer einen Fork verbreitet, gibt ihm einen eigenen
-Namen und eigene Zeichen.
+Namen und eigene Zeichen. Erlaubt bleibt, sachlich auf Taleward hinzuweisen, etwa „beruht auf Taleward“.
 
 ## Schriften
 

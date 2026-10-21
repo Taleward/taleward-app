@@ -129,7 +129,7 @@ Agreement, siehe `NOTICE.md`). Vor einem Pull Request bitte `npm run i18n:check`
 
 ## Lizenz und Marke
 
-Code: [AGPL-3.0-only](LICENSE). Name, Zeichen und Wortmarke „Taleward“ sind ausgenommen; Schriften stehen unter der
+Code: [AGPL-3.0-only](LICENSE). Name, Zeichen und Wortmarke „Taleward“ (beim DPMA angemeldet) sind ausgenommen; Schriften stehen unter der
 SIL Open Font License. Einzelheiten in [`NOTICE.md`](NOTICE.md).
 
 ---
