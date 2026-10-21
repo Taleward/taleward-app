@@ -146,7 +146,7 @@ export function BiblePanel({ campaignId, members, query, onQuery, focusEntryId, 
         <input id="tb-search" type="search" value={query} placeholder={t('Name, Ort, Gegenstand …')} onChange={(ev) => onQuery(ev.target.value)} />
       </div>
       {!quick ? (
-        <button type="button" className="btn small dashed" onClick={() => setQuick(true)}>{t('Schnell anlegen')}</button>
+        <button type="button" className="linklike small" style={{ alignSelf: 'flex-start', minHeight: 48 }} onClick={() => setQuick(true)}>{t('Schnell anlegen')}</button>
       ) : (
         <form className="table-quick" onSubmit={(ev) => { ev.preventDefault(); quickAdd(); }}>
           <input type="text" aria-label={t('Name des neuen Eintrags')} placeholder={t('Name')} value={quickName} maxLength={120} autoFocus onChange={(ev) => setQuickName(ev.target.value)} />

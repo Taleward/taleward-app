@@ -376,8 +376,9 @@ export function Recording() {
               <span className="muted small">{t('{ready} von {total} bereit', { ready: presentMembers.length - missing.length + guests.length, total: presentMembers.length + guests.length })}</span>
             </div>
             {campaign.members.filter((m) => !isDeletedMember(m)).map((m) => (
-              <div key={m.id} className="row" style={{ minHeight: 56, gap: 10, borderTop: '1px solid var(--line)' }}>
-                <label className="check" style={{ flex: 1, minWidth: 0, gap: 10 }}>
+              <div key={m.id} className="row" style={{ minHeight: 56, gap: 10, borderTop: '1px solid var(--line)', flexWrap: 'wrap', paddingBlock: 4 }}>
+                {/* Große Schrift: lieber „Zustimmen lassen“ in die nächste Zeile als den Namen abschneiden */}
+                <label className="check" style={{ flex: '1 1 180px', minWidth: 0, gap: 10 }}>
                   <input type="checkbox" checked={!!present[m.id]} aria-label={t('{name} ist da', { name: m.displayName })}
                     onChange={(e) => setPresent({ ...present, [m.id]: e.target.checked })} />
                   <Avatar campaignId={campaign.id} member={m} size={32} />

@@ -1433,7 +1433,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 .table-grid {
   display: grid;
-  gap: 12px;
+  gap: 0;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   grid-template-rows: repeat(5, minmax(0, 1fr));
   flex: 1;
@@ -1452,17 +1452,25 @@ details.card[open] { padding-bottom: var(--space-4); }
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  background: var(--paper-sunken);
+}
+/* Offene Spalten: Nachbarn trennt eine feine Linie statt eigener Flächen */
+.table-panel.edge-l { border-left: 1px solid var(--line); }
+.table-panel.edge-t { border-top: 1px solid var(--line); }
+.table-stack > .table-panel + .table-panel { border-top: 1px solid var(--line); padding-top: 8px; }
+/* Das Fenster über dem Schirm bleibt eine Fläche */
+.table-popup.table-panel {
+  background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
+.table-cover { width: 72px; flex-shrink: 0; }
 
 .table-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 8px 0 14px;
+  padding: 8px 12px 0;
   min-height: 48px;
 }
 
@@ -1475,7 +1483,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 14px 14px;
+  padding: 10px 12px 14px;
   overflow-y: auto;
   min-height: 0;
   flex: 1;
@@ -1488,12 +1496,12 @@ details.card[open] { padding-bottom: var(--space-4); }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
   color: var(--ink);
 }
+/* Einträge als Liste: untereinander ohne zusätzliche Lücke, nur die Trennlinie */
+:is(.table-entry, .table-scene, .table-doc-page) + :is(.table-entry, .table-scene, .table-doc-page) { margin-top: -10px; }
 
 .table-entry {
   padding: 0;
@@ -1501,7 +1509,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .table-entry.open:not(:has(> .table-entry-head)) {
-  padding: 10px 12px;
+  padding: 10px 0;
   gap: 8px;
 }
 
@@ -1511,7 +1519,7 @@ details.card[open] { padding-bottom: var(--space-4); }
   gap: 8px;
   min-height: 48px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 8px 0;
   background: none;
   border: 0;
   color: inherit;
@@ -1522,18 +1530,14 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 .table-entry-head.card-like {
   flex-direction: row;
-  border: 1px solid var(--line);
+  border: 0;
 }
 
 .table-entry-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 12px 12px;
-}
-
-.table-scene.played {
-  background: var(--paper);
+  padding: 0 0 12px;
 }
 
 .table-scene.played strong {
@@ -1541,20 +1545,20 @@ details.card[open] { padding-bottom: var(--space-4); }
   text-decoration-color: var(--line-strong);
 }
 
-.table-scene.skipped {
-  border-style: dashed;
-  border-color: var(--line-strong);
-  background: var(--paper);
-}
+/* Übersprungen: gedämpft statt eigenem Rahmen */
+.table-scene.skipped strong,
+.table-scene.skipped p { color: var(--ink-muted); }
 
 /* Suchfeld bleibt oben, während die Liste darunter scrollt */
 .table-sticky {
   position: sticky;
   top: -10px;
   z-index: 1;
-  margin: -10px -14px 0;
-  padding: 10px 14px 6px;
-  background: var(--paper-sunken);
+  margin: -10px -12px 0;
+  padding: 10px 12px 6px;
+  /* wie der Seitengrund (fest am Fenster), damit kein Streifen entsteht */
+  background: var(--vignette), var(--grain), var(--paper);
+  background-attachment: fixed;
 }
 
 .table-screen mark {

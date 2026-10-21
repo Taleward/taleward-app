@@ -5,6 +5,7 @@ import { apiAtLeast, currentConnectionId, p } from '../api/connections';
 import { useLive } from '../recorder/useLive';
 import type { Campaign, CampaignSummary } from '../api/types';
 import { Dialog } from '../components/Dialog';
+import { CampaignCover, hasCover } from '../covers/CampaignCover';
 import { IconBack } from '../components/Icons';
 import { ErrorBox, rememberCampaign } from '../components/Screen';
 import { t, tk, tn } from '../i18n';
@@ -127,8 +128,10 @@ function SwitchCampaign({ current }: { current: string }) {
 }
 
 /** Eine Karte auf dem Schirm; misst selbst, ob sie für die volle Ansicht groß genug ist */
-function Card({ id, forceCompact, onCompact, onExpand, style, children }: {
+function Card({ id, forceCompact, onCompact, onExpand, style, edge = '', children }: {
   id: PanelId;
+  /** Trennlinie zum Nachbarn links/oben (Raster): 'l', 't' oder beides */
+  edge?: string;
   forceCompact: boolean;
   onCompact: (id: PanelId, compact: boolean) => void;
   onExpand: () => void;
@@ -148,7 +151,8 @@ function Card({ id, forceCompact, onCompact, onExpand, style, children }: {
   const compact = forceCompact || small;
   useEffect(() => { onCompact(id, compact); }, [id, compact, onCompact]);
   return (
-    <section ref={ref} className={compact ? 'table-panel compact' : 'table-panel'} aria-label={label(id)} style={style}>
+    <section ref={ref} className={['table-panel', compact ? 'compact' : '', edge.includes('l') ? 'edge-l' : '', edge.includes('t') ? 'edge-t' : ''].filter(Boolean).join(' ')}
+      aria-label={label(id)} style={style}>
       <div className="table-panel-head">
         <h2 className="table-panel-title">{label(id)}</h2>
         {compact && <button type="button" className="btn small ghost" onClick={onExpand}>{t('Groß öffnen')}</button>}
@@ -362,7 +366,12 @@ export function TablePage() {
     <div className={editing ? 'table-screen editing' : 'table-screen'}>
       <header className="table-header">
         <Link className="btn ghost small" to={p(`/k/${campaignId}`)}><IconBack size={20} /> {t('Übersicht')}</Link>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        {/* Titelbild klein neben dem Namen – die Kopfzeile wird dadurch nicht höher */}
+        {wide && campaign && hasCover(campaign) && (
+          <div className="table-cover" aria-hidden><CampaignCover campaign={campaign} height={48} radius={8} /></div>
+        )}
+        {/* Mindestbreite für den Titel: am Handy rutschen die Knöpfe lieber in die nächste Zeile */}
+        <div style={{ flex: '1 1 180px', minWidth: 0 }}>
           <div className="overline">{campaign?.title ?? ' '}</div>
           <h1 className="table-title">{t('SL-Schirm')}</h1>
         </div>
@@ -383,7 +392,8 @@ export function TablePage() {
           {wide ? (
             <div className="table-grid">
               {layout.map((c) => (
-                <Card key={`${c.id}-${round}`} id={c.id} forceCompact={false} onCompact={onCompact} onExpand={() => setPopup(c.id)} style={area(c)}>
+                <Card key={`${c.id}-${round}`} id={c.id} forceCompact={false} onCompact={onCompact} onExpand={() => setPopup(c.id)} style={area(c)}
+                  edge={(c.x > 0 ? 'l' : '') + (c.y > 0 ? 't' : '')}>
                   {(compact) => panel(c.id, compact)}
                 </Card>
               ))}
