@@ -1,0 +1,339 @@
+From 562106339e982cb97ff63d82540d1b468dbe493a Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 21 Oct 2026 21:28:53 +0200
+Subject: [PATCH 156/157] Aufnahme breit und Hinweis zum Mikrofon je Umgebung
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Seiten mit Leiste beginnen am linken Rand; Aufnahme vorbereiten zweispaltig statt schmalem Streifen
+- Kein Zugriff aufs Mikrofon: Weg für Handy, Browser und Programmfenster unter Windows;
+  im Programmfenster Knopf „Einstellungen öffnen“, sobald das Programm ihn anbietet
+---
+ scripts/tests/desktop-shell.test.mjs | 20 +++++++
+ src/components/MicDenied.tsx         | 36 +++++++++++++
+ src/display/desktopShell.ts          | 78 ++++++++++++++++++++++++++++
+ src/i18n/en.ts                       |  6 ++-
+ src/pages/Recording.tsx              | 34 +++++++-----
+ src/pages/VoiceProfile.tsx           |  9 ++--
+ src/theme.css                        |  5 ++
+ 7 files changed, 171 insertions(+), 17 deletions(-)
+ create mode 100644 scripts/tests/desktop-shell.test.mjs
+ create mode 100644 src/components/MicDenied.tsx
+ create mode 100644 src/display/desktopShell.ts
+
+diff --git a/scripts/tests/desktop-shell.test.mjs b/scripts/tests/desktop-shell.test.mjs
+new file mode 100644
+index 0000000..52957cf
+--- /dev/null
++++ b/scripts/tests/desktop-shell.test.mjs
+@@ -0,0 +1,20 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { parseShellHello, shellOrigin } from '../../src/display/desktopShell.ts';
++
++test('Programmfenster nur, wenn die App direkt in der Oberfläche auf diesem PC steckt', () => {
++  assert.equal(shellOrigin(['http://localhost:51234'], 'http://localhost:8000', false), 'http://localhost:51234');
++  assert.equal(shellOrigin(['http://127.0.0.1:51234'], 'http://localhost:8000', false), 'http://127.0.0.1:51234');
++  assert.equal(shellOrigin([], 'http://localhost:8000', true), null);
++  assert.equal(shellOrigin(['https://fremd.example'], 'http://localhost:8000', false), null);
++  assert.equal(shellOrigin(['http://localhost:1', 'http://localhost:2'], 'http://localhost:8000', false), null);
++  assert.equal(shellOrigin(['http://localhost:51234'], 'https://app.taleward.org', false), null);
++  assert.equal(shellOrigin(undefined, 'http://localhost:8000', false), null);
++});
++
++test('Nachricht der Oberfläche: nur bekannte Hilfen', () => {
++  assert.deepEqual(parseShellHello({ taleward: 'desktop', can: ['mic-settings', 'irgendwas'] }), ['mic-settings']);
++  assert.equal(parseShellHello({ taleward: 'anders', can: [] }), null);
++  assert.equal(parseShellHello('mic-settings'), null);
++  assert.equal(parseShellHello(null), null);
++});
+diff --git a/src/components/MicDenied.tsx b/src/components/MicDenied.tsx
+new file mode 100644
+index 0000000..96c4714
+--- /dev/null
++++ b/src/components/MicDenied.tsx
+@@ -0,0 +1,36 @@
++import { useEffect, useState } from 'react';
++import { Capacitor } from '@capacitor/core';
++import { t } from '../i18n';
++import { inDesktopShell, onShellChange, openMicSettings, shellCan } from '../display/desktopShell';
++
++/**
++ * Kein Zugriff aufs Mikrofon – mit dem Weg, der hier wirklich hilft: Android-App (App-Einstellungen), Programmfenster
++ * unter Windows (Datenschutz → Mikrofon, mit Knopf, sobald das Programm ihn anbietet) oder Browser (Seiteneinstellungen).
++ */
++export function MicDenied() {
++  const [, redraw] = useState(0);
++  useEffect(() => onShellChange(() => redraw((n) => n + 1)), []);
++  const desktop = inDesktopShell();
++
++  return (
++    <div className="card warn" role="alert">
++      <strong>{t('Kein Zugriff aufs Mikrofon')}</strong>
++      {Capacitor.isNativePlatform() ? (
++        <span className="small">{t('Erlaube ihn in den App-Einstellungen des Handys.')}</span>
++      ) : desktop ? (
++        <>
++          <span className="small">
++            {t('Windows lässt Taleward gerade nicht ans Mikrofon. In den Windows-Einstellungen unter „Datenschutz und Sicherheit“ → „Mikrofon“ „Desktop-Apps den Zugriff erlauben“ einschalten, dann hier noch einmal starten.')}
++          </span>
++          {shellCan('mic-settings') && (
++            <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} onClick={openMicSettings}>
++              {t('Einstellungen öffnen')}
++            </button>
++          )}
++        </>
++      ) : (
++        <span className="small">{t('Erlaube ihn in den Einstellungen des Browsers für diese Seite (Schloss oder Symbol links neben der Adresse) und starte noch einmal.')}</span>
++      )}
++    </div>
++  );
++}
+diff --git a/src/display/desktopShell.ts b/src/display/desktopShell.ts
+new file mode 100644
+index 0000000..8cb39ec
+--- /dev/null
++++ b/src/display/desktopShell.ts
+@@ -0,0 +1,78 @@
++/**
++ * Läuft die App im Programmfenster „Taleward Desktop“? Dort steckt sie in einem Rahmen der Programmoberfläche
++ * (http://localhost:<Anschluss>), die selbst nur unter localhost läuft. Erkennung über `location.ancestorOrigins`
++ * (Chromium/WebView2) – keine Abfrage, kein Speicher.
++ *
++ * Absprache mit der Programmoberfläche (nur Nachrichten zwischen den beiden Fenstern):
++ * - App → Oberfläche: `{ taleward: 'hello' }` beim Start, `{ taleward: 'mic-settings' }` für den Knopf.
++ * - Oberfläche → App: `{ taleward: 'desktop', can: ['mic-settings'] }` – erst danach zeigt die App den Knopf.
++ * Die Oberfläche öffnet dafür fest die Mikrofon-Seite der Windows-Einstellungen, ohne Angaben aus der Nachricht.
++ */
++
++const SHELL = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d{1,5}$/;
++
++/** Herkunft der Programmoberfläche, wenn die App direkt darin steckt – sonst null */
++export function shellOrigin(ancestors: ArrayLike<string> | undefined, self: string, top: boolean): string | null {
++  if (top || !ancestors || ancestors.length !== 1) return null;
++  const parent = ancestors[0];
++  if (!SHELL.test(parent)) return null;
++  // Die App selbst kommt vom Server auf demselben PC
++  if (!/^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d{1,5}$/.test(self)) return null;
++  return parent;
++}
++
++/** Nachricht der Oberfläche lesen: welche Hilfen sie anbietet (nur bekannte Namen) */
++export function parseShellHello(data: unknown): string[] | null {
++  if (!data || typeof data !== 'object') return null;
++  const d = data as { taleward?: unknown; can?: unknown };
++  if (d.taleward !== 'desktop' || !Array.isArray(d.can)) return null;
++  return d.can.filter((x): x is string => x === 'mic-settings');
++}
++
++let origin: string | null | undefined;
++let can: string[] = [];
++const listeners = new Set<() => void>();
++
++function detect(): string | null {
++  if (origin !== undefined) return origin;
++  try {
++    origin = shellOrigin(location.ancestorOrigins, location.origin, window.top === window);
++  } catch {
++    origin = null;
++  }
++  if (origin) {
++    const from = origin;
++    window.addEventListener('message', (e) => {
++      if (e.origin !== from || e.source !== window.parent) return;
++      const c = parseShellHello(e.data);
++      if (!c) return;
++      can = c;
++      listeners.forEach((l) => l());
++    });
++    window.parent.postMessage({ taleward: 'hello' }, from);
++  }
++  return origin;
++}
++
++/** Im Programmfenster? */
++export function inDesktopShell(): boolean {
++  return detect() !== null;
++}
++
++/** Bietet die Oberfläche den Weg zu den Mikrofon-Einstellungen an? */
++export function shellCan(what: 'mic-settings'): boolean {
++  detect();
++  return can.includes(what);
++}
++
++export function onShellChange(cb: () => void): () => void {
++  detect();
++  listeners.add(cb);
++  return () => { listeners.delete(cb); };
++}
++
++/** Windows-Einstellungen → Mikrofon öffnen (macht die Programmoberfläche) */
++export function openMicSettings(): void {
++  const o = detect();
++  if (o && can.includes('mic-settings')) window.parent.postMessage({ taleward: 'mic-settings' }, o);
++}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index dd3a0b1..df6ae58 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -192,5 +192,9 @@ export const en: Record<string, string> = {
+   "Runde": "Session",
+   "Diesen Server kennt die App schon unter {old}. Melde dich hier an, dann gilt die neue Adresse. Deine Kampagnen bleiben, wie sie sind.": "The app already knows this server at {old}. Log in here and the new address applies. Your campaigns stay as they are.",
+-  "Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.": "No microphone access. Allow it in the app settings.",
++  "Kein Zugriff aufs Mikrofon": "No microphone access",
++  "Erlaube ihn in den App-Einstellungen des Handys.": "Allow it in the phone's app settings.",
++  "Windows lässt Taleward gerade nicht ans Mikrofon. In den Windows-Einstellungen unter „Datenschutz und Sicherheit“ → „Mikrofon“ „Desktop-Apps den Zugriff erlauben“ einschalten, dann hier noch einmal starten.": "Windows is keeping Taleward away from the microphone. In Windows Settings under “Privacy & security” → “Microphone”, turn on “Let desktop apps access your microphone”, then start again here.",
++  "Einstellungen öffnen": "Open settings",
++  "Erlaube ihn in den Einstellungen des Browsers für diese Seite (Schloss oder Symbol links neben der Adresse) und starte noch einmal.": "Allow it in the browser's settings for this page (the lock or icon left of the address) and start again.",
+   "Aufnahme beenden und hochladen?": "Stop recording and upload?",
+   "Die Aufnahme enthält keine Daten.": "The recording contains no data.",
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index d1d8007..2cb62e3 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -16,4 +16,5 @@ import { ConsentHandover } from '../components/ConsentHandover';
+ import { IconCheck, IconMic } from '../components/Icons';
+ import { CONSENT_ON_SITE } from '../consent';
++import { MicDenied } from '../components/MicDenied';
+ import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+ import { useAsync } from '../components/useAsync';
+@@ -63,4 +64,5 @@ export function Recording() {
+   const [progress, setProgress] = useState(0);
+   const [error, setError] = useState<unknown>(null);
++  const [micDenied, setMicDenied] = useState(false);
+   const [discordFiles, setDiscordFiles] = useState<{ file: File; memberId: string }[]>([]);
+   const [leftover, setLeftover] = useState<NativeStatus | null>(null);
+@@ -150,10 +152,10 @@ export function Recording() {
+   }, []);
+ 
+-  if (loadError) return <Screen narrow title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
+-  if (!campaign) return <Screen narrow title={t('Aufnahme')}><div className="empty">{t('Lade …')}</div></Screen>;
++  if (loadError) return <Screen title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
++  if (!campaign) return <Screen title={t('Aufnahme')}><div className="empty">{t('Lade …')}</div></Screen>;
+ 
+   if (campaign.myRole !== 'gm') {
+     return (
+-      <Screen narrow overline={campaign.title} title={t('Aufnahme')}>
++      <Screen overline={campaign.title} title={t('Aufnahme')}>
+         <div className="empty">{t('Aufnahmen startet die SL. Das Kapitel findest du danach in der Chronik.')}</div>
+       </Screen>
+@@ -255,4 +257,5 @@ export function Recording() {
+   const start = async () => {
+     setError(null);
++    setMicDenied(false);
+     try {
+       const id = await ensureSession();
+@@ -274,7 +277,6 @@ export function Recording() {
+       setPhase('recording');
+     } catch (e) {
+-      setError(e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')
+-        ? new Error(t('Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.'))
+-        : e);
++      if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
++      else setError(e);
+     }
+   };
+@@ -331,8 +333,13 @@ export function Recording() {
+ 
+   return (
+-    <Screen narrow overline={campaign.title} title={titleForPhase} nav={phase === 'prepare'} hero={{ campaign }}>
++    <Screen narrow={phase !== 'prepare'} overline={campaign.title} title={titleForPhase} nav={phase === 'prepare'} hero={{ campaign }}>
+       <ErrorBox error={error} />
++      {micDenied && <MicDenied />}
+ 
+-      {phase === 'prepare' && pending && (
++      {/* Vorbereiten: breit zweispaltig – links wer am Tisch ist, rechts der Knopf; am Handy untereinander */}
++      {phase === 'prepare' && (
++      <div className="split">
++      <div className="a">
++      {pending && (
+         <div className="card warn">
+           <h2>{t('Aufnahme noch nicht hochgeladen')}</h2>
+@@ -352,8 +359,8 @@ export function Recording() {
+       )}
+ 
+-      {phase === 'prepare' && !native && /Android|iPhone|iPad/i.test(navigator.userAgent) && (
++      {!native && /Android|iPhone|iPad/i.test(navigator.userAgent) && (
+         <div className="notice">{t('Im Browser stoppt die Aufnahme, wenn der Bildschirm ausgeht. Für lange Runden am Handy die Android-App nutzen.')}</div>
+       )}
+-      {phase === 'prepare' && native && !batteryOk && (
++      {native && !batteryOk && (
+         <div className="notice" style={{ alignItems: 'center' }}>
+           <span style={{ flex: 1 }}>{t('Akku-Optimierung ist an – die Aufnahme kann abbrechen.')}</span>
+@@ -364,6 +371,4 @@ export function Recording() {
+       )}
+ 
+-      {phase === 'prepare' && (
+-        <>
+           <section className="card" style={{ gap: 0 }}>
+             <div className="row between" style={{ marginBottom: 4 }}>
+@@ -418,4 +423,6 @@ export function Recording() {
+           )}
+ 
++      </div>
++      <div className="b">
+           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+             <button type="button" className="rec-button" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
+@@ -468,5 +475,6 @@ export function Recording() {
+             {!allConsented && <p className="muted small" style={{ margin: 0 }}>{t('Auch dafür müssen alle zugestimmt haben.')}</p>}
+           </details>
+-        </>
++      </div>
++      </div>
+       )}
+ 
+diff --git a/src/pages/VoiceProfile.tsx b/src/pages/VoiceProfile.tsx
+index d254ece..737303b 100644
+--- a/src/pages/VoiceProfile.tsx
++++ b/src/pages/VoiceProfile.tsx
+@@ -7,4 +7,5 @@ import { api } from '../api/client';
+ import type { VoiceProfile as Profile } from '../api/types';
+ import { IconInfo, IconMic } from '../components/Icons';
++import { MicDenied } from '../components/MicDenied';
+ import { ErrorBox, Screen } from '../components/Screen';
+ import { createRecorder, fileExtension, type Recorder } from '../recorder/recorder';
+@@ -20,4 +21,5 @@ export function VoiceProfile() {
+   const [profile, setProfile] = useState<Profile | null>(null);
+   const [error, setError] = useState<unknown>(null);
++  const [micDenied, setMicDenied] = useState(false);
+   const [consent, setConsent] = useState(false);
+   const [learn, setLearn] = useState(true);
+@@ -77,4 +79,5 @@ export function VoiceProfile() {
+   const start = async () => {
+     setError(null);
++    setMicDenied(false);
+     try {
+       recorder.current = createRecorder();
+@@ -83,7 +86,6 @@ export function VoiceProfile() {
+       setPhase('recording');
+     } catch (e) {
+-      setError(e instanceof Error && e.name === 'NotAllowedError'
+-        ? new Error(t('Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.'))
+-        : e);
++      if (e instanceof Error && e.name === 'NotAllowedError') setMicDenied(true);
++      else setError(e);
+     }
+   };
+@@ -136,4 +138,5 @@ export function VoiceProfile() {
+     <Screen narrow back overline={t('Freiwillig')} title={t('Mein Stimmprofil')} nav={false}>
+       <ErrorBox error={error} />
++      {micDenied && <MicDenied />}
+       {!profile && !error && <div className="empty">{t('Lade …')}</div>}
+ 
+diff --git a/src/theme.css b/src/theme.css
+index b3f16a2..c7d859a 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -1249,4 +1249,9 @@ details.card[open] { padding-bottom: var(--space-4); }
+   }
+ 
++  /* Mit Leiste: an den linken Rand (im Programmfenster direkt neben dessen Leiste), Inhalt nutzt die Breite */
++  .screen:has(> .bottom-nav) {
++    margin-inline-start: 0;
++  }
++
+   .screen:has(> .bottom-nav) > .screen-header {
+     grid-area: header;
