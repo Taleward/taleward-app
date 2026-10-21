@@ -1,4 +1,5 @@
 import { ProviderButton } from '../components/ProviderButton';
+import { inDesktopShell } from '../display/desktopShell';
 import { clearPendingRegister, readPendingRegister, startProviderLogin, type PendingRegister } from '../auth/oidc';
 import { LinkInput } from '../components/LinkInput';
 import { DownloadButton } from '../components/UpdateNotices';
@@ -375,7 +376,10 @@ function ForgotPassword({ info, baseUrl }: { info: ServerInfo; baseUrl: string }
     return <button type="button" className="btn small quiet" style={{ alignSelf: 'center' }} onClick={() => setOpen(true)}>{t('Passwort vergessen?')}</button>;
   }
   if (!info.passwordReset) {
-    return <div className="notice">{t('Die Verwaltung eures Servers schickt dir einen Link zum Zurücksetzen.')}</div>;
+    // Im Programmfenster „Alles auf diesem PC“ ist man selbst die Verwaltung: dort setzt das Programm das Passwort neu
+    return <div className="notice">{inDesktopShell()
+      ? t('Im Taleward-Programm unter Einstellungen → Erweitert → Passwort vergessen.')
+      : t('Die Verwaltung eures Servers schickt dir einen Link zum Zurücksetzen.')}</div>;
   }
   if (sent) {
     return <div className="notice">{t('Wenn es zu diesem Konto eine bestätigte E-Mail gibt, ist ein Link unterwegs. Er gilt eine Stunde.')}</div>;

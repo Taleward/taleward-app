@@ -195,6 +195,7 @@ export const en: Record<string, string> = {
   "Erlaube ihn in den App-Einstellungen des Handys.": "Allow it in the phone's app settings.",
   "Windows lässt Taleward gerade nicht ans Mikrofon. In den Windows-Einstellungen unter „Datenschutz und Sicherheit“ → „Mikrofon“ „Desktop-Apps den Zugriff erlauben“ einschalten, dann hier noch einmal starten.": "Windows is keeping Taleward away from the microphone. In Windows Settings under “Privacy & security” → “Microphone”, turn on “Let desktop apps access your microphone”, then start again here.",
   "Einstellungen öffnen": "Open settings",
+  "Im Taleward-Programm unter Einstellungen → Erweitert → Passwort vergessen.": "In the Taleward program under Settings → Advanced → Forgot password.",
   "Erlaube ihn in den Einstellungen des Browsers für diese Seite (Schloss oder Symbol links neben der Adresse) und starte noch einmal.": "Allow it in the browser's settings for this page (the lock or icon left of the address) and start again.",
   "Aufnahme beenden und hochladen?": "Stop recording and upload?",
   "Die Aufnahme enthält keine Daten.": "The recording contains no data.",
