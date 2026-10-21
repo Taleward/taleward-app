@@ -15,6 +15,7 @@ import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } fr
 import { ConsentHandover } from '../components/ConsentHandover';
 import { IconCheck, IconMic } from '../components/Icons';
 import { CONSENT_ON_SITE } from '../consent';
+import { MicDenied } from '../components/MicDenied';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { useAsync } from '../components/useAsync';
 import { BackgroundRecorder, hasNativeRecorder, nativeUploadFiles, type NativeStatus } from '../recorder/native';
@@ -62,6 +63,7 @@ export function Recording() {
   const [elapsed, setElapsed] = useState(0);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<unknown>(null);
+  const [micDenied, setMicDenied] = useState(false);
   const [discordFiles, setDiscordFiles] = useState<{ file: File; memberId: string }[]>([]);
   const [leftover, setLeftover] = useState<NativeStatus | null>(null);
   // Browser: Aufnahme aus dem Zwischenspeicher des Geräts, die noch nicht hochgeladen ist
@@ -149,12 +151,12 @@ export function Recording() {
     if (r && r.state !== 'idle' && getLive()?.recorder !== r) r.stop().catch(() => undefined);
   }, []);
 
-  if (loadError) return <Screen narrow title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
-  if (!campaign) return <Screen narrow title={t('Aufnahme')}><div className="empty">{t('Lade …')}</div></Screen>;
+  if (loadError) return <Screen title={t('Aufnahme')}><ErrorBox error={loadError} /></Screen>;
+  if (!campaign) return <Screen title={t('Aufnahme')}><div className="empty">{t('Lade …')}</div></Screen>;
 
   if (campaign.myRole !== 'gm') {
     return (
-      <Screen narrow overline={campaign.title} title={t('Aufnahme')}>
+      <Screen overline={campaign.title} title={t('Aufnahme')}>
         <div className="empty">{t('Aufnahmen startet die SL. Das Kapitel findest du danach in der Chronik.')}</div>
       </Screen>
     );
@@ -254,6 +256,7 @@ export function Recording() {
 
   const start = async () => {
     setError(null);
+    setMicDenied(false);
     try {
       const id = await ensureSession();
       if (native) {
@@ -273,9 +276,8 @@ export function Recording() {
       setPaused(false);
       setPhase('recording');
     } catch (e) {
-      setError(e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')
-        ? new Error(t('Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.'))
-        : e);
+      if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
+      else setError(e);
     }
   };
 
@@ -330,10 +332,15 @@ export function Recording() {
   const titleForPhase = phase === 'recording' ? t('Aufnahme läuft') : phase === 'uploading' ? t('Wird hochgeladen') : t('Neues Kapitel aufnehmen');
 
   return (
-    <Screen narrow overline={campaign.title} title={titleForPhase} nav={phase === 'prepare'} hero={{ campaign }}>
+    <Screen narrow={phase !== 'prepare'} overline={campaign.title} title={titleForPhase} nav={phase === 'prepare'} hero={{ campaign }}>
       <ErrorBox error={error} />
+      {micDenied && <MicDenied />}
 
-      {phase === 'prepare' && pending && (
+      {/* Vorbereiten: breit zweispaltig – links wer am Tisch ist, rechts der Knopf; am Handy untereinander */}
+      {phase === 'prepare' && (
+      <div className="split">
+      <div className="a">
+      {pending && (
         <div className="card warn">
           <h2>{t('Aufnahme noch nicht hochgeladen')}</h2>
           <div className="muted small">
@@ -351,10 +358,10 @@ export function Recording() {
         </div>
       )}
 
-      {phase === 'prepare' && !native && /Android|iPhone|iPad/i.test(navigator.userAgent) && (
+      {!native && /Android|iPhone|iPad/i.test(navigator.userAgent) && (
         <div className="notice">{t('Im Browser stoppt die Aufnahme, wenn der Bildschirm ausgeht. Für lange Runden am Handy die Android-App nutzen.')}</div>
       )}
-      {phase === 'prepare' && native && !batteryOk && (
+      {native && !batteryOk && (
         <div className="notice" style={{ alignItems: 'center' }}>
           <span style={{ flex: 1 }}>{t('Akku-Optimierung ist an – die Aufnahme kann abbrechen.')}</span>
           <button type="button" className="btn small outline" onClick={() => BackgroundRecorder.requestIgnoreBatteryOptimizations()}>
@@ -363,8 +370,6 @@ export function Recording() {
         </div>
       )}
 
-      {phase === 'prepare' && (
-        <>
           <section className="card" style={{ gap: 0 }}>
             <div className="row between" style={{ marginBottom: 4 }}>
               <h2>{t('Am Tisch')}</h2>
@@ -417,6 +422,8 @@ export function Recording() {
             </p>
           )}
 
+      </div>
+      <div className="b">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
             <button type="button" className="rec-button" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
               <IconMic size={48} />
@@ -467,7 +474,8 @@ export function Recording() {
             )}
             {!allConsented && <p className="muted small" style={{ margin: 0 }}>{t('Auch dafür müssen alle zugestimmt haben.')}</p>}
           </details>
-        </>
+      </div>
+      </div>
       )}
 
       {phase === 'recording' && (

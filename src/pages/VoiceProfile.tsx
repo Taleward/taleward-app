@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import type { VoiceProfile as Profile } from '../api/types';
 import { IconInfo, IconMic } from '../components/Icons';
+import { MicDenied } from '../components/MicDenied';
 import { ErrorBox, Screen } from '../components/Screen';
 import { createRecorder, fileExtension, type Recorder } from '../recorder/recorder';
 
@@ -19,6 +20,7 @@ type Phase = 'idle' | 'recording' | 'sending';
 export function VoiceProfile() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [micDenied, setMicDenied] = useState(false);
   const [consent, setConsent] = useState(false);
   const [learn, setLearn] = useState(true);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -76,15 +78,15 @@ export function VoiceProfile() {
 
   const start = async () => {
     setError(null);
+    setMicDenied(false);
     try {
       recorder.current = createRecorder();
       await recorder.current.start();
       setSeconds(0);
       setPhase('recording');
     } catch (e) {
-      setError(e instanceof Error && e.name === 'NotAllowedError'
-        ? new Error(t('Kein Zugriff aufs Mikrofon. Erlaube ihn in den App-Einstellungen.'))
-        : e);
+      if (e instanceof Error && e.name === 'NotAllowedError') setMicDenied(true);
+      else setError(e);
     }
   };
 
@@ -135,6 +137,7 @@ export function VoiceProfile() {
   return (
     <Screen narrow back overline={t('Freiwillig')} title={t('Mein Stimmprofil')} nav={false}>
       <ErrorBox error={error} />
+      {micDenied && <MicDenied />}
       {!profile && !error && <div className="empty">{t('Lade …')}</div>}
 
       {profile?.status === 'processing' && (

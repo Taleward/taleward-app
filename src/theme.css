@@ -1248,6 +1248,11 @@ details.card[open] { padding-bottom: var(--space-4); }
     grid-template-areas: 'nav header' 'nav main';
   }
 
+  /* Mit Leiste: an den linken Rand (im Programmfenster direkt neben dessen Leiste), Inhalt nutzt die Breite */
+  .screen:has(> .bottom-nav) {
+    margin-inline-start: 0;
+  }
+
   .screen:has(> .bottom-nav) > .screen-header {
     grid-area: header;
   }
