@@ -1,4 +1,5 @@
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
+import { Tour } from '../tour/Tour';
 import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
 import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
 import { DataSummary, openDataSummary } from '../components/DataSummary';
@@ -92,7 +93,7 @@ export function Overview() {
           {gm && !pickingCover && (
             <div className="overview-tools" style={{ marginTop: hasCover(campaign) ? -6 : 0 }}>
               {!campaign.archivedAt && (
-                <Link className="btn small accent" to={p(`/k/${campaignId}/tisch`)}><IconScreen /> {t('SL-Schirm')}</Link>
+                <Link className="btn small accent" to={p(`/k/${campaignId}/tisch`)} data-tour="schirm"><IconScreen /> {t('SL-Schirm')}</Link>
               )}
               <button type="button" className="btn small subtle" onClick={() => setPickingCover(true)}>
                 {hasCover(campaign) ? t('Titelbild ändern') : t('Titelbild wählen')}
@@ -199,12 +200,14 @@ export function Overview() {
           <Members campaign={campaign} onChanged={load} />
           {me?.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
 
-          {gm && <div id="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
+          {gm && <div id="invite" data-tour="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
           {gm && <UsageLine campaignId={campaignId} />}
           {me && <DataSummary campaign={campaign} info={serverInfo} gm={gm} />}
           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} />}
           </div>
           </div>
+          {/* Einmal je Gerät und Rolle: kurz zeigen, wo was ist (nicht in abgeschlossenen Kampagnen) */}
+          {!campaign.archivedAt && <Tour role={gm ? 'gm' : 'player'} />}
         </>
       )}
     </Screen>
@@ -216,7 +219,7 @@ function BibleSearch({ campaignId }: { campaignId: string }) {
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   return (
-    <form role="search" className="overview-search" aria-label={t('Wer war das?')}
+    <form role="search" data-tour="search" className="overview-search" aria-label={t('Wer war das?')}
       onSubmit={(e) => { e.preventDefault(); if (q.trim()) navigate(p(`/k/${campaignId}/bibel?q=${encodeURIComponent(q.trim())}`)); }}>
       <IconSearch />
       <input type="search" enterKeyHint="search" aria-label={t('Name in der Bibel suchen …')} placeholder={t('Wer war das? Name suchen …')} value={q} onChange={(e) => setQ(e.target.value)} />
@@ -481,7 +484,7 @@ function Members({ campaign, onChanged }: { campaign: Campaign; onChanged: () =>
   const former = campaign.members.filter((m) => !m.openSeat && isDeletedMember(m));
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <section data-tour="members" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <h2>{t('Am Tisch')}</h2>
       <div className="card" style={{ gap: 2, padding: '8px 12px' }}>
         {active.map((m) => m.openSeat ? (

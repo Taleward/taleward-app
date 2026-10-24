@@ -19,7 +19,7 @@ export interface NowItem {
 export function NowList({ items }: { items: NowItem[] }) {
   if (items.length === 0) return null;
   return (
-    <section className="card now-list" aria-labelledby="now-title">
+    <section className="card now-list" aria-labelledby="now-title" data-tour="now">
       <h2 id="now-title" className="overline">{t('Jetzt dran ({n})', { n: items.length })}</h2>
       <ul>
         {items.map((i) => (

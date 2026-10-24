@@ -1,4 +1,5 @@
 import { isUnencrypted } from '../api/addresses';
+import { resetTour } from '../tour/steps';
 import { oidcErrorText } from './ConnectPage';
 import { LoginSettings } from '../components/LoginSettings';
 import { ImportCampaign } from '../components/ImportCampaign';
@@ -40,6 +41,7 @@ export function AccountPage() {
         <h2>{t('Einstellungen')}</h2>
         <LanguageSwitch />
         <ThemeSwitch />
+        <TourAgain />
       </section>
       <NotifySettingsSection />
       <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
@@ -185,5 +187,16 @@ function ConnectionCard({ conn }: { conn: Connection }) {
         </>
       )}
     </section>
+  );
+}
+
+/** Die kurze Tour startet beim nächsten Öffnen einer Kampagne wieder */
+function TourAgain() {
+  const [done, setDone] = useState(false);
+  return (
+    <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+      <button type="button" className="btn small outline" onClick={() => { resetTour(); setDone(true); }}>{t('Tour noch einmal zeigen')}</button>
+      {done && <span className="small" role="status">{t('Sie startet beim nächsten Öffnen einer Kampagne.')}</span>}
+    </div>
   );
 }

@@ -2184,3 +2184,17 @@ button.table-group-face {
 /* Nutzungsbedingungen und Impressum je Server (ab Schnittstelle 0.4.22) */
 .terms-reminder { gap: 8px; }
 .server-legal { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- Kurze Tour: dunkelt ab, hebt die echte Stelle hervor ---------- */
+.tour-shade { position: fixed; inset: 0; z-index: 90; }
+.tour-dim { position: fixed; inset: 0; background: rgba(20, 15, 10, 0.55); }
+.tour-ring {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px var(--paper-raised), 0 0 0 9999px rgba(20, 15, 10, 0.55);
+  pointer-events: none;
+}
+.tour-card { position: fixed; gap: 6px; z-index: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .tour-ring { transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease; }
+}

@@ -126,15 +126,15 @@ function BottomNav() {
         <IconShield /> <span>{t('Übersicht')}</span>
       </NavLink>
       {!isPlayer && (
-        <NavLink to={`${c}/aufnahme`} className={cls}>
+        <NavLink to={`${c}/aufnahme`} className={cls} data-tour="nav-aufnahme">
           <IconMic /> <span>{t('Aufnahme')}</span>
         </NavLink>
       )}
-      <NavLink to={`${c}/chronik`} className={cls}>
+      <NavLink to={`${c}/chronik`} className={cls} data-tour="nav-chronik">
         <span style={{ position: 'relative', display: 'inline-flex' }}><IconScroll />{unread.recaps + unread.comments > 0 && dot}</span>
         <span>{t('Chronik')}</span>
       </NavLink>
-      <NavLink to={`${c}/bibel`} className={cls}>
+      <NavLink to={`${c}/bibel`} className={cls} data-tour="nav-bibel">
         <span style={{ position: 'relative', display: 'inline-flex' }}><IconBook />{unread.bible > 0 && dot}</span>
         <span>{t('Bibel')}</span>
       </NavLink>

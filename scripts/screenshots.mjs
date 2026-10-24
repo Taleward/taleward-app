@@ -106,6 +106,9 @@ for (const run of RUNS) {
     localStorage.clear();
     localStorage.setItem('session-chronik.lang', lang);
     localStorage.setItem('taleward.theme', theme === 'spielabend' ? 'dark' : 'light');
+    // Die kurze Tour gehört nicht auf die Aufnahmen
+    localStorage.setItem('taleward.tour.player', '1');
+    localStorage.setItem('taleward.tour.gm', '1');
   }, run.lang, run.theme);
   await page.reload(); await wait(800);
   // 15: Startbildschirm ohne Einladung – Feld leer, Testmodus-Hinweis ausgeblendet
