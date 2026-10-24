@@ -1,0 +1,42 @@
+From 3da10333e29bebe1ef74087b76c5af449b548730 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 17:18:25 +0200
+Subject: [PATCH] Aufnahme: Hinweis auf Craig bei Discord-Spuren, Zeilen am
+ Handy wieder einzeilig
+
+---
+ src/i18n/en.ts          | 1 +
+ src/pages/Recording.tsx | 6 ++++--
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index e357c90..3be5f9f 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -45,4 +45,5 @@ export const en: Record<string, string> = {
+   "Offene Fäden": "Open threads",
+   "Zurück": "Back",
++  "Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.": "Playing over Discord? The Craig bot records each person separately there. Upload the files here.",
+   "Tour noch einmal zeigen": "Show the tour again",
+   "Sie startet beim nächsten Öffnen einer Kampagne.": "It starts the next time you open a campaign.",
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index a2c7607..1984022 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -379,5 +379,5 @@ export function Recording() {
+               <div key={m.id} className="row" style={{ minHeight: 56, gap: 10, borderTop: '1px solid var(--line)', flexWrap: 'wrap', paddingBlock: 4 }}>
+                 {/* Große Schrift: lieber „Zustimmen lassen“ in die nächste Zeile als den Namen abschneiden */}
+-                <label className="check" style={{ flex: '1 1 180px', minWidth: 0, gap: 10 }}>
++                <label className="check" style={{ flex: '1 1 120px', minWidth: 0, gap: 10 }}>
+                   <input type="checkbox" checked={!!present[m.id]} aria-label={t('{name} ist da', { name: m.displayName })}
+                     onChange={(e) => setPresent({ ...present, [m.id]: e.target.checked })} />
+@@ -449,5 +449,7 @@ export function Recording() {
+             <div className="field" style={{ marginTop: 8 }}>
+               <label htmlFor="file-discord">{t('Discord-Spuren (eine Datei pro Person)')}</label>
+-              <input id="file-discord" type="file" accept="audio/*" multiple disabled={!allConsented} onChange={(e) => pickDiscord(e.target.files)} />
++              <input id="file-discord" type="file" accept="audio/*" multiple aria-describedby="discord-hint" disabled={!allConsented} onChange={(e) => pickDiscord(e.target.files)} />
++              {/* Woher solche Spuren kommen: heute über Craig, später über den eigenen Bot */}
++              <span id="discord-hint" className="muted small">{t('Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.')}</span>
+             </div>
+             {discordFiles.map((d, i) => (
