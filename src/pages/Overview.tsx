@@ -177,10 +177,11 @@ export function Overview() {
               </span>
             </Link>
           )}
-          {sessions?.length === 0 && (
+          {/* Die SL hat dafür „So fängst du an“ */}
+          {sessions?.length === 0 && !gm && (
             <div className="notice">
               <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
-              <span>{gm ? t('Noch kein Kapitel. Nimm unten über „Aufnahme“ die erste Runde auf.') : t('Noch kein Kapitel veröffentlicht.')}</span>
+              <span>{t('Noch kein Kapitel veröffentlicht.')}</span>
             </div>
           )}
 
@@ -228,40 +229,55 @@ function BibleSearch({ campaignId }: { campaignId: string }) {
 }
 
 /**
- * Erste Schritte einer neuen Kampagne (SL, solange es kein Kapitel gibt): Titelbild, Welt, Einladen. Jeder Punkt führt
- * zur Stelle auf dieser Seite; erledigte Punkte bekommen einen Haken, die Karte verschwindet, wenn alles erledigt oder
- * ausgeblendet ist. Ersetzt die frühere Seite „Neue Kampagne einrichten“.
+ * „So fängst du an“ (SL, solange es kein Kapitel gibt): die Reihenfolge bis zum ersten Kapitel – einladen, Welt
+ * (freiwillig), erste Runde aufnehmen. Der nächste offene Schritt ist der Hauptknopf; Titelbild als leiser Link darunter.
+ * Verschwindet mit dem ersten Kapitel oder über „Ausblenden“. Antwort auf „Ich wusste nicht, wo ich anfangen soll“.
  */
 function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => void }) {
+  const navigate = useNavigate();
   const key = `taleward.firstSteps.hidden.${campaign.id}`;
   const [hidden, setHidden] = useState(() => {
     try { return localStorage.getItem(key) === '1'; } catch { return false; }
   });
   const players = campaign.members.filter((m) => m.role === 'player' && !isDeletedMember(m) && m.userId).length;
   const steps = [
-    { label: t('Titelbild wählen'), done: hasCover(campaign), go: onCover },
-    { label: t('Die Welt beschreiben'), done: !!campaign.worldInfo?.trim(), go: () => document.getElementById('world')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
-    { label: t('Mitspielende einladen'), done: players > 0, go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
+    { label: t('Mitspielende einladen'), detail: t('Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.'), done: players > 0,
+      go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
+    { label: t('Die Welt beschreiben'), detail: t('Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.'), done: !!campaign.worldInfo?.trim(),
+      go: () => document.getElementById('world')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+    { label: t('Erste Runde aufnehmen'), detail: t('Am Spielabend unter „Aufnahme“. Jede Person am Tisch stimmt dort selbst zu, danach schreibt der Server das Kapitel.'), done: false,
+      go: () => navigate(p(`/k/${campaign.id}/aufnahme`)) }
   ];
-  if (hidden || steps.every((s) => s.done)) return null;
+  if (hidden) return null;
+  const nextIndex = steps.findIndex((s) => !s.done);
   const hide = () => {
     try { localStorage.setItem(key, '1'); } catch { /* egal */ }
     setHidden(true);
   };
   return (
-    <section className="card task" aria-labelledby="first-steps">
-      <strong id="first-steps">{t('Erste Schritte')}</strong>
-      <span className="muted small">{t('Alles optional. Erledigtes bekommt einen Haken.')}</span>
-      {steps.map((s) => (
-        <div key={s.label} className="row" style={{ minHeight: 48, gap: 10 }}>
-          <span aria-hidden style={{ width: 24, display: 'inline-flex', justifyContent: 'center', color: s.done ? 'var(--salbei)' : 'var(--ink-faint)' }}>
-            {s.done ? <IconCheck size={18} /> : '○'}
-          </span>
-          <span style={{ flex: 1 }}>{s.label}{s.done && <span className="visually-hidden"> – {t('erledigt')}</span>}</span>
-          {!s.done && <button type="button" className="btn small outline" aria-label={t('Los: {step}', { step: s.label })} onClick={s.go}>{t('Los')}</button>}
-        </div>
-      ))}
-      <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={hide}>{t('Ausblenden')}</button>
+    <section className="card task" aria-labelledby="first-steps" data-tour="first-steps">
+      <strong id="first-steps">{t('So fängst du an')}</strong>
+      <span className="muted small">{t('Drei Schritte bis zum ersten Kapitel. Alles andere kann warten.')}</span>
+      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {steps.map((s, i) => (
+          <li key={s.label} className="row" style={{ minHeight: 48, gap: 10, alignItems: 'flex-start' }}>
+            <span aria-hidden style={{ width: 24, flexShrink: 0, display: 'inline-flex', justifyContent: 'center', paddingTop: 2, fontWeight: 700, color: s.done ? 'var(--salbei)' : 'var(--ink-muted)' }}>
+              {s.done ? <IconCheck size={18} /> : i + 1}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span>{s.label}{s.done && <span className="visually-hidden"> – {t('erledigt')}</span>}</span>
+              {!s.done && <span className="muted small">{s.detail}</span>}
+            </span>
+            {!s.done && (
+              <button type="button" className={i === nextIndex ? 'btn small' : 'btn small outline'} aria-label={t('Los: {step}', { step: s.label })} onClick={s.go}>{t('Los')}</button>
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="row wrap" style={{ gap: 16 }}>
+        {!hasCover(campaign) && <button type="button" className="linklike small" style={{ minHeight: 48 }} onClick={onCover}>{t('Titelbild wählen')}</button>}
+        <button type="button" className="linklike small muted" style={{ minHeight: 48 }} onClick={hide}>{t('Ausblenden')}</button>
+      </div>
     </section>
   );
 }

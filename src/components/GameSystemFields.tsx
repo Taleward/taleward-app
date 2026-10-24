@@ -14,7 +14,9 @@ export const GAME_SYSTEMS: { value: GameSystem; label: string }[] = [
 
 /** Anzeige „Das Schwarze Auge“ bzw. bei „Anderes“ der frei eingetragene Name */
 export function systemLabel(system: GameSystem | null | undefined, systemName: string | null | undefined): string | null {
-  if (system && system !== 'other') return GAME_SYSTEMS.find((s) => s.value === system)!.label;
+  // Unbekanntes System (neuerer Server): wie „Anderes“ behandeln statt abzustürzen
+  const known = system && system !== 'other' ? GAME_SYSTEMS.find((s) => s.value === system) : undefined;
+  if (known) return known.label;
   return systemName?.trim() || null;
 }
 

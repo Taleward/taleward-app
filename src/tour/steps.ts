@@ -24,6 +24,7 @@ export const TOUR_STEPS: Record<TourRole, TourStep[]> = {
   ],
   gm: [
     { target: null, title: tk('Kurz herumgeführt'), text: tk('Wo du aufnimmst, Kapitel prüfst und am Spielabend nachschlägst. Dauert eine halbe Minute.') },
+    { target: 'first-steps', title: tk('Hier fängst du an'), text: tk('Lade deine Runde ein und nimm am Spielabend die erste Runde auf. Alles andere kann warten.') },
     { target: 'nav-aufnahme', title: tk('Aufnahme'), text: tk('Hier nimmst du die Runde auf. Vorher stimmt jede Person am Tisch selbst zu.') },
     { target: 'now', title: tk('Jetzt dran'), text: tk('Nach der Runde steht hier „Kapitel prüfen“. Erst wenn du es freigibst, lesen es die anderen.') },
     { target: 'nav-bibel', title: tk('Bibel'), text: tk('Namen aus den Kapiteln kommen als Vorschlag hierher. Was nur du weißt, bleibt „Nur SL“.') },
