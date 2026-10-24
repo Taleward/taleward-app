@@ -1,0 +1,157 @@
+From 5f79debbfcc498c5ebd06746cc6a19538c6a781f Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 24 Oct 2026 18:46:59 +0200
+Subject: [PATCH 164/165] =?UTF-8?q?Neue=20Kampagne:=20=E2=80=9ESo=20f?=
+ =?UTF-8?q?=C3=A4ngst=20du=20an=E2=80=9C=20mit=20Reihenfolge=20bis=20zum?=
+ =?UTF-8?q?=20ersten=20Kapitel?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Einladen, Welt (freiwillig), erste Runde aufnehmen; der nächste offene Schritt ist der Hauptknopf
+- Titelbild als leiser Link, Tour der SL zeigt zuerst auf diese Karte
+- Unbekanntes Spielsystem eines neueren Servers wird wie „Anderes“ angezeigt
+---
+ src/components/GameSystemFields.tsx |  4 +-
+ src/i18n/en.ts                      | 10 ++++-
+ src/pages/Overview.tsx              | 60 ++++++++++++++++++-----------
+ src/tour/steps.ts                   |  1 +
+ 4 files changed, 50 insertions(+), 25 deletions(-)
+
+diff --git a/src/components/GameSystemFields.tsx b/src/components/GameSystemFields.tsx
+index 0fbedf2..7cef56b 100644
+--- a/src/components/GameSystemFields.tsx
++++ b/src/components/GameSystemFields.tsx
+@@ -15,5 +15,7 @@ export const GAME_SYSTEMS: { value: GameSystem; label: string }[] = [
+ /** Anzeige „Das Schwarze Auge“ bzw. bei „Anderes“ der frei eingetragene Name */
+ export function systemLabel(system: GameSystem | null | undefined, systemName: string | null | undefined): string | null {
+-  if (system && system !== 'other') return GAME_SYSTEMS.find((s) => s.value === system)!.label;
++  // Unbekanntes System (neuerer Server): wie „Anderes“ behandeln statt abzustürzen
++  const known = system && system !== 'other' ? GAME_SYSTEMS.find((s) => s.value === system) : undefined;
++  if (known) return known.label;
+   return systemName?.trim() || null;
+ }
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 3be5f9f..103df20 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -45,4 +45,12 @@ export const en: Record<string, string> = {
+   "Offene Fäden": "Open threads",
+   "Zurück": "Back",
++  "Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.": "By link or QR code. Anyone without an account can join on the night as a guest.",
++  "Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.": "Optional, a few sentences are enough. Helps when the chapters are written.",
++  "Erste Runde aufnehmen": "Record your first session",
++  "Am Spielabend unter „Aufnahme“. Jede Person am Tisch stimmt dort selbst zu, danach schreibt der Server das Kapitel.": "On game night under “Record”. Everyone at the table agrees there for themselves, then the server writes the chapter.",
++  "So fängst du an": "How to start",
++  "Drei Schritte bis zum ersten Kapitel. Alles andere kann warten.": "Three steps to your first chapter. Everything else can wait.",
++  "Hier fängst du an": "Start here",
++  "Lade deine Runde ein und nimm am Spielabend die erste Runde auf. Alles andere kann warten.": "Invite your group and record the first session on game night. Everything else can wait.",
+   "Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.": "Playing over Discord? The Craig bot records each person separately there. Upload the files here.",
+   "Tour noch einmal zeigen": "Show the tour again",
+@@ -1023,6 +1031,4 @@ export const en: Record<string, string> = {
+   "Mehr": "More",
+   "Die Welt beschreiben": "Describe the world",
+-  "Erste Schritte": "First steps",
+-  "Alles optional. Erledigtes bekommt einen Haken.": "All optional. Done steps get a tick.",
+   "Los": "Go",
+   "Ausblenden": "Hide",
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index d7e3573..d6c4c3c 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -178,8 +178,9 @@ export function Overview() {
+             </Link>
+           )}
+-          {sessions?.length === 0 && (
++          {/* Die SL hat dafür „So fängst du an“ */}
++          {sessions?.length === 0 && !gm && (
+             <div className="notice">
+               <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
+-              <span>{gm ? t('Noch kein Kapitel. Nimm unten über „Aufnahme“ die erste Runde auf.') : t('Noch kein Kapitel veröffentlicht.')}</span>
++              <span>{t('Noch kein Kapitel veröffentlicht.')}</span>
+             </div>
+           )}
+@@ -229,9 +230,10 @@ function BibleSearch({ campaignId }: { campaignId: string }) {
+ 
+ /**
+- * Erste Schritte einer neuen Kampagne (SL, solange es kein Kapitel gibt): Titelbild, Welt, Einladen. Jeder Punkt führt
+- * zur Stelle auf dieser Seite; erledigte Punkte bekommen einen Haken, die Karte verschwindet, wenn alles erledigt oder
+- * ausgeblendet ist. Ersetzt die frühere Seite „Neue Kampagne einrichten“.
++ * „So fängst du an“ (SL, solange es kein Kapitel gibt): die Reihenfolge bis zum ersten Kapitel – einladen, Welt
++ * (freiwillig), erste Runde aufnehmen. Der nächste offene Schritt ist der Hauptknopf; Titelbild als leiser Link darunter.
++ * Verschwindet mit dem ersten Kapitel oder über „Ausblenden“. Antwort auf „Ich wusste nicht, wo ich anfangen soll“.
+  */
+ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => void }) {
++  const navigate = useNavigate();
+   const key = `taleward.firstSteps.hidden.${campaign.id}`;
+   const [hidden, setHidden] = useState(() => {
+@@ -240,9 +242,13 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () =>
+   const players = campaign.members.filter((m) => m.role === 'player' && !isDeletedMember(m) && m.userId).length;
+   const steps = [
+-    { label: t('Titelbild wählen'), done: hasCover(campaign), go: onCover },
+-    { label: t('Die Welt beschreiben'), done: !!campaign.worldInfo?.trim(), go: () => document.getElementById('world')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+-    { label: t('Mitspielende einladen'), done: players > 0, go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }
++    { label: t('Mitspielende einladen'), detail: t('Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.'), done: players > 0,
++      go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
++    { label: t('Die Welt beschreiben'), detail: t('Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.'), done: !!campaign.worldInfo?.trim(),
++      go: () => document.getElementById('world')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
++    { label: t('Erste Runde aufnehmen'), detail: t('Am Spielabend unter „Aufnahme“. Jede Person am Tisch stimmt dort selbst zu, danach schreibt der Server das Kapitel.'), done: false,
++      go: () => navigate(p(`/k/${campaign.id}/aufnahme`)) }
+   ];
+-  if (hidden || steps.every((s) => s.done)) return null;
++  if (hidden) return null;
++  const nextIndex = steps.findIndex((s) => !s.done);
+   const hide = () => {
+     try { localStorage.setItem(key, '1'); } catch { /* egal */ }
+@@ -250,17 +256,27 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () =>
+   };
+   return (
+-    <section className="card task" aria-labelledby="first-steps">
+-      <strong id="first-steps">{t('Erste Schritte')}</strong>
+-      <span className="muted small">{t('Alles optional. Erledigtes bekommt einen Haken.')}</span>
+-      {steps.map((s) => (
+-        <div key={s.label} className="row" style={{ minHeight: 48, gap: 10 }}>
+-          <span aria-hidden style={{ width: 24, display: 'inline-flex', justifyContent: 'center', color: s.done ? 'var(--salbei)' : 'var(--ink-faint)' }}>
+-            {s.done ? <IconCheck size={18} /> : '○'}
+-          </span>
+-          <span style={{ flex: 1 }}>{s.label}{s.done && <span className="visually-hidden"> – {t('erledigt')}</span>}</span>
+-          {!s.done && <button type="button" className="btn small outline" aria-label={t('Los: {step}', { step: s.label })} onClick={s.go}>{t('Los')}</button>}
+-        </div>
+-      ))}
+-      <button type="button" className="btn small ghost" style={{ alignSelf: 'flex-start' }} onClick={hide}>{t('Ausblenden')}</button>
++    <section className="card task" aria-labelledby="first-steps" data-tour="first-steps">
++      <strong id="first-steps">{t('So fängst du an')}</strong>
++      <span className="muted small">{t('Drei Schritte bis zum ersten Kapitel. Alles andere kann warten.')}</span>
++      <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
++        {steps.map((s, i) => (
++          <li key={s.label} className="row" style={{ minHeight: 48, gap: 10, alignItems: 'flex-start' }}>
++            <span aria-hidden style={{ width: 24, flexShrink: 0, display: 'inline-flex', justifyContent: 'center', paddingTop: 2, fontWeight: 700, color: s.done ? 'var(--salbei)' : 'var(--ink-muted)' }}>
++              {s.done ? <IconCheck size={18} /> : i + 1}
++            </span>
++            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
++              <span>{s.label}{s.done && <span className="visually-hidden"> – {t('erledigt')}</span>}</span>
++              {!s.done && <span className="muted small">{s.detail}</span>}
++            </span>
++            {!s.done && (
++              <button type="button" className={i === nextIndex ? 'btn small' : 'btn small outline'} aria-label={t('Los: {step}', { step: s.label })} onClick={s.go}>{t('Los')}</button>
++            )}
++          </li>
++        ))}
++      </ol>
++      <div className="row wrap" style={{ gap: 16 }}>
++        {!hasCover(campaign) && <button type="button" className="linklike small" style={{ minHeight: 48 }} onClick={onCover}>{t('Titelbild wählen')}</button>}
++        <button type="button" className="linklike small muted" style={{ minHeight: 48 }} onClick={hide}>{t('Ausblenden')}</button>
++      </div>
+     </section>
+   );
+diff --git a/src/tour/steps.ts b/src/tour/steps.ts
+index 3e8ffc8..45b152d 100644
+--- a/src/tour/steps.ts
++++ b/src/tour/steps.ts
+@@ -25,4 +25,5 @@ export const TOUR_STEPS: Record<TourRole, TourStep[]> = {
+   gm: [
+     { target: null, title: tk('Kurz herumgeführt'), text: tk('Wo du aufnimmst, Kapitel prüfst und am Spielabend nachschlägst. Dauert eine halbe Minute.') },
++    { target: 'first-steps', title: tk('Hier fängst du an'), text: tk('Lade deine Runde ein und nimm am Spielabend die erste Runde auf. Alles andere kann warten.') },
+     { target: 'nav-aufnahme', title: tk('Aufnahme'), text: tk('Hier nimmst du die Runde auf. Vorher stimmt jede Person am Tisch selbst zu.') },
+     { target: 'now', title: tk('Jetzt dran'), text: tk('Nach der Runde steht hier „Kapitel prüfen“. Erst wenn du es freigibst, lesen es die anderen.') },
