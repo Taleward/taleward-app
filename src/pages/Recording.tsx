@@ -378,7 +378,7 @@ export function Recording() {
             {campaign.members.filter((m) => !isDeletedMember(m)).map((m) => (
               <div key={m.id} className="row" style={{ minHeight: 56, gap: 10, borderTop: '1px solid var(--line)', flexWrap: 'wrap', paddingBlock: 4 }}>
                 {/* Große Schrift: lieber „Zustimmen lassen“ in die nächste Zeile als den Namen abschneiden */}
-                <label className="check" style={{ flex: '1 1 180px', minWidth: 0, gap: 10 }}>
+                <label className="check" style={{ flex: '1 1 120px', minWidth: 0, gap: 10 }}>
                   <input type="checkbox" checked={!!present[m.id]} aria-label={t('{name} ist da', { name: m.displayName })}
                     onChange={(e) => setPresent({ ...present, [m.id]: e.target.checked })} />
                   <Avatar campaignId={campaign.id} member={m} size={32} />
@@ -448,7 +448,9 @@ export function Recording() {
             </div>
             <div className="field" style={{ marginTop: 8 }}>
               <label htmlFor="file-discord">{t('Discord-Spuren (eine Datei pro Person)')}</label>
-              <input id="file-discord" type="file" accept="audio/*" multiple disabled={!allConsented} onChange={(e) => pickDiscord(e.target.files)} />
+              <input id="file-discord" type="file" accept="audio/*" multiple aria-describedby="discord-hint" disabled={!allConsented} onChange={(e) => pickDiscord(e.target.files)} />
+              {/* Woher solche Spuren kommen: heute über Craig, später über den eigenen Bot */}
+              <span id="discord-hint" className="muted small">{t('Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.')}</span>
             </div>
             {discordFiles.map((d, i) => (
               <div key={d.file.name} className="field">

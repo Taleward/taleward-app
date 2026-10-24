@@ -44,6 +44,7 @@ export const en: Record<string, string> = {
   "Vorlesen": "Read aloud",
   "Offene Fäden": "Open threads",
   "Zurück": "Back",
+  "Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.": "Playing over Discord? The Craig bot records each person separately there. Upload the files here.",
   "Tour noch einmal zeigen": "Show the tour again",
   "Sie startet beim nächsten Öffnen einer Kampagne.": "It starts the next time you open a campaign.",
   "{n} von {m}": "{n} of {m}",
