@@ -1,0 +1,61 @@
+From c9164d1a699e6cfe5fdc8a48c9cc0d346f630d7d Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sun, 25 Oct 2026 12:03:37 +0100
+Subject: [PATCH 166/167] Musterkampagne: Weg zur eigenen Kampagne benennen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Nur mit der Musterkampagne heißt der Hauptknopf „Eigene Kampagne anlegen“ und sagt, dass es dafür einen Server
+braucht und die Musterkampagne bleibt. „Ich will selbst leiten“ erscheint auch aus der Musterkampagne heraus.
+---
+ src/i18n/en.ts            | 2 ++
+ src/pages/Campaigns.tsx   | 6 +++++-
+ src/pages/ConnectPage.tsx | 4 +++-
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 103df20..c3c122a 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -45,4 +45,6 @@ export const en: Record<string, string> = {
+   "Offene Fäden": "Open threads",
+   "Zurück": "Back",
++  "Eigene Kampagne anlegen": "Create your own campaign",
++  "Dafür verbindest du dich zuerst mit einem Server – dem deines Vereins, deiner Gruppe oder einem eigenen. Die Musterkampagne bleibt dabei hier.": "For that you first connect to a server – your club's, your group's or your own. The sample campaign stays here.",
+   "Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.": "By link or QR code. Anyone without an account can join on the night as a guest.",
+   "Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.": "Optional, a few sentences are enough. Helps when the chapters are written.",
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 009905b..55caa61 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -258,5 +258,9 @@ export function Campaigns() {
+         <>
+           {onlyMuster ? (
+-            <Link className={firstStep ? 'btn' : 'btn outline'} to="/verbinden">{t('Mit einem Server verbinden')}</Link>
++            // Nur die Musterkampagne: Der Weg zur eigenen Kampagne führt über einen Server – so benannt, wie man es sucht
++            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
++              <Link className="btn" to="/verbinden">{t('Eigene Kampagne anlegen')}</Link>
++              <span className="muted small">{t('Dafür verbindest du dich zuerst mit einem Server – dem deines Vereins, deiner Gruppe oder einem eigenen. Die Musterkampagne bleibt dabei hier.')}</span>
++            </div>
+           ) : (
+             <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={() => { setMode('new'); setValue(''); }}>
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index 7550e4b..852574c 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -18,4 +18,5 @@ import { IconInfo } from '../components/Icons';
+ import { Divider, ErrorBox } from '../components/Screen';
+ import { MusterTry } from '../components/Muster';
++import { isMusterUrl } from '../api/muster';
+ import { Missing } from '../components/Missing';
+ import { LanguageSwitch, getLang, t } from '../i18n';
+@@ -208,5 +209,6 @@ export function ConnectPage() {
+           <>
+             <Divider />
+-            {active.length === 0 && (
++            {/* Auch aus der Musterkampagne heraus: wer selbst leiten will, braucht zuerst einen Server */}
++            {active.every((c) => isMusterUrl(c.baseUrl)) && (
+               <section className="card" aria-labelledby="lead-title">
+                 <h2 id="lead-title">{t('Ich will selbst leiten')}</h2>
