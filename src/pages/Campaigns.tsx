@@ -257,7 +257,11 @@ export function Campaigns() {
       {mode === 'none' ? (
         <>
           {onlyMuster ? (
-            <Link className={firstStep ? 'btn' : 'btn outline'} to="/verbinden">{t('Mit einem Server verbinden')}</Link>
+            // Nur die Musterkampagne: Der Weg zur eigenen Kampagne führt über einen Server – so benannt, wie man es sucht
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Link className="btn" to="/verbinden">{t('Eigene Kampagne anlegen')}</Link>
+              <span className="muted small">{t('Dafür verbindest du dich zuerst mit einem Server – dem deines Vereins, deiner Gruppe oder einem eigenen. Die Musterkampagne bleibt dabei hier.')}</span>
+            </div>
           ) : (
             <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={() => { setMode('new'); setValue(''); }}>
               {t('Neue Kampagne anlegen')}

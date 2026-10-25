@@ -17,6 +17,7 @@ import { useAuth } from '../auth/AuthContext';
 import { IconInfo } from '../components/Icons';
 import { Divider, ErrorBox } from '../components/Screen';
 import { MusterTry } from '../components/Muster';
+import { isMusterUrl } from '../api/muster';
 import { Missing } from '../components/Missing';
 import { LanguageSwitch, getLang, t } from '../i18n';
 
@@ -207,7 +208,8 @@ export function ConnectPage() {
         {!info && !params.get('invite') && (
           <>
             <Divider />
-            {active.length === 0 && (
+            {/* Auch aus der Musterkampagne heraus: wer selbst leiten will, braucht zuerst einen Server */}
+            {active.every((c) => isMusterUrl(c.baseUrl)) && (
               <section className="card" aria-labelledby="lead-title">
                 <h2 id="lead-title">{t('Ich will selbst leiten')}</h2>
                 <p className="muted small" style={{ margin: 0 }}>

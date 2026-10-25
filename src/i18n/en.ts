@@ -44,6 +44,8 @@ export const en: Record<string, string> = {
   "Vorlesen": "Read aloud",
   "Offene Fäden": "Open threads",
   "Zurück": "Back",
+  "Eigene Kampagne anlegen": "Create your own campaign",
+  "Dafür verbindest du dich zuerst mit einem Server – dem deines Vereins, deiner Gruppe oder einem eigenen. Die Musterkampagne bleibt dabei hier.": "For that you first connect to a server – your club's, your group's or your own. The sample campaign stays here.",
   "Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.": "By link or QR code. Anyone without an account can join on the night as a guest.",
   "Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.": "Optional, a few sentences are enough. Helps when the chapters are written.",
   "Erste Runde aufnehmen": "Record your first session",
