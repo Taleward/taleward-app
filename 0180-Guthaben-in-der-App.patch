@@ -1,0 +1,1706 @@
+From e85bb661787fa92b8bd8900cd7191e2ae0dea605 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 00:12:49 +0100
+Subject: [PATCH 180/181] Guthaben in der App und Kampagnen-Einstellungen an
+ einem Ort
+
+---
+ scripts/tests/billing.test.mjs       |  52 +++++
+ src/App.tsx                          |   2 +
+ src/api/client.ts                    |  31 ++-
+ src/api/types.ts                     |  95 +++++++++
+ src/billing/CreditWaitNote.tsx       |  95 +++++++++
+ src/billing/PayerSection.tsx         |  82 ++++++++
+ src/billing/rules.ts                 |  68 ++++++
+ src/components/CampaignSettings.tsx  | 158 ++++++++++++++
+ src/components/CharacterAnalysis.tsx |   2 +
+ src/i18n/en.ts                       |  92 +++++++++
+ src/mocks/billing.ts                 | 255 +++++++++++++++++++++++
+ src/mocks/db.ts                      |   7 +
+ src/mocks/handlers.ts                |  44 ++--
+ src/pages/AccountPage.tsx            |   6 +
+ src/pages/Campaigns.tsx              |  10 +-
+ src/pages/CreditPage.tsx             | 298 +++++++++++++++++++++++++++
+ src/pages/DocumentsPage.tsx          |   4 +-
+ src/pages/Overview.tsx               |  25 ++-
+ src/pages/Processing.tsx             |   7 +-
+ 19 files changed, 1307 insertions(+), 26 deletions(-)
+ create mode 100644 scripts/tests/billing.test.mjs
+ create mode 100644 src/billing/CreditWaitNote.tsx
+ create mode 100644 src/billing/PayerSection.tsx
+ create mode 100644 src/billing/rules.ts
+ create mode 100644 src/components/CampaignSettings.tsx
+ create mode 100644 src/mocks/billing.ts
+ create mode 100644 src/pages/CreditPage.tsx
+
+diff --git a/scripts/tests/billing.test.mjs b/scripts/tests/billing.test.mjs
+new file mode 100644
+index 0000000..f6af9c1
+--- /dev/null
++++ b/scripts/tests/billing.test.mjs
+@@ -0,0 +1,52 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { billingOn, canApprove, euro, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../../src/billing/rules.ts';
++
++const on = { billing: { mode: 'credit', currency: 'EUR', topUpUrl: 'https://verein.test/guthaben' } };
++
++test('Guthaben: aus, wenn die Angabe fehlt, null ist oder einen unbekannten Modus hat', () => {
++  assert.equal(billingOn(null), false);
++  assert.equal(billingOn({}), false);
++  assert.equal(billingOn({ billing: null }), false);
++  assert.equal(billingOn({ billing: { mode: 'later' } }), false);
++  assert.equal(billingOn(on), true);
++  assert.equal(billingOn({ billing: { mode: 'pot' } }), true);
++});
++
++test('Aufladen: nie im Store, nur auf demselben Server, nur http(s)', () => {
++  assert.equal(topUpUrl(on, 'https://verein.test/api/v1', 'store'), null);
++  assert.equal(topUpUrl(on, 'https://verein.test/api/v1', 'apk'), 'https://verein.test/guthaben');
++  assert.equal(topUpUrl(on, 'https://verein.test', 'web'), 'https://verein.test/guthaben');
++  assert.equal(topUpUrl(on, 'https://anderer.test/api/v1', 'apk'), null);
++  assert.equal(topUpUrl(on, 'https://verein.test:8443/api/v1', 'apk'), null);
++  assert.equal(topUpUrl({ billing: { mode: 'credit', topUpUrl: 'javascript:alert(1)' } }, 'https://verein.test', 'apk'), null);
++  assert.equal(topUpUrl({ billing: { mode: 'credit', topUpUrl: null } }, 'https://verein.test', 'apk'), null);
++  assert.equal(topUpUrl({ billing: null }, 'https://verein.test', 'apk'), null);
++});
++
++test('Gutscheine nicht in der Store-Fassung', () => {
++  assert.equal(vouchersAllowed('store'), false);
++  assert.equal(vouchersAllowed('apk'), true);
++  assert.equal(vouchersAllowed('web'), true);
++});
++
++test('Wartegründe und Verarbeiten', () => {
++  assert.equal(waitReason('approval'), 'approval');
++  assert.equal(waitReason('neu'), 'other');
++  assert.equal(waitReason(undefined), 'other');
++  assert.equal(canApprove({ reason: 'approval', creditId: 'c1', jobId: 'j1' }), true);
++  assert.equal(canApprove({ reason: 'approval', creditId: null, jobId: 'j1' }), false);
++  assert.equal(canApprove({ reason: 'empty', creditId: 'c1', jobId: 'j1' }), false);
++  assert.equal(canApprove(null), false);
++});
++
++test('Beträge', () => {
++  assert.equal(euro(1240, 'de').replace(/\s/g, ' '), '12,40 €');
++  assert.equal(euro(-35, 'de').replace(/\s/g, ' '), '-0,35 €');
++  assert.equal(euro(1240, 'en'), '€12.40');
++  assert.equal(parseEuro('2'), 200);
++  assert.equal(parseEuro('2,5'), 250);
++  assert.equal(parseEuro(' 2.50 € '), 250);
++  assert.equal(parseEuro('abc'), null);
++  assert.equal(parseEuro('-1'), null);
++});
+diff --git a/src/App.tsx b/src/App.tsx
+index 83deffc..6a195b0 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -25,4 +25,5 @@ import { Review } from './pages/Review';
+ import { NamesPage } from './pages/NamesPage';
+ import { Speakers } from './pages/Speakers';
++import { CreditPage } from './pages/CreditPage';
+ import { VoiceProfile } from './pages/VoiceProfile';
+ import { WelcomePage } from './pages/WelcomePage';
+@@ -94,4 +95,5 @@ function Routed() {
+       <Route path="/v/:conn/s/:sessionId/recap" element={scoped(<RecapPage />)} />
+       <Route path="/v/:conn/profil/stimme" element={scoped(<VoiceProfile />)} />
++      <Route path="/v/:conn/guthaben" element={scoped(<CreditPage />)} />
+       <Route path="*" element={<Navigate to="/" replace />} />
+     </Routes>
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 99e40c6..953be23 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -9,4 +9,11 @@ import type { InvitePreview, CharacterAnalysis,
+   ApiError,
+   Campaign,
++  CampaignBilling,
++  CampaignSettings,
++  CampaignSettingsIn,
++  CampaignSettingsLogEntry,
++  Credit,
++  CreditBooking,
++  CreditWaitingJob,
+   CampaignSummary,
+   CampaignExport,
+@@ -276,6 +283,26 @@ function makeApi(conn: () => Connection) {
+     language?: 'de' | 'en',
+     system?: GameSystem | null,
+-    systemName?: string | null
+-  ) => request<Campaign>('POST', '/campaigns', { body: { title, description, language, system, systemName } }),
++    systemName?: string | null,
++    /** Einstellungen gleich beim Anlegen (ab 0.4.25, nur an solche Server schicken) */
++    settings?: CampaignSettingsIn
++  ) => request<Campaign>('POST', '/campaigns', { body: { title, description, language, system, systemName, ...(settings ? { settings } : {}) } }),
++  // Kampagnen-Einstellungen an einem Ort (ab 0.4.25)
++  campaignSettings: (campaignId: string) => request<CampaignSettings>('GET', `/campaigns/${campaignId}/settings`),
++  updateCampaignSettings: (campaignId: string, version: number, change: CampaignSettingsIn) =>
++    request<CampaignSettings>('PATCH', `/campaigns/${campaignId}/settings`, { body: { ...change, version } }),
++  campaignSettingsLog: (campaignId: string) => request<CampaignSettingsLogEntry[]>('GET', `/campaigns/${campaignId}/settings/log`),
++  // Guthaben (ab 0.4.25) – bezahlt wird nie in der App
++  credits: () => request<Credit[]>('GET', '/credits'),
++  creditBookings: (creditId: string, before?: string) =>
++    request<CreditBooking[]>('GET', `/credits/${creditId}/bookings?limit=30${before ? `&before=${encodeURIComponent(before)}` : ''}`),
++  creditWaiting: (creditId: string) => request<CreditWaitingJob[]>('GET', `/credits/${creditId}/waiting`),
++  approveCreditJob: (creditId: string, jobId: string) => request<void>('POST', `/credits/${creditId}/waiting/${jobId}/approve`),
++  updateCreditSettings: (creditId: string, change: { approvalThresholdCents?: number; sheetMaxPages?: number; sheetsPerPlayer?: number }) =>
++    request<Credit>('PATCH', `/credits/${creditId}/settings`, { body: change }),
++  redeemVoucher: (creditId: string, code: string) =>
++    request<{ amountCents: number; credit: Credit }>('POST', `/credits/${creditId}/vouchers`, { body: { code } }),
++  offerPayment: (campaignId: string, memberId: string | null) =>
++    request<CampaignBilling>('POST', `/campaigns/${campaignId}/payer/offer`, { body: { memberId } }),
++  acceptPayment: (campaignId: string) => request<CampaignBilling>('POST', `/campaigns/${campaignId}/payer/accept`),
+   /** Beitreten – ab 0.4.7 optional mit einem Charakter aus der Sammlung */
+   joinCampaign: (code: string, characterName?: string, character?: Character | null) =>
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 8c9da8c..dc6e896 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -226,7 +226,93 @@ export interface Campaign extends CampaignSummary {
+   /** Hinweise an die SL (ab 0.4.7) */
+   gmNotices?: GmNotice[];
++  /** Fassung der Einstellungen (ab 0.4.25) */
++  settingsVersion?: number | null;
++  /** Wer zahlt – nur für SL und nur mit Guthaben (ab 0.4.25) */
++  billing?: CampaignBilling | null;
+   members: Member[];
+ }
+ 
++/** Ab 0.4.25: Wer für eine Kampagne zahlt (nur SL) */
++export interface CampaignBilling {
++  paidBy: 'gm' | 'organization' | 'nobody' | (string & {});
++  payerMemberId?: string | null;
++  isMe?: boolean;
++  offeredToMemberId?: string | null;
++}
++
++/** Ab 0.4.25: Warum ein Auftrag wegen der Abrechnung noch wartet (nur für SL) */
++export interface CreditWait {
++  reason: 'approval' | 'empty' | 'too_low' | 'no_payer' | 'pot' | (string & {});
++  /** Nur für Personen, die das zahlende Guthaben sehen dürfen */
++  estimateCents?: number | null;
++  creditId?: string | null;
++  jobId?: string | null;
++}
++
++/** Ab 0.4.25: ein Guthaben (eigenes oder Topf der Organisation) */
++export interface Credit {
++  id: string;
++  kind: 'account' | 'organization';
++  organizationId?: string | null;
++  organizationName?: string | null;
++  balanceCents: number;
++  status: 'good' | 'low' | 'empty' | 'negative' | (string & {});
++  approvalThresholdCents: number;
++  sheetMaxPages: number;
++  sheetsPerPlayer: number;
++  waitingCount?: number;
++  /** false = Ändern, „Verarbeiten“ und Gutscheine nur auf der Seite des Servers */
++  canManage: boolean;
++}
++
++export type JobKind = 'transcribe' | 'summarize' | 'revise' | 'document';
++
++export interface CreditBooking {
++  id: string;
++  kind: 'payment' | 'credit' | 'voucher' | 'usage' | 'chargeback' | 'refund' | 'correction' | (string & {});
++  amountCents: number;
++  createdAt: string;
++  reason?: string | null;
++  usage?: { jobKind: JobKind | (string & {}); campaignId?: string | null; campaignTitle?: string | null; sessionNumber?: number | null; documentTitle?: string | null } | null;
++}
++
++export interface CreditWaitingJob {
++  jobId: string;
++  jobKind: JobKind | (string & {});
++  campaignId: string;
++  campaignTitle: string;
++  sessionId?: string | null;
++  sessionNumber?: number | null;
++  documentId?: string | null;
++  documentTitle?: string | null;
++  analysisId?: string | null;
++  estimateCents: number;
++  reason: CreditWait['reason'];
++  createdAt?: string;
++}
++
++/** Ab 0.4.25: Einstellungen einer Kampagne an einem Ort */
++export type SettingField = 'allowCloudSummary' | 'allowExternalTranscription' | 'allowCharacterAnalysis';
++export type CampaignSettingsIn = Partial<Record<SettingField, boolean>>;
++export interface CampaignSettings {
++  version: number;
++  allowCloudSummary: boolean;
++  allowExternalTranscription: boolean;
++  allowCharacterAnalysis: boolean;
++  characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
++  locks: { field: SettingField | (string & {}); value: boolean; reason: 'unavailable' | 'operator' | (string & {}) }[];
++  updatedAt: string;
++  updatedByMemberId?: string | null;
++}
++export interface CampaignSettingsLogEntry {
++  at: string;
++  field: string;
++  oldValue: boolean | number | null;
++  newValue: boolean | number | null;
++  version: number;
++  byMemberId?: string | null;
++  byOperator: boolean;
++}
++
+ /**
+  * Anwesende Person. Entweder ein Mitglied (memberId) oder ein Gast ohne Konto (guestName, ab 0.3.2).
+@@ -275,4 +361,6 @@ export interface ProcessingStatus {
+   /** Geschätzte Restdauer in Sekunden, z. B. nach erneuter Transkription (ab 0.4.6) */
+   estimatedSeconds?: number | null;
++  /** Wartet wegen der Abrechnung (ab 0.4.25) */
++  creditWait?: CreditWait | null;
+ }
+ 
+@@ -567,4 +655,6 @@ export interface CampaignDocument {
+   progress: number | null;
+   message: string | null;
++  /** Wartet wegen der Abrechnung (ab 0.4.25) */
++  creditWait?: CreditWait | null;
+   proposalCount: number;
+   openProposalCount: number;
+@@ -593,4 +683,7 @@ export interface CharacterAnalysis {
+   /** Nur für die SL, sobald done */
+   proposalCount: number | null;
++  /** Geschätzte Kosten, nur für Berechtigte und nur mit Guthaben (ab 0.4.25) */
++  costEstimateCents?: number | null;
++  creditWait?: CreditWait | null;
+   createdAt: string;
+   decidedAt: string | null;
+@@ -667,4 +760,6 @@ export interface ServerInfo {
+   /** Eigene Kampagnen nur mit SL-Freigabe (ab 0.4.23); fehlt = none */
+   gmApproval?: 'required' | 'none';
++  /** Abrechnung über Guthaben (ab 0.4.25); null/fehlt = aus */
++  billing?: { mode: 'credit' | 'pot' | (string & {}); currency: 'EUR' | (string & {}); topUpUrl?: string | null } | null;
+   /** Unterstützte Anmeldearten; später z. B. 'oidc' für einen zentralen Anmeldedienst oder 'passkey' */
+   authMethods: string[];
+diff --git a/src/billing/CreditWaitNote.tsx b/src/billing/CreditWaitNote.tsx
+new file mode 100644
+index 0000000..2d63f58
+--- /dev/null
++++ b/src/billing/CreditWaitNote.tsx
+@@ -0,0 +1,95 @@
++import { useState } from 'react';
++import { Link } from 'react-router-dom';
++import { api } from '../api/client';
++import { currentConnection } from '../api/connections';
++import type { CreditWait } from '../api/types';
++import { confirmDialog } from '../components/confirm';
++import { IconInfo } from '../components/Icons';
++import { ErrorBox } from '../components/Screen';
++import { getLang, t } from '../i18n';
++import { DIST } from '../update/updater';
++import { canApprove, euro, waitReason } from './rules';
++
++/** Betrag in der Sprache der App */
++export const eur = (cents: number) => euro(cents, getLang());
++
++/**
++ * Warum ein Auftrag wegen des Guthabens wartet (Schnittstelle 0.4.25). Den Satz formuliert die App selbst: in der
++ * Store-Fassung ohne Link und ohne Knopf zum Aufladen, sonst mit Weg zur Seite „Guthaben“ in der App.
++ * Betrag, „Verarbeiten“ und der Weg zum Guthaben gibt es nur, wenn der Server die Kennungen mitschickt (zahlende SL).
++ */
++export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null | undefined; onApproved?: () => void }) {
++  const [busy, setBusy] = useState(false);
++  const [done, setDone] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  if (!wait || done) return null;
++  const reason = waitReason(wait.reason);
++  const mine = !!wait.creditId;
++  const amount = wait.estimateCents != null ? eur(wait.estimateCents) : null;
++  const store = DIST === 'store';
++  const creditPage = mine ? `/v/${currentConnection().id}/guthaben` : null;
++
++  let text: string;
++  switch (reason) {
++    case 'approval':
++      text = mine
++        ? (amount ? t('Kostet voraussichtlich {amount}. Die Verarbeitung startet, sobald du sie freigibst.', { amount }) : t('Die Verarbeitung startet, sobald du sie freigibst.'))
++        : t('Die Verarbeitung wartet auf die Freigabe der Spielleitung, die für die Kampagne zahlt.');
++      break;
++    case 'empty':
++      text = mine
++        ? (store ? t('Kein Guthaben, die Verarbeitung wartet. Du kannst es auf der Seite deines Servers aufladen.') : t('Kein Guthaben, die Verarbeitung wartet. Danach startet sie von selbst.'))
++        : t('Das Guthaben der Spielleitung, die für die Kampagne zahlt, ist aufgebraucht. Die Verarbeitung wartet.');
++      break;
++    case 'too_low':
++      text = mine
++        ? (store
++          ? t('Das Guthaben reicht voraussichtlich nicht ({amount}). Du kannst es auf der Seite deines Servers aufladen.', { amount: amount ?? '?' })
++          : t('Das Guthaben reicht voraussichtlich nicht ({amount}). Danach startet die Verarbeitung von selbst.', { amount: amount ?? '?' }))
++        : t('Das Guthaben der Spielleitung, die für die Kampagne zahlt, reicht voraussichtlich nicht. Die Verarbeitung wartet.');
++      break;
++    case 'no_payer':
++      text = t('Für diese Kampagne zahlt gerade niemand. Unter „Kampagne verwalten“ kann eine Spielleitung die Zahlung übernehmen.');
++      break;
++    case 'pot':
++      text = t('Das Guthaben der Organisation reicht gerade nicht oder wartet auf die Verwaltung. Die Verarbeitung startet danach von selbst.');
++      break;
++    default:
++      text = t('Die Verarbeitung wartet auf das Guthaben.');
++  }
++
++  const approve = async () => {
++    if (!wait.creditId || !wait.jobId) return;
++    const q = amount
++      ? t('Verarbeiten? Das kostet voraussichtlich {amount} aus deinem Guthaben.', { amount })
++      : t('Verarbeiten? Die Kosten gehen von deinem Guthaben ab.');
++    if (!(await confirmDialog(q, { confirmLabel: t('Verarbeiten') }))) return;
++    setBusy(true);
++    setError(null);
++    try {
++      await api.approveCreditJob(wait.creditId, wait.jobId);
++      setDone(true);
++      onApproved?.();
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <div className="notice" role="status" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
++      <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
++        <span style={{ flexShrink: 0, color: 'var(--ink-muted)' }}><IconInfo /></span>
++        <span>{text}</span>
++      </div>
++      <ErrorBox error={error} />
++      {(canApprove(wait) || (creditPage && reason !== 'approval')) && (
++        <div className="row wrap" style={{ gap: 8 }}>
++          {canApprove(wait) && <button type="button" className="btn small" disabled={busy} onClick={approve}>{t('Verarbeiten')}</button>}
++          {creditPage && reason !== 'approval' && <Link className="btn small outline" to={creditPage}>{t('Guthaben ansehen')}</Link>}
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/src/billing/PayerSection.tsx b/src/billing/PayerSection.tsx
+new file mode 100644
+index 0000000..a42e228
+--- /dev/null
++++ b/src/billing/PayerSection.tsx
+@@ -0,0 +1,82 @@
++import { useState } from 'react';
++import { api } from '../api/client';
++import { currentConnection } from '../api/connections';
++import type { Campaign, Member } from '../api/types';
++import { isDeletedMember } from '../api/types';
++import { confirmDialog } from '../components/confirm';
++import { ErrorBox } from '../components/Screen';
++import { t } from '../i18n';
++
++/**
++ * Wer zahlt für die Kampagne (Schnittstelle 0.4.25, nur SL und nur mit Guthaben): Zahlung an eine andere SL abgeben
++ * oder übernehmen. Unter „Kampagne verwalten“.
++ */
++export function PayerSection({ campaign, me, onChanged }: { campaign: Campaign; me: Member; onChanged: () => void }) {
++  const billing = campaign.billing!;
++  const otherGms = campaign.members.filter((m) => m.role === 'gm' && m.id !== me.id && m.userId && !m.leftAt && !isDeletedMember(m));
++  const [target, setTarget] = useState(otherGms[0]?.id ?? '');
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  const name = (id: string | null | undefined) => campaign.members.find((m) => m.id === id)?.displayName ?? t('eine andere Spielleitung');
++  const server = currentConnection().name;
++
++  const run = async (action: () => Promise<unknown>) => {
++    setBusy(true);
++    setError(null);
++    try {
++      await action();
++      onChanged();
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++  const accept = async () => {
++    if (await confirmDialog(t('Zahlung für „{campaign}“ auf „{server}“ übernehmen? Ab dann gehen die Kosten der Verarbeitung von deinem Guthaben ab.', { campaign: campaign.title, server }), { confirmLabel: t('Übernehmen') })) {
++      run(() => api.acceptPayment(campaign.id));
++    }
++  };
++  const offer = async () => {
++    if (await confirmDialog(t('Zahlung an {name} abgeben? Bis {name} übernimmt, zahlst du weiter.', { name: name(target) }), { confirmLabel: t('Anbieten') })) {
++      run(() => api.offerPayment(campaign.id, target));
++    }
++  };
++
++  let line: string;
++  if (billing.paidBy === 'organization') line = t('Bezahlt wird aus dem Guthaben der Organisation.');
++  else if (billing.paidBy === 'nobody') line = t('Gerade zahlt niemand für diese Kampagne. Neue Verarbeitungen warten, bis eine Spielleitung übernimmt.');
++  else if (billing.isMe) line = t('Die Kosten der Verarbeitung gehen von deinem Guthaben ab.');
++  else line = t('Die Kosten der Verarbeitung gehen vom Guthaben von {name} ab.', { name: name(billing.payerMemberId) });
++
++  return (
++    <>
++      <span className="overline" style={{ marginTop: 6 }}>{t('Wer zahlt')}</span>
++      <span className="small">{line}</span>
++      <ErrorBox error={error} />
++      {(billing.paidBy === 'nobody' || (billing.paidBy === 'gm' && !billing.isMe && billing.offeredToMemberId === me.id)) && (
++        <>
++          {billing.paidBy === 'gm' && <span className="small">{t('{name} möchte dir die Zahlung übergeben.', { name: name(billing.payerMemberId) })}</span>}
++          <button type="button" className="btn outline" disabled={busy} onClick={accept}>{t('Zahlung übernehmen')}</button>
++        </>
++      )}
++      {billing.paidBy === 'gm' && billing.isMe && billing.offeredToMemberId && (
++        <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
++          <span className="small" style={{ flex: '1 1 160px' }}>{t('Angeboten an {name}, noch nicht übernommen.', { name: name(billing.offeredToMemberId) })}</span>
++          <button type="button" className="btn small outline" disabled={busy} onClick={() => run(() => api.offerPayment(campaign.id, null))}>{t('Angebot zurücknehmen')}</button>
++        </div>
++      )}
++      {billing.paidBy === 'gm' && billing.isMe && !billing.offeredToMemberId && otherGms.length > 0 && (
++        <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
++          <div className="field" style={{ flex: '1 1 160px', margin: 0 }}>
++            <label htmlFor="payer-target" className="small">{t('Zahlung abgeben an')}</label>
++            <select id="payer-target" value={target} onChange={(e) => setTarget(e.target.value)}>
++              {otherGms.map((m) => <option key={m.id} value={m.id}>{m.displayName}</option>)}
++            </select>
++          </div>
++          <button type="button" className="btn small outline" disabled={busy || !target} onClick={offer}>{t('Anbieten')}</button>
++        </div>
++      )}
++    </>
++  );
++}
+diff --git a/src/billing/rules.ts b/src/billing/rules.ts
+new file mode 100644
+index 0000000..3afaf16
+--- /dev/null
++++ b/src/billing/rules.ts
+@@ -0,0 +1,68 @@
++/*
++ * Guthaben in der App (Schnittstelle 0.4.25) – Regeln ohne Laufzeit-Importe (Test: scripts/tests/billing.test.mjs).
++ *
++ * Bezahlt wird nie in der App. Store-Fassung: kein Link, kein Knopf und keine Preise zum Aufladen, Gutscheine vorerst
++ * auch nicht (Prüfung der Store-Regeln vor dem Scharfschalten). Fassung von der Website und Web-App: Knopf „Guthaben
++ * aufladen“ öffnet die Aufladeseite des Servers im Browser – nur wenn sie auf demselben Server liegt wie die Verbindung.
++ */
++
++export type Dist = 'apk' | 'store' | 'web';
++
++export interface BillingInfo {
++  billing?: { mode?: string; currency?: string; topUpUrl?: string | null } | null;
++}
++
++/** Rechnet der Server mit Guthaben ab? Fehlt die Angabe (ältere Server) oder ist sie null: nein */
++export function billingOn(info: BillingInfo | null | undefined): boolean {
++  return !!info?.billing && (info.billing.mode === 'credit' || info.billing.mode === 'pot');
++}
++
++function origin(url: string): string | null {
++  try {
++    const u = new URL(url);
++    return u.protocol === 'https:' || u.protocol === 'http:' ? u.origin : null;
++  } catch {
++    return null;
++  }
++}
++
++/**
++ * Adresse für „Guthaben aufladen“ oder null. Nie in der Store-Fassung, nur über https (http nur, wenn auch die
++ * Verbindung http ist, z. B. im Heimnetz) und nur auf demselben Server wie die Verbindung.
++ */
++export function topUpUrl(info: BillingInfo | null | undefined, connBaseUrl: string, dist: Dist): string | null {
++  if (dist === 'store' || !billingOn(info)) return null;
++  const url = info?.billing?.topUpUrl;
++  if (!url) return null;
++  const a = origin(url);
++  const b = origin(connBaseUrl);
++  if (!a || !b || a !== b) return null;
++  return url;
++}
++
++/** Gutschein einlösen: vorerst nicht in der Store-Fassung */
++export const vouchersAllowed = (dist: Dist): boolean => dist !== 'store';
++
++export type WaitReason = 'approval' | 'empty' | 'too_low' | 'no_payer' | 'pot' | 'other';
++
++/** Bekannte Wartegründe; unbekannte (neuere Server) als „other“ */
++export function waitReason(reason: string | null | undefined): WaitReason {
++  return reason === 'approval' || reason === 'empty' || reason === 'too_low' || reason === 'no_payer' || reason === 'pot' ? reason : 'other';
++}
++
++/** Darf ich hier „Verarbeiten“ tippen? Nur mit Kennungen (die gibt es nur für Berechtigte) und nicht beim Topf */
++export function canApprove(wait: { reason: string; creditId?: string | null; jobId?: string | null } | null | undefined): boolean {
++  return !!wait && waitReason(wait.reason) === 'approval' && !!wait.creditId && !!wait.jobId;
++}
++
++/** Betrag in Euro, z. B. „12,40 €“ bzw. „€12.40“; negative mit Minuszeichen */
++export function euro(cents: number, lang: 'de' | 'en'): string {
++  return new Intl.NumberFormat(lang === 'de' ? 'de-DE' : 'en-IE', { style: 'currency', currency: 'EUR' }).format(cents / 100);
++}
++
++/** Eingabe „2“, „2,50“ oder „2.50“ in Cent; ungültig → null */
++export function parseEuro(text: string): number | null {
++  const s = text.trim().replace(/\s|€/g, '').replace(',', '.');
++  if (!/^\d{1,4}(\.\d{1,2})?$/.test(s)) return null;
++  return Math.round(Number(s) * 100);
++}
+diff --git a/src/components/CampaignSettings.tsx b/src/components/CampaignSettings.tsx
+new file mode 100644
+index 0000000..6e945e6
+--- /dev/null
++++ b/src/components/CampaignSettings.tsx
+@@ -0,0 +1,158 @@
++import { useCallback, useEffect, useState } from 'react';
++import { api, fetchServerInfo, isApiError } from '../api/client';
++import { apiAtLeast, type Connection } from '../api/connections';
++import type { Campaign, CampaignSettings, CampaignSettingsIn, CampaignSettingsLogEntry, ServerInfo, SettingField } from '../api/types';
++import { providerLabel } from './CloudNotice';
++import { isDeletedMember } from '../api/types';
++import { formatDate } from './format';
++import { t, tk } from '../i18n';
++
++/*
++ * Kampagnen-Einstellungen an einem Ort (Schnittstelle 0.4.25): Lesen und Ändern über …/settings mit Fassungsnummer,
++ * damit zwei Geräte sich nicht still überschreiben; Vorgaben des Betreibers (locks); Protokoll. Ältere Server: wie
++ * bisher über PATCH /campaigns/{id}.
++ */
++
++export interface SettingsState {
++  values: Record<SettingField, boolean>;
++  /** null = frei; operator = vom Betreiber festgelegt; unavailable = gibt es auf diesem Server nicht */
++  lock: (field: SettingField) => 'operator' | 'unavailable' | null;
++  change: (field: SettingField, value: boolean) => Promise<void>;
++  /** Jemand anderes hat inzwischen geändert – der neue Stand ist geladen */
++  conflict: boolean;
++  /** Protokoll vorhanden (ab 0.4.25) */
++  hasLog: boolean;
++}
++
++export function useCampaignSettings(campaign: Campaign, onChanged: () => void): SettingsState {
++  const modern = apiAtLeast('0.4.25');
++  const [settings, setSettings] = useState<CampaignSettings | null>(null);
++  const [conflict, setConflict] = useState(false);
++
++  useEffect(() => {
++    if (!modern) return;
++    api.campaignSettings(campaign.id).then(setSettings).catch(() => setSettings(null));
++  }, [campaign.id, campaign.settingsVersion, modern]);
++
++  const values: Record<SettingField, boolean> = settings
++    ? { allowCloudSummary: settings.allowCloudSummary, allowExternalTranscription: settings.allowExternalTranscription, allowCharacterAnalysis: settings.allowCharacterAnalysis }
++    : { allowCloudSummary: !!campaign.allowCloudSummary, allowExternalTranscription: !!campaign.allowExternalTranscription, allowCharacterAnalysis: !!campaign.allowCharacterAnalysis };
++
++  const lock = (field: SettingField) => {
++    const l = settings?.locks.find((x) => x.field === field);
++    if (!l) return null;
++    return l.reason === 'unavailable' ? 'unavailable' : 'operator';
++  };
++
++  const change = useCallback(async (field: SettingField, value: boolean) => {
++    setConflict(false);
++    if (!modern || !settings) {
++      await api.updateCampaign(campaign.id, { [field]: value });
++      onChanged();
++      return;
++    }
++    try {
++      setSettings(await api.updateCampaignSettings(campaign.id, settings.version, { [field]: value }));
++      onChanged();
++    } catch (e) {
++      if (isApiError(e, 'settings_conflict')) {
++        const current = (e.details as { current?: CampaignSettings } | undefined)?.current;
++        if (current) setSettings(current);
++        else api.campaignSettings(campaign.id).then(setSettings).catch(() => undefined);
++        setConflict(true);
++        onChanged();
++        return;
++      }
++      throw e;
++    }
++  }, [campaign.id, modern, settings, onChanged]);
++
++  return { values, lock, change, conflict, hasLog: modern && !!settings };
++}
++
++const FIELDS: Record<string, string> = {
++  allowCloudSummary: tk('Zusammenfassung über die Cloud'),
++  allowExternalTranscription: tk('Transkription über die Cloud'),
++  allowCharacterAnalysis: tk('Charakterbögen auswerten')
++};
++
++/** Wer hat wann was geändert (nur SL, ab 0.4.25) */
++export function SettingsLog({ campaign }: { campaign: Campaign }) {
++  const [log, setLog] = useState<CampaignSettingsLogEntry[] | null>(null);
++  const [open, setOpen] = useState(false);
++  useEffect(() => {
++    if (open && !log) api.campaignSettingsLog(campaign.id).then(setLog).catch(() => setLog([]));
++  }, [open, log, campaign.id]);
++  const who = (e: CampaignSettingsLogEntry) => {
++    if (e.byOperator) return t('Betreiber');
++    const m = campaign.members.find((x) => x.id === e.byMemberId);
++    return m && !isDeletedMember(m) ? m.displayName : t('Unbekannt');
++  };
++  const value = (v: boolean | number | null) => (v === true ? t('an') : v === false ? t('aus') : v === null ? '–' : String(v));
++  return (
++    <details className="more" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
++      <summary className="small">{t('Änderungen der Einstellungen')}</summary>
++      {open && !log && <span className="muted small">{t('Wird geladen …')}</span>}
++      {log && log.length === 0 && <span className="muted small">{t('Noch nichts geändert.')}</span>}
++      {log && log.length > 0 && (
++        <ul className="small" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
++          {log.map((e, i) => (
++            <li key={i}>
++              {formatDate(e.at)} · {who(e)}: {FIELDS[e.field] ? t(FIELDS[e.field]) : e.field} {value(e.oldValue)} → {value(e.newValue)}
++            </li>
++          ))}
++        </ul>
++      )}
++    </details>
++  );
++}
++
++/** Hinweis bei Vorgabe des Betreibers */
++export function LockNote({ lock }: { lock: 'operator' | 'unavailable' | null }) {
++  if (lock !== 'operator') return null;
++  return <span className="muted small">{t('Vom Betreiber des Servers festgelegt.')}</span>;
++}
++
++/**
++ * Drei kurze Fragen beim Anlegen (ab 0.4.25), eingeklappt und freiwillig. Geschickt wird nur, was die SL ändert;
++ * sonst gilt die Voreinstellung des Servers (bei „Nur Cloud“ ist die Cloud dort schon an).
++ */
++export function StartSettings({ conn, value, onChange }: {
++  conn: Connection; value: CampaignSettingsIn; onChange: (v: CampaignSettingsIn) => void;
++}) {
++  const [info, setInfo] = useState<ServerInfo | null>(null);
++  useEffect(() => {
++    setInfo(null);
++    fetchServerInfo(conn.baseUrl).then(setInfo).catch(() => setInfo(null));
++  }, [conn.baseUrl]);
++  if (!apiAtLeast('0.4.25', conn) || !info) return null;
++  const cloudOnly = info.externalTranscriptionMode === 'primary';
++  const shown = (field: SettingField, fallback: boolean) => value[field] ?? fallback;
++  const set = (field: SettingField, v: boolean) => onChange({ ...value, [field]: v });
++  const summary = providerLabel(info.cloudSummary, info.cloudSummaryInfo);
++  const external = providerLabel(info.externalTranscription, info.externalTranscriptionInfo);
++  return (
++    <details className="more">
++      <summary>{t('Einstellungen (freiwillig, später änderbar)')}</summary>
++      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
++        {summary && (
++          <label className="check" style={{ alignItems: 'flex-start' }}>
++            <input type="checkbox" checked={shown('allowCloudSummary', cloudOnly)} onChange={(e) => set('allowCloudSummary', e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
++            <span>{t('Kapitel über {provider} schreiben lassen', { provider: summary })}</span>
++          </label>
++        )}
++        {external && (
++          <label className="check" style={{ alignItems: 'flex-start' }}>
++            <input type="checkbox" checked={shown('allowExternalTranscription', cloudOnly)} onChange={(e) => set('allowExternalTranscription', e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
++            <span>{cloudOnly ? t('Abschrift über {provider}', { provider: external }) : t('Abschrift über {provider} als Ausweichlösung', { provider: external })}</span>
++          </label>
++        )}
++        <label className="check" style={{ alignItems: 'flex-start' }}>
++          <input type="checkbox" checked={shown('allowCharacterAnalysis', false)} onChange={(e) => set('allowCharacterAnalysis', e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
++          <span>{t('Charakterbögen und Hintergründe auswerten lassen (du stimmst jeder Auswertung zu)')}</span>
++        </label>
++        {(summary || external) && <span className="muted small">{t('Was in die Cloud geht, sehen alle am Tisch. Sag es vorher in der Runde.')}</span>}
++      </div>
++    </details>
++  );
++}
+diff --git a/src/components/CharacterAnalysis.tsx b/src/components/CharacterAnalysis.tsx
+index 87b8274..10a7132 100644
+--- a/src/components/CharacterAnalysis.tsx
++++ b/src/components/CharacterAnalysis.tsx
+@@ -1,2 +1,3 @@
++import { eur } from '../billing/CreditWaitNote';
+ import { useEffect, useRef, useState } from 'react';
+ import { api, isApiError } from '../api/client';
+@@ -104,4 +105,5 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
+           ? t('Ausgewertet werden nur die ersten {n} Seiten.', { n: campaign.characterSheetLimits.maxPages })
+           : t('Ausgewertet werden nur die ersten Seiten.')) : ''}
++        {analysis.costEstimateCents != null ? ' ' + t('Kostet voraussichtlich {amount}.', { amount: eur(analysis.costEstimateCents) }) : ''}
+       </span>
+       <ErrorBox error={error} />
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index bafa1e4..3c6dae7 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1437,3 +1437,95 @@ export const en: Record<string, string> = {
+   "{n} Vorschlag ist noch offen.": "{n} suggestion is still open.",
+   "{n} Vorschläge sind noch offen.": "{n} suggestions are still open.",
++  "Kostet voraussichtlich {amount}. Die Verarbeitung startet, sobald du sie freigibst.": "Probably costs {amount}. Processing starts as soon as you approve it.",
++  "Die Verarbeitung startet, sobald du sie freigibst.": "Processing starts as soon as you approve it.",
++  "Die Verarbeitung wartet auf die Freigabe der Spielleitung, die für die Kampagne zahlt.": "Processing is waiting for approval from the game master who pays for this campaign.",
++  "Kein Guthaben, die Verarbeitung wartet. Du kannst es auf der Seite deines Servers aufladen.": "No credit left, processing is waiting. You can top it up on your server's page.",
++  "Kein Guthaben, die Verarbeitung wartet. Danach startet sie von selbst.": "No credit left, processing is waiting. Once there is credit again, it starts by itself.",
++  "Das Guthaben der Spielleitung, die für die Kampagne zahlt, ist aufgebraucht. Die Verarbeitung wartet.": "The credit of the game master who pays for this campaign is used up. Processing is waiting.",
++  "Das Guthaben reicht voraussichtlich nicht ({amount}). Du kannst es auf der Seite deines Servers aufladen.": "The credit is probably not enough ({amount}). You can top it up on your server's page.",
++  "Das Guthaben reicht voraussichtlich nicht ({amount}). Danach startet die Verarbeitung von selbst.": "The credit is probably not enough ({amount}). Once there is enough, processing starts by itself.",
++  "Das Guthaben der Spielleitung, die für die Kampagne zahlt, reicht voraussichtlich nicht. Die Verarbeitung wartet.": "The credit of the game master who pays for this campaign is probably not enough. Processing is waiting.",
++  "Für diese Kampagne zahlt gerade niemand. Unter „Kampagne verwalten“ kann eine Spielleitung die Zahlung übernehmen.": "Nobody is paying for this campaign right now. A game master can take over payment under “Manage campaign”.",
++  "Das Guthaben der Organisation reicht gerade nicht oder wartet auf die Verwaltung. Die Verarbeitung startet danach von selbst.": "The organisation's credit is not enough right now or is waiting for its administrators. Processing starts by itself afterwards.",
++  "Die Verarbeitung wartet auf das Guthaben.": "Processing is waiting for credit.",
++  "Verarbeiten? Das kostet voraussichtlich {amount} aus deinem Guthaben.": "Process it? This will probably cost {amount} from your credit.",
++  "Verarbeiten? Die Kosten gehen von deinem Guthaben ab.": "Process it? The cost comes out of your credit.",
++  "Verarbeiten": "Process",
++  "Guthaben ansehen": "View credit",
++  "eine andere Spielleitung": "another game master",
++  "Zahlung für „{campaign}“ auf „{server}“ übernehmen? Ab dann gehen die Kosten der Verarbeitung von deinem Guthaben ab.": "Take over payment for “{campaign}” on “{server}”? From then on, processing costs come out of your credit.",
++  "Zahlung an {name} abgeben? Bis {name} übernimmt, zahlst du weiter.": "Hand payment over to {name}? You keep paying until {name} takes over.",
++  "Anbieten": "Offer",
++  "Bezahlt wird aus dem Guthaben der Organisation.": "Paid from the organisation's credit.",
++  "Gerade zahlt niemand für diese Kampagne. Neue Verarbeitungen warten, bis eine Spielleitung übernimmt.": "Nobody is paying for this campaign right now. New processing waits until a game master takes over.",
++  "Die Kosten der Verarbeitung gehen von deinem Guthaben ab.": "Processing costs come out of your credit.",
++  "Die Kosten der Verarbeitung gehen vom Guthaben von {name} ab.": "Processing costs come out of {name}'s credit.",
++  "Wer zahlt": "Who pays",
++  "{name} möchte dir die Zahlung übergeben.": "{name} would like to hand payment over to you.",
++  "Zahlung übernehmen": "Take over payment",
++  "Angeboten an {name}, noch nicht übernommen.": "Offered to {name}, not taken over yet.",
++  "Angebot zurücknehmen": "Withdraw offer",
++  "Zahlung abgeben an": "Hand payment over to",
++  "Zusammenfassung über die Cloud": "Summary via the cloud",
++  "Transkription über die Cloud": "Transcription via the cloud",
++  "Charakterbögen auswerten": "Analyse character sheets",
++  "Betreiber": "Operator",
++  "an": "on",
++  "aus": "off",
++  "Änderungen der Einstellungen": "Changes to the settings",
++  "Noch nichts geändert.": "Nothing changed yet.",
++  "Vom Betreiber des Servers festgelegt.": "Set by the server's operator.",
++  "Einstellungen (freiwillig, später änderbar)": "Settings (optional, can be changed later)",
++  "Kapitel über {provider} schreiben lassen": "Have chapters written via {provider}",
++  "Abschrift über {provider}": "Transcript via {provider}",
++  "Abschrift über {provider} als Ausweichlösung": "Transcript via {provider} as a fallback",
++  "Charakterbögen und Hintergründe auswerten lassen (du stimmst jeder Auswertung zu)": "Have character sheets and backstories analysed (you approve each analysis)",
++  "Was in die Cloud geht, sehen alle am Tisch. Sag es vorher in der Runde.": "Everyone at the table can see what goes to the cloud. Tell your group beforehand.",
++  "Kostet voraussichtlich {amount}.": "Probably costs {amount}.",
++  "Guthaben": "Credit",
++  "Dieser Server rechnet nicht über Guthaben ab.": "This server does not bill via credit.",
++  "Damit bezahlt die Spielleitung die Verarbeitung ihrer Runden: Abschrift, Kapitel und Unterlagen. Für Spielende kostenlos.": "This is how the game master pays for processing their sessions: transcript, chapters and documents. Free for players.",
++  "Das Guthaben wird knapp.": "Credit is running low.",
++  "Kein Guthaben mehr. Neue Verarbeitungen warten, bis wieder etwas da ist.": "No credit left. New processing waits until there is credit again.",
++  "Im Minus. Neue Verarbeitungen warten, bis das Guthaben wieder über null ist.": "In the red. New processing waits until the credit is above zero again.",
++  "Guthaben von {name}": "Credit of {name}",
++  "der Organisation": "the organisation",
++  "Dein Guthaben": "Your credit",
++  "Guthaben aufladen": "Top up credit",
++  "Öffnet die Seite des Servers im Browser. Bezahlt wird dort, nicht in der App.": "Opens the server's page in the browser. Payment happens there, not in the app.",
++  "Aufladen kannst du auf der Seite deines Servers.": "You can top up on your server's page.",
++  "Aufladen, Freigeben und Einstellungen gehen beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.": "For the organisation's credit, topping up, approving and settings are only possible on the server's page, with a second factor.",
++  "Wartet ({n})": "Waiting ({n})",
++  "Warten ({n})": "Waiting ({n})",
++  "etwa {amount}": "about {amount}",
++  "Buchungen": "Bookings",
++  "Noch keine Buchungen.": "No bookings yet.",
++  "Ältere anzeigen": "Show older",
++  "wartet auf „Verarbeiten“": "waiting for “Process”",
++  "wartet auf Guthaben": "waiting for credit",
++  "Guthaben reicht voraussichtlich nicht": "credit probably not enough",
++  "niemand zahlt": "nobody is paying",
++  "wartet auf die Verwaltung": "waiting for the administrators",
++  "wartet": "waiting",
++  "Kapitel überarbeiten": "Revise chapter",
++  "Unterlage auswerten": "Analyse document",
++  "Aufgeladen": "Topped up",
++  "Gutschrift": "Credit note",
++  "Gutschein": "Voucher",
++  "Rückbuchung": "Chargeback",
++  "Erstattung": "Refund",
++  "Korrektur": "Correction",
++  "Buchung": "Booking",
++  "Vorher fragen ab (Euro)": "Ask first from (euros)",
++  "Kostet eine Verarbeitung voraussichtlich mehr, wartet sie auf dein „Verarbeiten“.": "If processing will probably cost more, it waits for your “Process”.",
++  "Seiten je Charakterbogen": "Pages per character sheet",
++  "Charakterbögen je Spielerin und Kampagne": "Character sheets per player and campaign",
++  "Bitte gültige Werte eintragen.": "Please enter valid values.",
++  "Gespeichert.": "Saved.",
++  "{amount} gutgeschrieben.": "{amount} credited.",
++  "Gutschein einlösen": "Redeem voucher",
++  "Code": "Code",
++  "Einlösen": "Redeem",
++  "Inzwischen hat jemand die Einstellungen geändert. Hier ist der neue Stand, bitte noch einmal wählen.": "Someone changed the settings in the meantime. Here is the current state, please choose again.",
++  "Kapitel schreiben": "Write chapter",
+ };
+diff --git a/src/mocks/billing.ts b/src/mocks/billing.ts
+new file mode 100644
+index 0000000..7f6c5fc
+--- /dev/null
++++ b/src/mocks/billing.ts
+@@ -0,0 +1,255 @@
++/*
++ * Guthaben und Kampagnen-Einstellungen im Testmodus (Schnittstelle 0.4.25). Zum Ausprobieren in localStorage setzen
++ * und neu laden:
++ * - „taleward.mock.billing“ = credit (Standard) | pot | off
++ * - „taleward.mock.creditBalance“ = Startguthaben in Cent (Standard 1240; 0 = leer, negativ = im Minus)
++ * - „taleward.mock.creditWait“ = approval | empty | too_low | no_payer | pot – wartende Runden und Unterlagen
++ *   zeigen diesen Grund (die Verarbeitung im Testmodus läuft trotzdem weiter)
++ * - „taleward.mock.settingsLock“ = allowCloudSummary (o. ä.): vom Betreiber festgelegt
++ * Gutschein zum Ausprobieren: TAVERNE-GUTSCHEIN (5 €, einmal).
++ */
++import { HttpResponse, http } from 'msw';
++import type { Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
++import { campaigns } from './db';
++import type { MockCampaign } from './db';
++
++const setting = (key: string): string | null => { try { return localStorage.getItem(`taleward.mock.${key}`); } catch { return null; } };
++
++export function billingMode(): 'credit' | 'pot' | 'off' {
++  const m = setting('billing');
++  return m === 'pot' || m === 'off' ? m : 'credit';
++}
++
++export function billingInfo(local: boolean) {
++  if (!local || billingMode() === 'off') return null;
++  return { mode: billingMode(), currency: 'EUR', topUpUrl: `${location.origin}/guthaben` };
++}
++
++const daysAgo = (d: number) => new Date(Date.now() - d * 864e5).toISOString();
++const err = (status: number, code: string, message: string, details?: unknown) => HttpResponse.json({ code, message, ...(details ? { details } : {}) }, { status });
++
++const own: Omit<Credit, 'balanceCents' | 'status'> = {
++  id: 'cr-robin', kind: 'account', organizationId: null, organizationName: null,
++  approvalThresholdCents: 200, sheetMaxPages: 20, sheetsPerPlayer: 3, canManage: true
++};
++const pot: Omit<Credit, 'balanceCents' | 'status'> = {
++  id: 'cr-verein', kind: 'organization', organizationId: 'org-verein', organizationName: 'Rollenspielverein',
++  approvalThresholdCents: 500, sheetMaxPages: 20, sheetsPerPlayer: 3, canManage: false
++};
++const start = Number(setting('creditBalance') ?? '1240');
++const bookings: Record<string, CreditBooking[]> = {
++  'cr-robin': [
++    { id: 'bk-7', kind: 'usage', amountCents: -38, createdAt: daysAgo(2), usage: { jobKind: 'summarize', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: 12, documentTitle: null } },
++    { id: 'bk-6', kind: 'usage', amountCents: -72, createdAt: daysAgo(2), usage: { jobKind: 'transcribe', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: 12, documentTitle: null } },
++    { id: 'bk-5', kind: 'usage', amountCents: -12, createdAt: daysAgo(6), usage: { jobKind: 'document', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: null, documentTitle: 'Stadtplan Grauwacht' } },
++    { id: 'bk-4', kind: 'credit', amountCents: 200, createdAt: daysAgo(9), reason: 'Danke fürs Testen' },
++    { id: 'bk-3', kind: 'voucher', amountCents: 500, createdAt: daysAgo(12) },
++    { id: 'bk-2', kind: 'usage', amountCents: -38, createdAt: daysAgo(13), usage: { jobKind: 'summarize', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: 11, documentTitle: null } },
++    { id: 'bk-1', kind: 'payment', amountCents: start + 38 + 72 + 12 - 200 - 500 + 38, createdAt: daysAgo(20) }
++  ],
++  'cr-verein': [{ id: 'bv-1', kind: 'payment', amountCents: 5310, createdAt: daysAgo(4) }]
++};
++const balance = (id: string) => (bookings[id] ?? []).reduce((n, b) => n + b.amountCents, 0);
++const status = (cents: number): Credit['status'] => (cents < 0 ? 'negative' : cents === 0 ? 'empty' : cents < 200 ? 'low' : 'good');
++
++const waiting: Record<string, CreditWaitingJob[]> = {
++  'cr-robin': [{
++    jobId: 'job-grau-13', jobKind: 'summarize', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht',
++    sessionId: 's-c-grau-13', sessionNumber: 13, documentId: null, documentTitle: null, analysisId: null,
++    estimateCents: 260, reason: 'approval', createdAt: daysAgo(0.1)
++  }],
++  'cr-verein': []
++};
++let voucherUsed = false;
++
++function visibleCredits(): Credit[] {
++  const list = [own, ...(billingMode() === 'pot' ? [pot] : [])];
++  return list.map((c) => {
++    const b = balance(c.id);
++    return { ...c, balanceCents: b, status: status(b), waitingCount: waiting[c.id]?.length ?? 0 };
++  });
++}
++
++/** CreditWait für wartende Runden und Unterlagen (nur SL), nach „taleward.mock.creditWait“ */
++export function mockCreditWait(gm: boolean, kind: 'session' | 'document', id: string): CreditWait | null {
++  if (!gm || billingMode() === 'off') return null;
++  const r = setting('creditWait');
++  if (!r) return null;
++  const mine = r !== 'pot' && r !== 'no_payer';
++  return { reason: r, estimateCents: mine ? (kind === 'session' ? 260 : 18) : null, creditId: mine ? own.id : null, jobId: mine ? `job-${id}` : null };
++}
++
++/** Kosten einer Auswertung im Dialog der SL */
++export const mockAnalysisCost = (gm: boolean) => (gm && billingMode() !== 'off' ? 35 : null);
++
++// ---------------- Kampagnen-Einstellungen
++
++interface SettingsRecord { version: number; updatedAt: string; updatedByMemberId: string | null; log: CampaignSettingsLogEntry[] }
++const records: Record<string, SettingsRecord> = {};
++const FIELDS: SettingField[] = ['allowCloudSummary', 'allowExternalTranscription', 'allowCharacterAnalysis'];
++
++function record(c: MockCampaign): SettingsRecord {
++  return (records[c.id] ??= { version: 1, updatedAt: daysAgo(30), updatedByMemberId: null, log: [] });
++}
++const lockField = () => setting('settingsLock') as SettingField | null;
++
++export function settingsOf(c: MockCampaign, gm: boolean): CampaignSettings {
++  const r = record(c);
++  const locked = lockField();
++  return {
++    version: r.version,
++    allowCloudSummary: !!c.allowCloudSummary,
++    allowExternalTranscription: !!c.allowExternalTranscription,
++    allowCharacterAnalysis: !!c.allowCharacterAnalysis,
++    characterSheetLimits: { maxSheets: own.sheetsPerPlayer, maxPages: own.sheetMaxPages },
++    locks: locked && FIELDS.includes(locked) ? [{ field: locked, value: !!c[locked], reason: 'operator' }] : [],
++    updatedAt: r.updatedAt,
++    ...(gm ? { updatedByMemberId: r.updatedByMemberId } : {})
++  };
++}
++
++/** Vorher/Nachher vergleichen und protokollieren (auch für PATCH /campaigns/{id}) */
++export function snapshot(c: MockCampaign): Record<SettingField, boolean> {
++  return { allowCloudSummary: !!c.allowCloudSummary, allowExternalTranscription: !!c.allowExternalTranscription, allowCharacterAnalysis: !!c.allowCharacterAnalysis };
++}
++export function recordChange(c: MockCampaign, before: Record<SettingField, boolean>, byMemberId: string | null): void {
++  const r = record(c);
++  const after = snapshot(c);
++  const changed = FIELDS.filter((f) => before[f] !== after[f]);
++  if (!changed.length) return;
++  r.version += 1;
++  r.updatedAt = new Date().toISOString();
++  r.updatedByMemberId = byMemberId;
++  for (const f of changed) r.log.unshift({ at: r.updatedAt, field: f, oldValue: before[f], newValue: after[f], version: r.version, byMemberId, byOperator: false });
++}
++
++/** Zusätze für Campaign (Fassung, wer zahlt) */
++export function campaignExtras(c: MockCampaign, me: Member | undefined): Pick<Campaign, 'settingsVersion' | 'billing'> {
++  const extras: Pick<Campaign, 'settingsVersion' | 'billing'> = { settingsVersion: record(c).version };
++  if (me?.role === 'gm' && billingMode() !== 'off') extras.billing = payerOf(c, me);
++  return extras;
++}
++
++const payers: Record<string, { payer: string | null; offered: string | null }> = {};
++function payerOf(c: MockCampaign, me: Member): CampaignBilling {
++  if (billingMode() === 'pot') return { paidBy: 'organization', payerMemberId: null, isMe: false, offeredToMemberId: null };
++  const firstGm = c.members.find((m) => m.role === 'gm' && m.userId && !m.leftAt);
++  const p = (payers[c.id] ??= { payer: setting('creditWait') === 'no_payer' ? null : firstGm?.id ?? null, offered: null });
++  if (!p.payer) return { paidBy: 'nobody', payerMemberId: null, isMe: false, offeredToMemberId: null };
++  return { paidBy: 'gm', payerMemberId: p.payer, isMe: p.payer === me.id, offeredToMemberId: p.offered };
++}
++
++export function billingHandlers(B: string, deps: {
++  myMember: (c: MockCampaign) => Member | undefined;
++  terms: () => boolean;
++}) {
++  const off = () => billingMode() === 'off';
++  const notFound = () => err(404, 'not_found', 'Nicht gefunden.');
++  const credit = (id: string) => visibleCredits().find((c) => c.id === id);
++  const gmCampaign = (id: string) => {
++    const c = campaigns.find((x) => x.id === id);
++    const m = c && deps.myMember(c);
++    return c && m?.role === 'gm' ? { c, m } : null;
++  };
++  return [
++    http.get(`${B}/credits`, () => (off() ? notFound() : HttpResponse.json(visibleCredits()))),
++    http.get(`${B}/credits/:cid/bookings`, ({ params, request }) => {
++      if (off() || !credit(String(params.cid))) return notFound();
++      const url = new URL(request.url);
++      const limit = Math.min(100, Number(url.searchParams.get('limit')) || 50);
++      const before = url.searchParams.get('before');
++      const list = bookings[String(params.cid)] ?? [];
++      const from = before ? list.findIndex((b) => b.id === before) + 1 : 0;
++      return HttpResponse.json(list.slice(from, from + limit));
++    }),
++    http.get(`${B}/credits/:cid/waiting`, ({ params }) => {
++      if (off() || !credit(String(params.cid))) return notFound();
++      return HttpResponse.json(waiting[String(params.cid)] ?? []);
++    }),
++    http.post(`${B}/credits/:cid/waiting/:jid/approve`, ({ params }) => {
++      const cr = credit(String(params.cid));
++      if (off() || !cr) return notFound();
++      if (!cr.canManage) return err(403, 'second_factor_required', 'Das geht beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.');
++      const list = waiting[cr.id] ?? [];
++      const job = list.find((j) => j.jobId === params.jid);
++      if (String(params.jid).startsWith('job-') && !job) return new HttpResponse(null, { status: 204 }); // Grund aus „creditWait“
++      if (!job || job.reason !== 'approval') return err(409, 'wrong_state', 'Dieser Auftrag wartet nicht auf eine Freigabe.');
++      waiting[cr.id] = list.filter((j) => j !== job);
++      bookings[cr.id].unshift({ id: 'bk-' + crypto.randomUUID().slice(0, 6), kind: 'usage', amountCents: -job.estimateCents, createdAt: new Date().toISOString(), usage: { jobKind: job.jobKind, campaignId: job.campaignId, campaignTitle: job.campaignTitle, sessionNumber: job.sessionNumber, documentTitle: job.documentTitle } });
++      return new HttpResponse(null, { status: 204 });
++    }),
++    http.patch(`${B}/credits/:cid/settings`, async ({ params, request }) => {
++      const cr = credit(String(params.cid));
++      if (off() || !cr) return notFound();
++      if (!cr.canManage) return err(403, 'second_factor_required', 'Das geht beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.');
++      const body = (await request.json()) as Partial<Pick<Credit, 'approvalThresholdCents' | 'sheetMaxPages' | 'sheetsPerPlayer'>>;
++      const clamp = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : undefined);
++      const a = clamp(body.approvalThresholdCents, 0, 100000), p = clamp(body.sheetMaxPages, 1, 2000), s = clamp(body.sheetsPerPlayer, 0, 50);
++      if (a !== undefined) own.approvalThresholdCents = a;
++      if (p !== undefined) own.sheetMaxPages = p;
++      if (s !== undefined) own.sheetsPerPlayer = s;
++      return HttpResponse.json(credit(own.id));
++    }),
++    http.post(`${B}/credits/:cid/vouchers`, async ({ params, request }) => {
++      const cr = credit(String(params.cid));
++      if (off() || !cr) return notFound();
++      if (!cr.canManage) return err(403, 'second_factor_required', 'Das geht beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.');
++      const { code } = (await request.json()) as { code?: string };
++      const norm = (code ?? '').toUpperCase().replace(/[\s-]/g, '');
++      if (norm !== 'TAVERNEGUTSCHEIN' || voucherUsed) return err(400, 'voucher_invalid', 'Dieser Gutschein gilt nicht (mehr). Prüf den Code oder frag, wer ihn dir gegeben hat.');
++      voucherUsed = true;
++      bookings[cr.id].unshift({ id: 'bk-' + crypto.randomUUID().slice(0, 6), kind: 'voucher', amountCents: 500, createdAt: new Date().toISOString() });
++      return HttpResponse.json({ amountCents: 500, credit: credit(cr.id) });
++    }),
++    http.post(`${B}/campaigns/:id/payer/offer`, async ({ params, request }) => {
++      const g = gmCampaign(String(params.id));
++      if (off() || billingMode() === 'pot' || !g) return notFound();
++      const b = payerOf(g.c, g.m);
++      if (!b.isMe) return notFound();
++      const { memberId } = (await request.json()) as { memberId: string | null };
++      if (memberId !== null && !g.c.members.some((m) => m.id === memberId && m.role === 'gm' && m.userId && !m.leftAt && m.id !== g.m.id)) {
++        return err(400, 'invalid_member', 'An diese Person kann die Zahlung nicht gehen. Sie muss Spielleitung der Kampagne sein.');
++      }
++      payers[g.c.id].offered = memberId;
++      return HttpResponse.json(payerOf(g.c, g.m));
++    }),
++    http.post(`${B}/campaigns/:id/payer/accept`, ({ params }) => {
++      const g = gmCampaign(String(params.id));
++      if (off() || billingMode() === 'pot' || !g) return notFound();
++      const p = payers[g.c.id] ?? { payer: null, offered: null };
++      if (p.payer && p.offered !== g.m.id) return err(409, 'wrong_state', 'Dir hat niemand die Zahlung angeboten.');
++      payers[g.c.id] = { payer: g.m.id, offered: null };
++      return HttpResponse.json(payerOf(g.c, g.m));
++    }),
++    http.get(`${B}/campaigns/:id/settings`, ({ params }) => {
++      const c = campaigns.find((x) => x.id === params.id);
++      const m = c && deps.myMember(c);
++      if (!c || !m) return notFound();
++      return HttpResponse.json(settingsOf(c, m.role === 'gm'));
++    }),
++    http.patch(`${B}/campaigns/:id/settings`, async ({ params, request }) => {
++      const g = gmCampaign(String(params.id));
++      if (!g) return notFound();
++      const body = (await request.json()) as Partial<Record<SettingField, boolean>> & { version?: number };
++      if (body.version !== record(g.c).version) return err(409, 'settings_conflict', 'Inzwischen hat jemand die Einstellungen geändert.', { current: settingsOf(g.c, true) });
++      const locked = lockField();
++      if (locked && typeof body[locked] === 'boolean' && body[locked] !== !!g.c[locked]) return err(400, 'setting_locked', 'Das hat der Betreiber des Servers festgelegt.', { field: locked });
++      if (FIELDS.some((f) => body[f] === true) && !deps.terms()) return err(403, 'terms_required', 'Bitte stimme zuerst den neuen Nutzungsbedingungen zu.');
++      const before = snapshot(g.c);
++      for (const f of FIELDS) if (typeof body[f] === 'boolean') g.c[f] = body[f];
++      recordChange(g.c, before, g.m.id);
++      return HttpResponse.json(settingsOf(g.c, true));
++    }),
++    http.get(`${B}/campaigns/:id/settings/log`, ({ params }) => {
++      const g = gmCampaign(String(params.id));
++      if (!g) return notFound();
++      return HttpResponse.json(record(g.c).log.slice(0, 100));
++    })
++  ];
++}
++
++/** Testmodus: eine andere SL ändert die Einstellungen (zum Ausprobieren von settings_conflict) */
++export function bumpSettingsVersion(campaignId: string): void {
++  const c = campaigns.find((x) => x.id === campaignId);
++  if (c) record(c).version += 1;
++}
+diff --git a/src/mocks/db.ts b/src/mocks/db.ts
+index f65bd46..4b4617b 100644
+--- a/src/mocks/db.ts
++++ b/src/mocks/db.ts
+@@ -134,4 +134,11 @@ export const sessions: MockSession[] = [
+ ];
+ 
++// Testmodus (0.4.25): Mit „taleward.mock.creditWait“ wartet eine weitere Runde auf das Guthaben
++try {
++  if (localStorage.getItem('taleward.mock.creditWait')) {
++    sessions.push({ ...pastSession('c-grau', 14, 'Unterwegs nach Kaltenfurt', '2026-10-03T17:00:00Z'), state: 'queued', publishedAt: null, audioDeletedAt: null });
++  }
++} catch { /* ohne Speicher: nichts */ }
++
+ export const recaps: Record<string, Recap> = {
+   's-c-grau-10': {
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index ab2bd03..f9e3bec 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -3,4 +3,5 @@ import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
+ import { textToPdf } from './minipdf';
+ import { cleanAliases, findMatch, secretWarnings } from './checks';
++import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
+ 
+ /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
+@@ -393,5 +394,7 @@ function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean):
+   }
+   const { phaseStartedAt: _p, ...rest } = a;
+-  return forGm ? rest : { ...rest, proposalCount: null };
++  // 0.4.25: Kosten im Dialog der SL (nur mit Guthaben)
++  const cost = rest.state === 'awaiting_gm' ? mockAnalysisCost(forGm) : null;
++  return forGm ? { ...rest, costEstimateCents: cost } : { ...rest, proposalCount: null };
+ }
+ 
+@@ -643,8 +646,10 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.24',
++      apiVersion: nachbar ? '0.3.9' : '0.4.25',
+       serverId: nachbar ? undefined : 'testserver',
+       registration: nachbar ? 'invite_only' : registrationSetting(),
+       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
++      // 0.4.25: Guthaben (taleward.mock.billing)
++      billing: nachbar ? undefined : billingInfo(true),
+       authMethods: ['password'],
+       privacyPolicyUrl: null,
+@@ -908,5 +913,5 @@ export const handlers = [
+       return err(403, 'gm_permission_required', 'Eigene Kampagnen legst du hier erst nach der SL-Freigabe an.');
+     }
+-    const body = (await request.json()) as { title: string; description?: string; language?: 'de' | 'en'; system?: MockCampaign['system']; systemName?: string | null };
++    const body = (await request.json()) as { title: string; description?: string; language?: 'de' | 'en'; system?: MockCampaign['system']; systemName?: string | null; settings?: Record<string, boolean> };
+     const c: MockCampaign = {
+       id: 'c-' + crypto.randomUUID().slice(0, 8),
+@@ -922,8 +927,12 @@ export const handlers = [
+       nextSessionAt: null,
+       inviteCode: 'NEU-' + Math.floor(1000 + Math.random() * 9000),
+-      members: [{ id: 'm-' + crypto.randomUUID().slice(0, 8), userId: ME.id, displayName: ME.displayName, characterName: null, role: 'gm' }]
++      members: [{ id: 'm-' + crypto.randomUUID().slice(0, 8), userId: ME.id, displayName: ME.displayName, characterName: null, role: 'gm' }],
++      // 0.4.25: Einstellungen gleich beim Anlegen
++      allowCloudSummary: body.settings?.allowCloudSummary === true,
++      allowExternalTranscription: body.settings?.allowExternalTranscription === true,
++      allowCharacterAnalysis: body.settings?.allowCharacterAnalysis === true
+     };
+     campaigns.push(c);
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) }, { status: 201 });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) }, { status: 201 });
+   }),
+ 
+@@ -961,5 +970,5 @@ export const handlers = [
+       seen.chronicle[c.id] = seen.bible[c.id] = new Date().toISOString();
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) });
+   }),
+ 
+@@ -967,5 +976,5 @@ export const handlers = [
+     const c = campaigns.find((x) => x.id === params.id);
+     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+   }),
+ 
+@@ -1119,4 +1128,5 @@ export const handlers = [
+     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+     if (!isGm(c.id)) return err(403, 'forbidden', 'Nur die Spielleitung kann die Kampagne bearbeiten.');
++    const settingsBefore = snapshot(c);
+     const body = (await request.json()) as { title?: string; description?: string; worldInfo?: string; language?: 'de' | 'en'; coverPreset?: string | null; system?: MockCampaign['system']; systemName?: string | null };
+     const SYSTEMS = ['dsa', 'dnd', 'pathfinder', 'cthulhu', 'shadowrun', 'splittermond', 'other'];
+@@ -1165,5 +1175,6 @@ export const handlers = [
+       delete coverImages[c.id]; // Motiv gewählt: eigenes Bild entfällt
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, hotwords: c.hotwords ?? [], members: membersFor(c) });
++    recordChange(c, settingsBefore, myMember(c)?.id ?? null);
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), hotwords: c.hotwords ?? [], members: membersFor(c) });
+   }),
+ 
+@@ -1412,5 +1423,9 @@ export const handlers = [
+     // Spieler (ab 0.4.7): nur die eigenen Charakterbögen
+     const mine = (d: (typeof documents)[number]) => isGm(c.id) || (d.kind === 'character_sheet' && d.uploadedByMemberId === m.id);
+-    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id && mine(d)).map(advanceDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
++    const withWait = (d: CampaignDocument): CampaignDocument => {
++      const wait = d.state === 'queued' || d.state === 'processing' ? mockCreditWait(isGm(c.id), 'document', d.id) : null;
++      return wait ? { ...d, state: 'queued', progress: null, message: null, creditWait: wait } : d;
++    };
++    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id && mine(d)).map(advanceDoc).map(withWait).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+   }),
+ 
+@@ -1650,5 +1665,5 @@ export const handlers = [
+     coverImages[c.id] = { data, type, updatedAt: new Date().toISOString() };
+     c.coverPreset = null;
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) });
+   }),
+ 
+@@ -1787,5 +1802,8 @@ export const handlers = [
+     const s = sessions.find((x) => x.id === params.id);
+     if (!s) return err(404, 'not_found', 'Session nicht gefunden.');
+-    return HttpResponse.json(advance(s));
++    const st = advance(s);
++    // 0.4.25: Wartegrund des Guthabens (Testmodus: taleward.mock.creditWait)
++    const wait = st.state === 'queued' || st.state === 'transcribing' || st.state === 'summarizing' ? mockCreditWait(isGm(s.campaignId), 'session', s.id) : null;
++    return HttpResponse.json(wait ? { ...st, state: 'queued', progress: null, message: null, creditWait: wait } : st);
+   }),
+ 
+@@ -2269,4 +2287,6 @@ export const handlers = [
+     entries.push(e);
+     return HttpResponse.json(e, { status: 201 });
+-  })
++  }),
++  // 0.4.25: Guthaben und Kampagnen-Einstellungen
++  ...billingHandlers(B, { myMember, terms: () => !termsOutdated() })
+ ];
+diff --git a/src/pages/AccountPage.tsx b/src/pages/AccountPage.tsx
+index e3a0b57..d53cdef 100644
+--- a/src/pages/AccountPage.tsx
++++ b/src/pages/AccountPage.tsx
+@@ -19,4 +19,6 @@ import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
+ import { ServerLegal } from '../components/Terms';
+ import { gmState, type GmState } from '../auth/serverAccess';
++import { billingOn } from '../billing/rules';
++import { CreditLink } from './CreditPage';
+ 
+ /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
+@@ -68,8 +70,11 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+   // Kampagne aus einer Datei übernehmen heißt: neue Kampagne als SL – auf manchen Servern erst nach der SL-Freigabe
+   const [gm, setGm] = useState<GmState>('ok');
++  // Guthaben (ab 0.4.25): nur, wenn der Server damit abrechnet
++  const [billing, setBilling] = useState(false);
+   useEffect(() => {
+     if (!hasValidToken(conn)) return;
+     const api = apiFor(conn);
+     api.info().then(async (info) => {
++      setBilling(billingOn(info));
+       if (info.gmApproval === 'required') setGm(gmState(info, await api.me()));
+     }).catch(() => undefined);
+@@ -184,4 +189,5 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+         <div className="row wrap" style={{ gap: 8 }}>
+           <Link className="btn small outline" to={`/v/${conn.id}/profil/stimme`}>{t('Mein Stimmprofil')}</Link>
++          {billing && <CreditLink connId={conn.id} />}
+           <button type="button" className="btn small outline" onClick={signOut}>{t('Abmelden')}</button>
+         </div>
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 39d9937..9c0845b 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -3,5 +3,5 @@ import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
+ import { GmDecision, GmRequest } from '../components/GmRequest';
+ import { gmState, termsOutdated } from '../auth/serverAccess';
+-import type { ServerInfo, User } from '../api/types';
++import type { CampaignSettingsIn, ServerInfo, User } from '../api/types';
+ import { serverHasCharacters } from '../characters/sync';
+ import { LinkInput } from '../components/LinkInput';
+@@ -11,4 +11,5 @@ import { UpdateNotices } from '../components/UpdateNotices';
+ import type { GameSystem } from '../api/types';
+ import { GameSystemFields } from '../components/GameSystemFields';
++import { StartSettings } from '../components/CampaignSettings';
+ import type { CampaignSummary } from '../api/types';
+ import { NewDot } from '../components/Screen';
+@@ -20,5 +21,5 @@ import { apiFor, fetchServerInfo, isApiError } from '../api/client';
+ import { isMusterUrl } from '../api/muster';
+ import { offlineSince } from '../api/readCopy';
+-import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
++import { APP_VERSION, MIN_API_VERSION, apiAtLeast, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
+ import { IconInfo } from '../components/Icons';
+ import { useAuth } from '../auth/AuthContext';
+@@ -58,4 +59,5 @@ export function Campaigns() {
+   const [system, setSystem] = useState<GameSystem | null>(null);
+   const [systemName, setSystemName] = useState('');
++  const [startSettings, setStartSettings] = useState<CampaignSettingsIn>({});
+   const [actionError, setActionError] = useState<unknown>(null);
+   const [tried, setTried] = useState(false);
+@@ -191,5 +193,6 @@ export function Campaigns() {
+     if (!conn) return;
+     try {
+-      const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null);
++      const chosen = apiAtLeast('0.4.25', conn) && Object.keys(startSettings).length ? startSettings : undefined;
++      const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null, chosen);
+       navigate(`/v/${conn.id}/k/${c.id}`);
+     } catch (e) {
+@@ -364,4 +367,5 @@ export function Campaigns() {
+             </div>
+           )}
++          {mode === 'new' && newTarget() && <StartSettings conn={newTarget()!} value={startSettings} onChange={setStartSettings} />}
+           <ErrorBox error={actionError} />
+           <Missing text={missing} shown={tried} />
+diff --git a/src/pages/CreditPage.tsx b/src/pages/CreditPage.tsx
+new file mode 100644
+index 0000000..893ce6d
+--- /dev/null
++++ b/src/pages/CreditPage.tsx
+@@ -0,0 +1,298 @@
++import { Capacitor } from '@capacitor/core';
++import { useCallback, useEffect, useState } from 'react';
++import { Link } from 'react-router-dom';
++import { api, isApiError } from '../api/client';
++import { currentConnection } from '../api/connections';
++import type { Credit, CreditBooking, CreditWaitingJob, ServerInfo } from '../api/types';
++import { eur } from '../billing/CreditWaitNote';
++import { billingOn, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../billing/rules';
++import { confirmDialog } from '../components/confirm';
++import { formatDate } from '../components/format';
++import { ErrorBox, Screen } from '../components/Screen';
++import { getLang, t, tk, tn } from '../i18n';
++import { DIST } from '../update/updater';
++
++/**
++ * Guthaben auf einem Server (Schnittstelle 0.4.25): Stand, wartende Aufträge mit „Verarbeiten“, Einstellungen,
++ * Gutschein und Buchungen. Bezahlt wird nie hier – „Guthaben aufladen“ öffnet nur in der Fassung von der Website die
++ * Aufladeseite des Servers im Browser; die Store-Fassung zeigt keinen Weg dorthin.
++ */
++export function CreditPage() {
++  const conn = currentConnection();
++  const [info, setInfo] = useState<ServerInfo | null>(null);
++  const [credits, setCredits] = useState<Credit[] | null>(null);
++  const [error, setError] = useState<unknown>(null);
++
++  const load = useCallback(() => {
++    api.info().then(setInfo).catch(() => undefined);
++    api.credits().then(setCredits).catch((e) => { setError(e); setCredits([]); });
++  }, []);
++  useEffect(load, [load]);
++
++  const off = (info && !billingOn(info)) || isApiError(error) && error.status === 404;
++  return (
++    <Screen narrow backTo={{ to: '/konto', label: t('Konten und Server') }} overline={conn.name} title={t('Guthaben')} nav={false}>
++      {off ? (
++        <p className="muted" style={{ margin: 0 }}>{t('Dieser Server rechnet nicht über Guthaben ab.')}</p>
++      ) : (
++        <>
++          <p className="muted" style={{ margin: 0 }}>
++            {t('Damit bezahlt die Spielleitung die Verarbeitung ihrer Runden: Abschrift, Kapitel und Unterlagen. Für Spielende kostenlos.')}
++          </p>
++          {!credits && !error && <p className="muted">{t('Wird geladen …')}</p>}
++          {!off && <ErrorBox error={error} />}
++          {credits?.map((c) => <CreditCard key={c.id} credit={c} info={info} baseUrl={conn.baseUrl} onChanged={load} />)}
++        </>
++      )}
++    </Screen>
++  );
++}
++
++async function openOutside(url: string) {
++  if (Capacitor.isNativePlatform()) {
++    const { Browser } = await import('@capacitor/browser');
++    await Browser.open({ url, toolbarColor: '#17313b' });
++  } else {
++    window.open(url, '_blank', 'noopener,noreferrer');
++  }
++}
++
++const STATUS: Record<string, string> = {
++  low: tk('Das Guthaben wird knapp.'),
++  empty: tk('Kein Guthaben mehr. Neue Verarbeitungen warten, bis wieder etwas da ist.'),
++  negative: tk('Im Minus. Neue Verarbeitungen warten, bis das Guthaben wieder über null ist.')
++};
++
++function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info: ServerInfo | null; baseUrl: string; onChanged: () => void }) {
++  const [waiting, setWaiting] = useState<CreditWaitingJob[] | null>(null);
++  const [bookings, setBookings] = useState<CreditBooking[] | null>(null);
++  const [more, setMore] = useState(true);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  const url = credit.canManage ? topUpUrl(info, baseUrl, DIST) : null;
++  const pot = credit.kind === 'organization';
++
++  const loadLists = useCallback(() => {
++    api.creditWaiting(credit.id).then(setWaiting).catch(() => setWaiting([]));
++    api.creditBookings(credit.id).then((b) => { setBookings(b); setMore(b.length >= 30); }).catch(() => setBookings([]));
++  }, [credit.id]);
++  useEffect(loadLists, [loadLists]);
++
++  const loadMore = async () => {
++    const last = bookings?.[bookings.length - 1];
++    if (!last) return;
++    try {
++      const next = await api.creditBookings(credit.id, last.id);
++      setBookings([...(bookings ?? []), ...next]);
++      setMore(next.length >= 30);
++    } catch (e) {
++      setError(e);
++    }
++  };
++
++  const approve = async (job: CreditWaitingJob) => {
++    if (!(await confirmDialog(t('Verarbeiten? Das kostet voraussichtlich {amount} aus deinem Guthaben.', { amount: eur(job.estimateCents) }), { confirmLabel: t('Verarbeiten') }))) return;
++    setBusy(true);
++    setError(null);
++    try {
++      await api.approveCreditJob(credit.id, job.jobId);
++      loadLists();
++      onChanged();
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <section className="card" style={{ gap: 12 }}>
++      <span className="overline">{pot ? t('Guthaben von {name}', { name: credit.organizationName ?? t('der Organisation') }) : t('Dein Guthaben')}</span>
++      <div style={{ fontFamily: 'var(--font-serif, Alegreya, serif)', fontSize: 34, lineHeight: 1.1 }} aria-live="polite">{eur(credit.balanceCents)}</div>
++      {STATUS[credit.status] && <span className="small" style={{ fontWeight: 700 }}>{t(STATUS[credit.status])}</span>}
++      {url && (
++        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
++          <button type="button" className="btn" onClick={() => openOutside(url)}>{t('Guthaben aufladen')}</button>
++          <span className="muted small">{t('Öffnet die Seite des Servers im Browser. Bezahlt wird dort, nicht in der App.')}</span>
++        </div>
++      )}
++      {!url && credit.canManage && DIST === 'store' && credit.status !== 'good' && (
++        <span className="muted small">{t('Aufladen kannst du auf der Seite deines Servers.')}</span>
++      )}
++      {!credit.canManage && (
++        <span className="muted small">{t('Aufladen, Freigeben und Einstellungen gehen beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.')}</span>
++      )}
++      <ErrorBox error={error} />
++
++      {waiting && waiting.length > 0 && (
++        <>
++          <h3 style={{ margin: '6px 0 0' }}>{tn(waiting.length, 'Wartet ({n})', 'Warten ({n})')}</h3>
++          {waiting.map((w) => (
++            <div key={w.jobId} className="row wrap" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 8, alignItems: 'center' }}>
++              <span style={{ flex: '1 1 180px', minWidth: 0 }}>
++                <span>{jobLabel(w.jobKind)}</span>
++                <span className="muted small"> · {[w.campaignTitle, w.sessionNumber != null ? t('Kapitel {n}', { n: w.sessionNumber }) : null, w.documentTitle].filter(Boolean).join(' · ')}</span>
++                <br />
++                <span className="muted small">{t('etwa {amount}', { amount: eur(w.estimateCents) })} · {t(WAIT_SHORT[waitReason(w.reason)])}</span>
++              </span>
++              {waitReason(w.reason) === 'approval' && credit.canManage && (
++                <button type="button" className="btn small outline" disabled={busy} onClick={() => approve(w)}>{t('Verarbeiten')}</button>
++              )}
++            </div>
++          ))}
++        </>
++      )}
++
++      {credit.canManage && <CreditSettings credit={credit} onSaved={onChanged} />}
++      {credit.canManage && vouchersAllowed(DIST) && <Voucher credit={credit} onDone={() => { loadLists(); onChanged(); }} />}
++
++      <h3 style={{ margin: '6px 0 0' }}>{t('Buchungen')}</h3>
++      {bookings && bookings.length === 0 && <span className="muted small">{t('Noch keine Buchungen.')}</span>}
++      {bookings?.map((b) => (
++        <div key={b.id} className="row" style={{ gap: 8, borderTop: '1px solid var(--line)', paddingTop: 6, alignItems: 'baseline' }}>
++          <span className="muted small" style={{ width: 64, flexShrink: 0 }}>{formatDate(b.createdAt)}</span>
++          <span className="small" style={{ flex: 1, minWidth: 0 }}>{bookingLabel(b)}</span>
++          <span className="small" style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontWeight: b.amountCents > 0 ? 700 : 400 }}>
++            {b.amountCents > 0 ? '+' : ''}{eur(b.amountCents)}
++          </span>
++        </div>
++      ))}
++      {bookings && bookings.length > 0 && more && (
++        <button type="button" className="btn small quiet" style={{ alignSelf: 'flex-start' }} onClick={loadMore}>{t('Ältere anzeigen')}</button>
++      )}
++    </section>
++  );
++}
++
++const WAIT_SHORT: Record<string, string> = {
++  approval: tk('wartet auf „Verarbeiten“'),
++  empty: tk('wartet auf Guthaben'),
++  too_low: tk('Guthaben reicht voraussichtlich nicht'),
++  no_payer: tk('niemand zahlt'),
++  pot: tk('wartet auf die Verwaltung'),
++  other: tk('wartet')
++};
++
++const JOBS: Record<string, string> = {
++  transcribe: tk('Abschrift'),
++  summarize: tk('Kapitel schreiben'),
++  revise: tk('Kapitel überarbeiten'),
++  document: tk('Unterlage auswerten')
++};
++const jobLabel = (kind: string) => t(JOBS[kind] ?? 'Verarbeitung');
++
++function bookingLabel(b: CreditBooking): string {
++  const withReason = (label: string) => (b.reason ? `${label}: ${b.reason}` : label);
++  switch (b.kind) {
++    case 'payment': return t('Aufgeladen');
++    case 'credit': return withReason(t('Gutschrift'));
++    case 'voucher': return t('Gutschein');
++    case 'chargeback': return t('Rückbuchung');
++    case 'refund': return t('Erstattung');
++    case 'correction': return withReason(t('Korrektur'));
++    case 'usage': {
++      const u = b.usage;
++      const parts = [jobLabel(u?.jobKind ?? ''), u?.campaignTitle, u?.sessionNumber != null ? t('Kapitel {n}', { n: u.sessionNumber }) : null, u?.documentTitle];
++      return parts.filter(Boolean).join(' · ');
++    }
++    default: return b.reason ?? t('Buchung');
++  }
++}
++
++function CreditSettings({ credit, onSaved }: { credit: Credit; onSaved: () => void }) {
++  const lang = getLang();
++  const asText = (cents: number) => (cents / 100).toFixed(2).replace('.', lang === 'de' ? ',' : '.');
++  const [threshold, setThreshold] = useState(asText(credit.approvalThresholdCents));
++  const [pages, setPages] = useState(String(credit.sheetMaxPages));
++  const [sheets, setSheets] = useState(String(credit.sheetsPerPlayer));
++  const [busy, setBusy] = useState(false);
++  const [saved, setSaved] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  const cents = parseEuro(threshold);
++  const pagesN = Number(pages), sheetsN = Number(sheets);
++  const valid = cents !== null && cents <= 100000 && Number.isInteger(pagesN) && pagesN >= 1 && pagesN <= 2000 && Number.isInteger(sheetsN) && sheetsN >= 0 && sheetsN <= 50;
++
++  const save = async () => {
++    if (!valid) return;
++    setBusy(true);
++    setError(null);
++    setSaved(false);
++    try {
++      await api.updateCreditSettings(credit.id, { approvalThresholdCents: cents, sheetMaxPages: pagesN, sheetsPerPlayer: sheetsN });
++      setSaved(true);
++      onSaved();
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <details className="more">
++      <summary>{t('Einstellungen')}</summary>
++      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
++        <div className="field">
++          <label htmlFor={`thr-${credit.id}`}>{t('Vorher fragen ab (Euro)')}</label>
++          <input id={`thr-${credit.id}`} type="text" inputMode="decimal" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
++          <span className="muted small">{t('Kostet eine Verarbeitung voraussichtlich mehr, wartet sie auf dein „Verarbeiten“.')}</span>
++        </div>
++        <div className="field">
++          <label htmlFor={`pg-${credit.id}`}>{t('Seiten je Charakterbogen')}</label>
++          <input id={`pg-${credit.id}`} type="text" inputMode="numeric" value={pages} onChange={(e) => setPages(e.target.value)} />
++        </div>
++        <div className="field">
++          <label htmlFor={`sh-${credit.id}`}>{t('Charakterbögen je Spielerin und Kampagne')}</label>
++          <input id={`sh-${credit.id}`} type="text" inputMode="numeric" value={sheets} onChange={(e) => setSheets(e.target.value)} />
++        </div>
++        <ErrorBox error={error} />
++        {!valid && <span className="small" role="alert">{t('Bitte gültige Werte eintragen.')}</span>}
++        <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
++          <button type="button" className="btn small outline" disabled={busy || !valid} onClick={save}>{t('Speichern')}</button>
++          {saved && <span className="small" role="status">{t('Gespeichert.')}</span>}
++        </div>
++      </div>
++    </details>
++  );
++}
++
++function Voucher({ credit, onDone }: { credit: Credit; onDone: () => void }) {
++  const [code, setCode] = useState('');
++  const [busy, setBusy] = useState(false);
++  const [result, setResult] = useState<string | null>(null);
++  const [error, setError] = useState<unknown>(null);
++  const redeem = async () => {
++    setBusy(true);
++    setError(null);
++    setResult(null);
++    try {
++      const r = await api.redeemVoucher(credit.id, code.trim());
++      setResult(t('{amount} gutgeschrieben.', { amount: eur(r.amountCents) }));
++      setCode('');
++      onDone();
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++  return (
++    <details className="more">
++      <summary>{t('Gutschein einlösen')}</summary>
++      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
++        <div className="field">
++          <label htmlFor={`vc-${credit.id}`}>{t('Code')}</label>
++          <input id={`vc-${credit.id}`} type="text" autoCapitalize="characters" autoComplete="off" maxLength={40} value={code} onChange={(e) => setCode(e.target.value)} />
++        </div>
++        <ErrorBox error={error} />
++        {result && <span className="small" role="status">{result}</span>}
++        <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} disabled={busy || !code.trim()} onClick={redeem}>{t('Einlösen')}</button>
++      </div>
++    </details>
++  );
++}
++
++/** Kurze Zeile mit Weg zum Guthaben, z. B. unter „Konten und Server“ */
++export function CreditLink({ connId }: { connId: string }) {
++  return <Link className="btn small outline" to={`/v/${connId}/guthaben`}>{t('Guthaben')}</Link>;
++}
+diff --git a/src/pages/DocumentsPage.tsx b/src/pages/DocumentsPage.tsx
+index 6b86d60..c0cc8da 100644
+--- a/src/pages/DocumentsPage.tsx
++++ b/src/pages/DocumentsPage.tsx
+@@ -1,2 +1,3 @@
++import { CreditWaitNote } from '../billing/CreditWaitNote';
+ import { confirmDialog } from '../components/confirm';
+ import { p } from '../api/connections';
+@@ -139,5 +140,6 @@ export function DocumentsPage() {
+           <div className="small"><strong>{t(DOC_STATE[d.state])}</strong>{d.state === 'failed' && d.message ? ` – ${d.message}` : ''}</div>
+           {/* Hinweis des Servers beim Warten, z. B. „Die SL hat das für diese Kampagne noch nicht erlaubt …“ */}
+-          {d.message && (d.state === 'queued' || d.state === 'processing') && <div className="muted small">{d.message}</div>}
++          {d.message && (d.state === 'queued' || d.state === 'processing') && !d.creditWait && <div className="muted small">{d.message}</div>}
++          {d.state === 'queued' && d.creditWait && <CreditWaitNote wait={d.creditWait} />}
+           {d.progress !== null && (d.state === 'processing' || d.state === 'queued') && (
+             <div className="progress"><div style={{ width: `${d.progress * 100}%` }} /></div>
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 8965eb1..228efb9 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -9,4 +9,6 @@ import { useTermsNotice } from '../components/Terms';
+ import { prepWhen } from '../prep/prep';
+ import { isDeletedMember } from '../api/types';
++import { LockNote, SettingsLog, useCampaignSettings } from '../components/CampaignSettings';
++import { PayerSection } from '../billing/PayerSection';
+ import { InviteBox } from '../components/InviteBox';
+ import { confirmDialog } from '../components/confirm';
+@@ -683,7 +685,9 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+       if (!(await confirmDialog(q, { confirmLabel: t('Erlauben') }))) return;
+     }
+-    run(() => api.updateCampaign(campaign.id, { [field]: value }));
++    run(() => settings.change(field, value), () => undefined);
+   };
+ 
++  const settings = useCampaignSettings(campaign, onChanged);
++
+   const leave = async () => {
+     if (await confirmDialog(t('Kampagne verlassen? Du siehst sie danach nicht mehr. Deine Kommentare bleiben stehen. Zurück geht es nur mit einer neuen Einladung.'), { confirmLabel: t('Verlassen'), danger: true })) {
+@@ -703,11 +707,14 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+         </>
+       )}
++      {gm && settings.conflict && (
++        <div className="notice" role="status">{t('Inzwischen hat jemand die Einstellungen geändert. Hier ist der neue Stand, bitte noch einmal wählen.')}</div>
++      )}
+       {gm && (externalProvider || summaryProvider) && (
+         <>
+           <span className="overline" style={{ marginTop: 6 }}>{t('Cloud-Dienste')}</span>
+-          {externalProvider && (
++          {externalProvider && settings.lock('allowExternalTranscription') !== 'unavailable' && (
+             <div className="field">
+               <label className="check" style={{ alignItems: 'flex-start' }}>
+-                <input type="checkbox" checked={!!campaign.allowExternalTranscription} disabled={busy}
++                <input type="checkbox" checked={settings.values.allowExternalTranscription} disabled={busy || !!settings.lock('allowExternalTranscription')}
+                   onChange={(e) => setCloud('allowExternalTranscription', e.target.checked, externalProvider)} style={{ marginTop: 3, flexShrink: 0 }} />
+                 <span>{t('Transkription über {provider} erlauben', { provider: externalProvider })}</span>
+@@ -718,10 +725,11 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+                   : t('Nur wenn 24 Stunden lang kein Worker erreichbar ist, nutzt der Server als Ausweichlösung {provider}.', { provider: externalProvider })}
+               </span>
++              <LockNote lock={settings.lock('allowExternalTranscription')} />
+             </div>
+           )}
+-          {summaryProvider && (
++          {summaryProvider && settings.lock('allowCloudSummary') !== 'unavailable' && (
+             <div className="field">
+               <label className="check" style={{ alignItems: 'flex-start' }}>
+-                <input type="checkbox" checked={!!campaign.allowCloudSummary} disabled={busy}
++                <input type="checkbox" checked={settings.values.allowCloudSummary} disabled={busy || !!settings.lock('allowCloudSummary')}
+                   onChange={(e) => setCloud('allowCloudSummary', e.target.checked, summaryProvider)} style={{ marginTop: 3, flexShrink: 0 }} />
+                 <span>{t('Zusammenfassung und Unterlagen über {provider} erlauben', { provider: summaryProvider })}</span>
+@@ -730,4 +738,5 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+                 {t('Für Kapitel, Vorschläge und das Auswerten von Unterlagen geht Text an {provider} – Namen und Gespräche der Runde bzw. der Inhalt der Unterlage, keine Stimmen. Ohne Erlaubnis wartet beides auf ein lokales Modell.', { provider: summaryProvider })}
+               </span>
++              <LockNote lock={settings.lock('allowCloudSummary')} />
+             </div>
+           )}
+@@ -738,7 +747,11 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
+         <>
+           <span className="overline" style={{ marginTop: 6 }}>{t('Charaktere')}</span>
+-          <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
++          <AnalysisSwitch campaign={{ ...campaign, allowCharacterAnalysis: settings.values.allowCharacterAnalysis }} info={info}
++            busy={busy || !!settings.lock('allowCharacterAnalysis')} onChange={(value) => run(() => settings.change('allowCharacterAnalysis', value), () => undefined)} />
++          <LockNote lock={settings.lock('allowCharacterAnalysis')} />
+         </>
+       )}
++      {gm && settings.hasLog && <SettingsLog campaign={campaign} />}
++      {gm && !muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
+       {gm && !muster && <h3 style={{ margin: (externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? '10px 0 0' : 0 }}>{t('Weitergeben')}</h3>}
+       {gm && !muster && (
+diff --git a/src/pages/Processing.tsx b/src/pages/Processing.tsx
+index a326202..9f65080 100644
+--- a/src/pages/Processing.tsx
++++ b/src/pages/Processing.tsx
+@@ -1,2 +1,3 @@
++import { CreditWaitNote } from '../billing/CreditWaitNote';
+ import { confirmDialog } from '../components/confirm';
+ import { IconInfo } from '../components/Icons';
+@@ -159,5 +160,7 @@ export function Processing() {
+ 
+       {/* Hinweis des Servers während des Wartens, z. B. „Zurzeit ist kein Worker … verbunden“ */}
+-      {(status?.message || status?.estimatedSeconds) && !failed && (
++      {/* Wartet wegen des Guthabens (ab 0.4.25): eigener Satz statt des Server-Hinweises */}
++      {status?.creditWait && !failed && <CreditWaitNote wait={status.creditWait} />}
++      {(status?.message || status?.estimatedSeconds) && !failed && !status.creditWait && (
+         <div className="notice">
+           <span style={{ flexShrink: 0, color: 'var(--ink-muted)' }}><IconInfo /></span>
+@@ -180,5 +183,5 @@ export function Processing() {
+         </p>
+       )}
+-      {status?.queuePosition != null && <p className="muted" style={{ margin: 0 }}>{t('Platz {n} in der Warteschlange.', { n: status.queuePosition })}</p>}
++      {status?.queuePosition != null && !status.creditWait && <p className="muted" style={{ margin: 0 }}>{t('Platz {n} in der Warteschlange.', { n: status.queuePosition })}</p>}
+       {status && RUNNING.includes(status.state) && status.state !== 'uploading' && (
+         <p className="muted small" style={{ margin: 0 }}>{t('Du kannst die App schließen.')}</p>
