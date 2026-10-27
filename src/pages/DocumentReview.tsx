@@ -8,6 +8,7 @@ import type { CampaignDocument, Entry, Member, Proposal } from '../api/types';
 import { ProposalCard } from '../components/ProposalCard';
 import { ErrorBox, Screen } from '../components/Screen';
 import { t, tn } from '../i18n';
+import { bulkAcceptable } from '../review/bulk';
 
 /** Vorschläge aus einer Unterlage prüfen und in die Bibel übernehmen. */
 export function DocumentReview() {
@@ -49,8 +50,9 @@ export function DocumentReview() {
   };
 
   // Schnell durchgehen: alles Offene auf einmal übernehmen oder verwerfen
+  const easy = bulkAcceptable(proposals ?? []);
   const bulk = (decision: 'accepted' | 'rejected') =>
-    Promise.all((proposals ?? []).filter((p) => p.decision === 'open').map((p) => api.decide(p.id, { decision })))
+    Promise.all((decision === 'accepted' ? easy : (proposals ?? []).filter((p) => p.decision === 'open')).map((p) => api.decide(p.id, { decision })))
       .then((updated) => setProposals((list) => list?.map((x) => updated.find((u) => u.id === x.id) ?? x) ?? null))
       .catch(setError);
 
@@ -63,8 +65,9 @@ export function DocumentReview() {
 
       {proposals && open > 1 && (
         <div className="row wrap" style={{ gap: 8 }}>
-          <button type="button" className="btn small moss outline" onClick={() => bulk('accepted')}>{t('Alle offenen übernehmen')}</button>
+          {easy.length > 1 && <button type="button" className="btn small moss outline" onClick={() => bulk('accepted')}>{tn(easy.length, '{n} unauffälligen übernehmen', '{n} unauffällige übernehmen')}</button>}
           <button type="button" className="btn small outline" onClick={() => bulk('rejected')}>{t('Alle offenen verwerfen')}</button>
+          {easy.length > 1 && easy.length < open && <span className="muted small" style={{ flexBasis: '100%' }}>{t('Markierte, Aufgedecktes und ähnliche Namen prüfst du einzeln.')}</span>}
         </div>
       )}
 

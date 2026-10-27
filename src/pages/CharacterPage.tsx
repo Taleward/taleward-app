@@ -2,14 +2,14 @@ import { confirmDialog } from '../components/confirm';
 import { isDeletedMember } from '../api/types';
 import { currentConnection, currentConnectionId, p } from '../api/connections';
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Campaign, Member } from '../api/types';
 import { blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
 import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
-import { CharacterForm } from '../components/CharacterForm';
+import { CharacterForm, MissingHint, missingParts } from '../components/CharacterForm';
 import { IconLock } from '../components/Icons';
 import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { t } from '../i18n';
@@ -46,6 +46,20 @@ export function CharacterPage() {
   const own = !!member && member.userId === user?.id;
   const otherGms = campaign?.members.filter((m) => m.role === 'gm' && m.id !== memberId && !isDeletedMember(m)).length ?? 0;
   const name = member ? member.characterName ?? member.displayName : '';
+
+  // Aus „Dein Charakter ist noch unvollständig“: gleich bearbeiten – in der Sammlung, wenn er dort liegt
+  const [params] = useSearchParams();
+  const editNow = params.get('bearbeiten') === '1';
+  useEffect(() => {
+    if (!editNow || !campaign || !member || !own) return;
+    const connId = currentConnectionId() ?? currentConnection().id;
+    const linked = member.role === 'player' && serverHasCharacters(currentConnection()) ? characterForCampaign(connId, campaign.id) : null;
+    if (linked && linked.links.some((l) => l.connId === connId && l.campaignId === campaign.id)) {
+      navigate(`/charaktere/${linked.id}?bearbeiten=1`, { replace: true });
+    } else {
+      setEditing(true);
+    }
+  }, [editNow, !!campaign, !!member, own]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changeRole = async (role: 'gm' | 'player') => {
     const q = role === 'gm'
@@ -84,6 +98,9 @@ export function CharacterPage() {
       {campaign && !member && !error && <div className="empty">{t('Nicht gefunden.')}</div>}
       {campaign && member && (editing ? (
         <section className="card">
+          {editNow && member.role === 'player' && (
+            <MissingHint parts={missingParts({ name: member.characterName, summary: member.characterSummary, portrait: !!member.portraitUpdatedAt })} />
+          )}
           <CharacterForm campaign={campaign} member={member} submitLabel={t('Speichern')}
             onSaved={() => { setEditing(false); load(); }}
             secondary={{ label: t('Abbrechen'), onClick: () => setEditing(false) }} />

@@ -66,7 +66,7 @@ export function Chronicle() {
       <ErrorBox error={error} />
 
       {pending.map((s) => (
-        <Link key={s.id} to={p(`/s/${s.id}`)} className={['awaiting_speakers', 'awaiting_review', 'failed'].includes(s.state) ? 'card warn' : 'card'}>
+        <Link key={s.id} to={p(s.state === 'awaiting_review' ? `/s/${s.id}/freigabe` : `/s/${s.id}`)} className={['awaiting_speakers', 'awaiting_review', 'failed'].includes(s.state) ? 'card warn' : 'card'}>
           <div className="row between">
             <strong>{t('Kapitel {n}', { n: s.number })}</strong>
             <span className={['awaiting_speakers', 'awaiting_review', 'failed'].includes(s.state) ? 'pill seal' : 'pill'}>{PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state}</span>

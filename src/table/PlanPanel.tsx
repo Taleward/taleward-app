@@ -89,12 +89,15 @@ export function PlanPanel({ campaignId, nextNumber, onEntry, onDoc, compact }: {
   const setSceneState = (sceneId: string, state: NonNullable<PlanScene['state']>) =>
     apply((p) => ({ scenes: p.scenes.map((x) => (x.id === sceneId ? { ...x, state } : x)) }));
 
+  // Gerade angelegt und noch nie gespeichert: „Abbrechen“ nimmt ihn wieder weg, „Löschen“ braucht es nicht
+  const [freshId, setFreshId] = useState<string | null>(null);
   const create = async () => {
     setError(null);
     try {
       const pl = await api.createPlan(campaignId, { title: t('Kapitel {n}', { n: nextNumber }), sessionNumber: nextNumber, state: 'draft' });
       setPlans((list) => [...(list ?? []), pl]);
       setPlanId(pl.id);
+      setFreshId(pl.id);
       setEditing(true);
     } catch (e) {
       setError(e);
@@ -128,9 +131,18 @@ export function PlanPanel({ campaignId, nextNumber, onEntry, onDoc, compact }: {
   }
 
   if (editing && plan) {
-    return <PlanEditor plan={plan} entries={entries} docs={docs} onCancel={() => setEditing(false)}
-      onSave={async (change) => { await save(change); setEditing(false); }}
-      onDelete={async () => {
+    const fresh = freshId === plan.id;
+    return <PlanEditor plan={plan} entries={entries} docs={docs}
+      onCancel={async () => {
+        setEditing(false);
+        if (!fresh) return;
+        setFreshId(null);
+        setPlanId(null);
+        await api.deletePlan(plan.id).catch(() => undefined);
+        load();
+      }}
+      onSave={async (change) => { await save(change); setFreshId(null); setEditing(false); }}
+      onDelete={fresh ? undefined : async () => {
         if (!(await confirmDialog(t('Plan „{title}“ löschen? Einträge und Unterlagen bleiben.', { title: plan.title }), { confirmLabel: t('Löschen'), danger: true }))) return;
         try {
           await api.deletePlan(plan.id);
@@ -222,7 +234,7 @@ function PlanEditor({ plan, entries, docs, onSave, onCancel, onDelete }: {
   docs: CampaignDocument[];
   onSave: (change: Partial<ChapterPlan>) => Promise<void>;
   onCancel: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
 }) {
   const [title, setTitle] = useState(plan.title);
   const [number, setNumber] = useState(plan.sessionNumber ? String(plan.sessionNumber) : '');
@@ -338,7 +350,7 @@ function PlanEditor({ plan, entries, docs, onSave, onCancel, onDelete }: {
       <div className="row wrap" style={{ gap: 8 }}>
         <button type="button" className="btn small" disabled={busy} onClick={submit}>{t('Speichern')}</button>
         <button type="button" className="btn small ghost" onClick={onCancel}>{t('Abbrechen')}</button>
-        <button type="button" className="btn small danger outline" style={{ marginLeft: 'auto' }} onClick={onDelete}>{t('Plan löschen')}</button>
+        {onDelete && <button type="button" className="btn small danger outline" style={{ marginLeft: 'auto' }} onClick={onDelete}>{t('Plan löschen')}</button>}
       </div>
     </div>
   );

@@ -29,6 +29,27 @@ export function DatePollPage() {
   const [newDate, setNewDate] = useState('');
   const [triedDate, setTriedDate] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Beim Starten gleich die ersten Termine mitgeben (weitere schlagen alle danach vor)
+  const [firstDates, setFirstDates] = useState<string[]>([]);
+  const [firstDate, setFirstDate] = useState('');
+  const past = (d: string) => new Date(d).getTime() < Date.now();
+  const addFirst = () => {
+    if (!firstDate || past(firstDate)) return;
+    if (!firstDates.includes(firstDate)) setFirstDates([...firstDates, firstDate].sort());
+    setFirstDate('');
+  };
+  const start = () => run(async () => {
+    const dates = [...new Set([...firstDates, ...(firstDate && !past(firstDate) ? [firstDate] : [])])].sort();
+    let p = await api.createDatePoll(campaignId, note);
+    // Scheitert ein Termin, steht die Abstimmung trotzdem – mit den übrigen und der Meldung
+    for (const d of dates) {
+      try { p = await api.addDateOption(p.id, new Date(d).toISOString()); } catch (e) { setError(e); }
+    }
+    setFirstDates([]);
+    setFirstDate('');
+    return p;
+  });
+  const dateInputStyle = { width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule-strong)', background: 'var(--field)', color: 'var(--ink)', fontFamily: 'var(--text)', fontSize: 'calc(17px * var(--ts))' };
 
   const load = async () => {
     try {
@@ -100,7 +121,27 @@ export function DatePollPage() {
               <label htmlFor="poll-note">{t('Hinweis (optional)')}</label>
               <input id="poll-note" type="text" value={note} placeholder={t('z. B. Kapitel 14, gern am Wochenende')} onChange={(e) => setNote(e.target.value)} />
             </div>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.createDatePoll(campaignId, note))}>
+            <div className="field">
+              <label htmlFor="poll-first">{t('Erste Termine (optional)')}</label>
+              <div className="row" style={{ gap: 8 }}>
+                <input id="poll-first" type="datetime-local" value={firstDate} onChange={(e) => setFirstDate(e.target.value)} style={{ ...dateInputStyle, flex: 1 }} />
+                <button type="button" className="btn small outline" disabled={!firstDate || past(firstDate)} onClick={addFirst}>{t('Dazu')}</button>
+              </div>
+              {firstDate && past(firstDate) && <span className="small" role="alert" style={{ color: 'var(--siegel-text)' }}>{t('Der Termin liegt in der Vergangenheit.')}</span>}
+              {firstDates.length > 0 && (
+                <ul className="poll-first" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {firstDates.map((d) => (
+                    <li key={d} className="row between" style={{ minHeight: 48 }}>
+                      <span>{formatDateTime(new Date(d).toISOString())}</span>
+                      <button type="button" className="linklike small tap-link" aria-label={t('{date} entfernen', { date: formatDateTime(new Date(d).toISOString()) })}
+                        onClick={() => setFirstDates(firstDates.filter((x) => x !== d))}>{t('Entfernen')}</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <span className="muted small">{t('Weitere Termine können danach alle vorschlagen.')}</span>
+            </div>
+            <button type="button" className="btn" disabled={busy} onClick={start}>
               {t('Abstimmung starten')}
             </button>
           </section>
@@ -182,8 +223,7 @@ export function DatePollPage() {
             <h2>{t('Termin vorschlagen')}</h2>
             <div className="field">
               <label htmlFor="new-date">{t('Datum und Uhrzeit')}</label>
-              <input id="new-date" type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)}
-                style={{ width: '100%', minHeight: 46, padding: '0 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--rule-strong)', background: 'var(--field)', color: 'var(--ink)', fontFamily: 'var(--text)', fontSize: 'calc(17px * var(--ts))' }} />
+              <input id="new-date" type="datetime-local" value={newDate} onChange={(e) => setNewDate(e.target.value)} style={dateInputStyle} />
             </div>
             <Missing text={newDate ? null : t('Bitte zuerst Datum und Uhrzeit wählen.')} shown={triedDate} />
             <button type="button" className="btn small" disabled={busy}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { apiFor } from '../api/client';
 import { activeConnections, type Connection } from '../api/connections';
 import type { CampaignSummary, CharacterStatus } from '../api/types';
@@ -15,6 +15,7 @@ import { formatDate } from '../components/format';
 import { IconLock } from '../components/Icons';
 import { ENTRY_KIND } from '../components/ProposalCard';
 import { Divider, ErrorBox, Screen } from '../components/Screen';
+import { MissingHint, missingParts } from '../components/CharacterForm';
 import { t, tn } from '../i18n';
 
 /** Ein Charakter der Sammlung: Stammdaten, private Notizen, mitgebrachte Welt, Kampagnen und Abschriften. */
@@ -22,7 +23,10 @@ export function MyCharacterPage() {
   const { characterId = '' } = useParams();
   const navigate = useNavigate();
   const [c, setC] = useState(() => getCharacter(characterId));
-  const [editing, setEditing] = useState(false);
+  // Aus „Dein Charakter ist noch unvollständig“ (über die Kampagne): gleich im Formular, mit Hinweis
+  const [params] = useSearchParams();
+  const editNow = params.get('bearbeiten') === '1';
+  const [editing, setEditing] = useState(editNow);
   const [worldItem, setWorldItem] = useState<WorldItem | null | undefined>(undefined);
   const [notes, setNotes] = useState(c?.notes ?? '');
   const [busy, setBusy] = useState<string | null>(null);
@@ -99,6 +103,7 @@ export function MyCharacterPage() {
               ))}
             </div>
           </div>
+          {editNow && <MissingHint parts={missingParts({ name: c.name, summary: c.summary, portrait: !!c.portrait })} />}
           <CharacterEditor character={c} submitLabel={t('Speichern')} onSaved={() => setEditing(false)}
             secondary={{ label: t('Abbrechen'), onClick: () => setEditing(false) }} />
         </section>

@@ -114,6 +114,20 @@ export function CharacterForm({ campaign, member, onSaved, submitLabel, secondar
   );
 }
 
+/** Was am Charakter noch fehlt – für den Hinweis über dem Formular */
+export function missingParts(c: { name?: string | null; summary?: string | null; portrait?: boolean }): string[] {
+  return [
+    !c.name ? t('Name') : null,
+    !c.summary ? t('Kurzbeschreibung') : null,
+    !c.portrait ? t('Bild') : null
+  ].filter((x): x is string => !!x);
+}
+
+export function MissingHint({ parts }: { parts: string[] }) {
+  if (!parts.length) return null;
+  return <div className="notice" role="status">{t('Es fehlt noch: {list}.', { list: parts.join(', ') })}</div>;
+}
+
 /** Fehlt noch etwas Wichtiges am eigenen Charakter? (für den Hinweis auf der Übersicht) */
 export function characterIncomplete(m: Member | undefined): boolean {
   if (!m || m.role === 'gm') return false;

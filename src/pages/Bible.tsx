@@ -91,7 +91,13 @@ export function Bible() {
       )}
 
       {entries?.length === 0 && (
-        <div className="empty">{query ? t('Nichts gefunden für „{q}“.', { q: query }) : t('Hier steht noch nichts. Einträge entstehen aus freigegebenen Vorschlägen.')}</div>
+        <div className="empty">
+          {query ? t('Nichts gefunden für „{q}“.', { q: query })
+            : all && all.length > 0 ? t('In dieser Rubrik steht noch nichts.')
+            : campaign?.myRole === 'gm'
+              ? t('Noch leer. Nach jeder Runde schlägt Taleward Personen, Orte und Aufträge vor; was du übernimmst, steht hier. Du kannst auch gleich selbst etwas eintragen.')
+              : t('Noch leer. Hier steht, was deine Figur aus den Runden weiß, sobald die Spielleitung es freigibt.')}
+        </div>
       )}
 
       {/* Karten einer Reihe gleich hoch – sonst enden sie mit Löchern darunter */}
@@ -114,7 +120,8 @@ export function Bible() {
             }}
           />
         ) : (
-          <button type="button" className="btn dashed" onClick={() => setAdding(true)}>
+          // Leere Bibel: Selbst eintragen ist der nächste Schritt
+          <button type="button" className={all?.length === 0 ? 'btn' : 'btn dashed'} onClick={() => setAdding(true)}>
             {t('Eintrag von Hand hinzufügen')}
           </button>
         ))}

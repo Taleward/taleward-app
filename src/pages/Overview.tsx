@@ -123,7 +123,8 @@ export function Overview() {
               <span className="small">{t('Hier fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme neu zu. Lade alle über „Mitspielende einladen“ ein; wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst auf ihren Platz. Cloud-Freigaben und Stimmprofile richtet ihr hier neu ein.')}</span>
             </div>
           )}
-          {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
+          {/* Frische Kampagne der SL: „So fängst du an“ trägt den Hauptknopf, die eigene Zustimmung steht ruhiger daneben */}
+          {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} quiet={gm && sessions?.length === 0} />}
           {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
           {prep === 'today' && prepCard}
           <NowList items={[
@@ -198,7 +199,8 @@ export function Overview() {
 
           <div className="b">
           <Divider />
-          <Members campaign={campaign} onChanged={load} />
+          {/* Stimmprofil ist freiwillig: erst wenn die Zustimmung steht und (bei der SL) die erste Runde aufgenommen ist */}
+          <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && sessions?.length === 0)} />
           {me?.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
 
           {gm && <div id="invite" data-tour="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
@@ -244,7 +246,7 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => 
     { label: t('Mitspielende einladen'), detail: t('Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.'), done: players > 0,
       go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
     { label: t('Die Welt beschreiben'), detail: t('Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.'), done: !!campaign.worldInfo?.trim(),
-      go: () => document.getElementById('world')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+      go: () => window.dispatchEvent(new Event(EDIT_WORLD)) },
     { label: t('Erste Runde aufnehmen'), detail: t('Am Spielabend unter „Aufnahme“. Jede Person am Tisch stimmt dort selbst zu, danach schreibt der Server das Kapitel.'), done: false,
       go: () => navigate(p(`/k/${campaign.id}/aufnahme`)) }
   ];
@@ -283,7 +285,7 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => 
 }
 
 /** Eigene, stehende Zustimmung zu Aufnahmen in dieser Kampagne. Ohne Zustimmung: auffällig oben. */
-export function RecordingConsent({ campaign, onChanged }: { campaign: Campaign; onChanged: () => void }) {
+export function RecordingConsent({ campaign, onChanged, quiet }: { campaign: Campaign; onChanged: () => void; quiet?: boolean }) {
   const { user } = useAuth();
   // Frist und Cloud-Dienst gehören in den Wortlaut, den die Person bestätigt
   const info = useServerInfo();
@@ -341,7 +343,7 @@ export function RecordingConsent({ campaign, onChanged }: { campaign: Campaign; 
         </div>
       ) : (
         <>
-          <button type="button" className="btn" disabled={busy} onClick={() => change(true)}>{t('Ich stimme zu')}</button>
+          <button type="button" className={quiet ? 'btn outline' : 'btn'} disabled={busy} onClick={() => change(true)}>{t('Ich stimme zu')}</button>
           <p className="muted small" style={{ margin: 0 }}>
             {t('Ohne Zustimmung wird nicht aufgenommen, solange du am Tisch sitzt.')}
           </p>
@@ -350,6 +352,9 @@ export function RecordingConsent({ campaign, onChanged }: { campaign: Campaign; 
     </section>
   );
 }
+
+/** „Los: Die Welt beschreiben“ öffnet gleich das Formular */
+const EDIT_WORLD = 'taleward:edit-world';
 
 export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved: (c: Campaign) => void }) {
   const gm = campaign.myRole === 'gm';
@@ -384,6 +389,19 @@ export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved: 
     try { if (next) localStorage.setItem(closedKey, '1'); else localStorage.removeItem(closedKey); } catch { /* egal */ }
   };
   const long = paragraphs.length > 1 || (paragraphs[0]?.length ?? 0) > 280;
+  useEffect(() => {
+    if (!gm) return;
+    const open = () => {
+      setEditing(true);
+      window.setTimeout(() => {
+        const el = document.getElementById('w-info');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el?.focus({ preventScroll: true });
+      }, 50);
+    };
+    window.addEventListener(EDIT_WORLD, open);
+    return () => window.removeEventListener(EDIT_WORLD, open);
+  }, [gm]);
 
   const save = async () => {
     setBusy(true);
@@ -490,7 +508,7 @@ export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved: 
   );
 }
 
-function Members({ campaign, onChanged }: { campaign: Campaign; onChanged: () => void }) {
+function Members({ campaign, onChanged, voiceHint }: { campaign: Campaign; onChanged: () => void; voiceHint: boolean }) {
   const { user } = useAuth();
   const me = campaign.members.find((m) => m.userId === user?.id);
   const gm = me?.role === 'gm';
@@ -554,7 +572,7 @@ function Members({ campaign, onChanged }: { campaign: Campaign; onChanged: () =>
         </details>
       )}
       {/* Eigener Charakter und Umzugs-Haken: über die eigene Zeile oben (Charakterseite) */}
-      {me && !isMusterUrl(currentConnection().baseUrl) && <VoiceProfileHint />}
+      {me && voiceHint && !isMusterUrl(currentConnection().baseUrl) && <VoiceProfileHint />}
       {seat && <OpenSeatDialog campaign={campaign} seat={seat} onClose={() => setSeat(null)} onDone={() => { setSeat(null); onChanged(); }} />}
     </section>
   );
@@ -788,7 +806,8 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
       items.push({
         key: 's-' + s.id,
         label: t('Kapitel {n}', { n: s.number }) + ' · ' + (PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state),
-        to: p(`/s/${s.id}`)
+        // Fertig geschrieben: gleich zur Prüfung, nicht erst über den Fortschritt
+        to: p(s.state === 'awaiting_review' ? `/s/${s.id}/freigabe` : `/s/${s.id}`)
       });
     }
     if (campaign.openCharacterProposals) {
@@ -804,7 +823,7 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
     }
   }
   if (characterIncomplete(me)) {
-    items.push({ key: 'me', label: t('Dein Charakter ist noch unvollständig'), to: p(`/k/${campaign.id}/charakter/${me!.id}`) });
+    items.push({ key: 'me', label: t('Dein Charakter ist noch unvollständig'), to: p(`/k/${campaign.id}/charakter/${me!.id}?bearbeiten=1`) });
   }
   if (campaign.datePollNeedsMyVote) {
     items.push({ key: 'poll', label: t('Nächste Runde') + ' · ' + t('Abstimmen'), to: p(`/k/${campaign.id}/termin`) });

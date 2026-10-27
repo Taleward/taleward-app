@@ -139,7 +139,6 @@ function ConnectionCard({ conn }: { conn: Connection }) {
     <section className="card">
       <span className="overline">{conn.operator ?? t('Server')}</span>
       <h2>{conn.name}</h2>
-      <div className="muted small" style={{ wordBreak: 'break-all' }}>{conn.baseUrl}</div>
       {isUnencrypted(conn.baseUrl) && (
         <div className="notice">
           <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
@@ -147,7 +146,12 @@ function ConnectionCard({ conn }: { conn: Connection }) {
         </div>
       )}
       {conn.user && <div className="small">{t('Angemeldet als {name}', { name: conn.user.displayName })} ({conn.user.username})</div>}
-      {valid && conn.expiresAt && <div className="muted small">{t('Anmeldung gültig bis {date}', { date: formatDateFull(conn.expiresAt) })}</div>}
+      {/* Technisches nur auf Wunsch */}
+      <details className="more">
+        <summary className="small">{t('Verbindung')}</summary>
+        <div className="muted small" style={{ wordBreak: 'break-all' }}>{conn.baseUrl}</div>
+        {valid && conn.expiresAt && <div className="muted small">{t('Anmeldung gültig bis {date}', { date: formatDateFull(conn.expiresAt) })}</div>}
+      </details>
       <ServerLegal conn={conn} />
       {isOutdated(conn.apiVersion) && (
         <div className="notice">

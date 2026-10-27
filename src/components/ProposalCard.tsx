@@ -185,7 +185,13 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
               </button>
             </div>
           )}
-          {p.visibilityReason && !(p.publicSuggested && secretEntry) && <div className="muted small">{t('Warum so eingestuft:')} {p.visibilityReason}</div>}
+          {/* Begründung nur auf Wunsch – die Karte bleibt kurz */}
+          {p.visibilityReason && !(p.publicSuggested && secretEntry) && (
+            <details className="more">
+              <summary className="small">{t('Warum so eingestuft?')}</summary>
+              <div className="muted small">{p.visibilityReason}</div>
+            </details>
+          )}
           {ev && (
             <div className="quote">
               {t('„{q}“', { q: ev.quote.replace(/^[„"]|[“"]$/g, '') })}{' '}
