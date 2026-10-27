@@ -1,4 +1,4 @@
-From 8a4f6f3c2c4b1d9e0f7a6b5c4d3e2f1a0b9c8d7e Mon Sep 17 00:00:00 2001
+From 0b99c819d74a6781a415ec395f5a49395909eccc Mon Sep 17 00:00:00 2001
 From: "Tinkerworks (Benjamin)"
  <121437138+Tinkerworkss@users.noreply.github.com>
 Date: Tue, 27 Oct 2026 09:23:41 +0100
@@ -10,7 +10,7 @@ Subject: [PATCH] Fassung 0.30.2
  2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/package-lock.json b/package-lock.json
-index a35ee3c..0000000 100644
+index a35ee3c..0c70df7 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -1,5 +1,5 @@
@@ -28,7 +28,7 @@ index a35ee3c..0000000 100644
        "license": "AGPL-3.0-only",
        "dependencies": {
 diff --git a/package.json b/package.json
-index 885c925..0000000 100644
+index 885c925..6805e86 100644
 --- a/package.json
 +++ b/package.json
 @@ -2,5 +2,5 @@
