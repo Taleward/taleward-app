@@ -1,0 +1,35 @@
+From 3fc477ad8117b3f1594155f8d5e1ef53b2b61661 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 09:27:07 +0100
+Subject: [PATCH] Schnittstelle 0.4.24: eine wartende Aufnahme ohne Guthaben
+
+---
+ docs/session-chronik-api.yaml | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 63f4bc8..1eca8ee 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -238,4 +238,6 @@ info:
+     Änderungen in 0.4.24 (Stimmvorschläge für Gäste): Speaker.suggestedGuestName – der Server schlägt eine Stimme einem
+     Gast der Runde vor (z. B. aus der Vorstellungsrunde). Ältere Apps sehen keinen Vorschlag für diese Stimme.
++    Außerdem 409 `budget_recording_waiting` bei POST /sessions/{id}/uploads: Mit Einzelzahler und leerem Guthaben
++    wartet höchstens eine Aufnahme je Konto. Ältere Apps zeigen die Meldung und behalten die Aufnahme wie bei jedem 409.
+ 
+ servers:
+@@ -1931,5 +1933,12 @@ paths:
+           description: |
+             Nicht alle Anwesenden haben eingewilligt (`consent_missing`), eine App-Zustimmung wurde inzwischen
+-            widerrufen (`consent_revoked`), oder es läuft bereits ein anderer Upload
++            widerrufen (`consent_revoked`), oder es läuft bereits ein anderer Upload.
++            Ab 0.4.24 `budget_recording_waiting`: Mit Einzelzahler und Guthaben ≤ 0 wartet von diesem Konto schon eine
++            Aufnahme auf Verarbeitung; eine weitere nimmt der Server erst an, wenn sie verarbeitet oder gelöscht ist.
++            Geprüft wird hier, vor dem ersten Teil, damit nichts umsonst übertragen wird. details.sessionId = die
++            wartende Runde (nur wenn das Konto sie sehen darf, sonst fehlt das Feld). `message` sachlich und ohne Kaufweg,
++            z. B. „Ohne Guthaben wartet schon eine Aufnahme. Eine weitere geht erst, wenn sie verarbeitet oder gelöscht
++            ist. Wende dich an die Verwaltung deines Servers.“ (Store-Regeln: kein Link, keine Preise, keine Aufforderung
++            zum Aufladen.) Die App behält die Aufnahme auf dem Gerät, sagt das dazu und wiederholt nicht von selbst.
+           content:
+             application/json:
