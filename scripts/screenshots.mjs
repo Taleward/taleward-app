@@ -33,7 +33,7 @@ const L = {
     analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund' },
   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
     accept: 'Accept', publish: 'Publish chapter', invite: 'Invite players', qr: 'Show QR code',
-    all: 'All (', world: 'Brought-along world', mara: '00000000-0000-4000-8000-000000000801',
+    all: 'All (', world: 'Character lore', mara: '00000000-0000-4000-8000-000000000801',
     played: 'Played', search: 'Sefa Mor', note: 'Ohm Tessel knew Mara\'s mother. Only say so if she asks.\nBreak after the bridge.', hint: 'She did not flee. She left before they could come for her.',
     analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory' }
 };
@@ -49,11 +49,13 @@ const GM = [16, 17, 18];
 // 19–22: Auswertung von Charakterbögen und Hintergründen (Schnittstelle 0.4.18) – Charakterseite der Spielerin mit Stand,
 // „Jetzt dran“ der SL mit aufgeklappter Bitte, „Mitgebrachte Welt“ mit Herkunft, „Was mit deinen Daten passiert“
 const ANALYSIS = [19, 20, 21, 22];
+// Website (Wunsch 27.10.): jede Aufnahme in beiden Sprachen und beiden Themen
+const WEB = [1, 2, 4, 5, 6, 7, 8, 9, 10, 12, ...START, 16, 17, 18, 19, 21, 22];
 const RUNS = [
-  { lang: 'de', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM, ...ANALYSIS] },
-  { lang: 'en', theme: 'pergament', shots: [1, 2, 3, 4, 5, 6, 7, 8, 9, ...CHAR, ...START, ...GM, ...ANALYSIS] },
-  { lang: 'de', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM, ...ANALYSIS] },
-  { lang: 'en', theme: 'spielabend', shots: [1, 7, ...CHAR, ...START, ...GM, ...ANALYSIS] }
+  { lang: 'de', theme: 'pergament', shots: [...WEB, 11, 13, 14, 20] },
+  { lang: 'en', theme: 'pergament', shots: [...WEB, 11, 13, 14, 20] },
+  { lang: 'de', theme: 'spielabend', shots: WEB },
+  { lang: 'en', theme: 'spielabend', shots: WEB }
 ].map((r) => (process.env.SHOTS ? { ...r, shots: r.shots.filter((n) => process.env.SHOTS.split(',').map(Number).includes(n)) } : r));
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -138,17 +140,30 @@ for (const run of RUNS) {
   }, SERVER, t.cid);
   await go(`${k}/aufnahme`); await shot(2);
   await go(`${s}/stimmen`); await shot(4);
+  // Kapitel prüfen hat am Handy Reiter; die feste Leiste darf den Anfang nicht verdecken
+  const below = (el) => {
+    el?.scrollIntoView({ block: 'start' });
+    const bar = document.querySelector('.review-steps');
+    document.querySelector('.screen-main').scrollBy(0, -((bar ? bar.getBoundingClientRect().bottom : 0) - (el ? el.getBoundingClientRect().top : 0) + 12));
+  };
+  await page.evaluate(`window.__below = ${below.toString()}`);
   await go(`${s}/freigabe`);
-  await page.evaluate(() => document.querySelector('details.card summary')?.click());
+  await page.evaluate(() => document.getElementById('tab-proposals')?.click()); await wait(500);
+  await page.evaluate(() => {
+    const card = [...document.querySelectorAll('.review-proposals .card-title')].find((c) => c.textContent.includes('Iria Sehl'))?.closest('.card');
+    card?.querySelector('details:not([open]) > summary')?.click();
+    window.__below(card);
+  });
   await shot(5);
   if (run.shots.includes(18)) {
     // Zweiten Absatz antippen und einen Hinweis schreiben (abgeschickt wird nichts)
+    await page.evaluate(() => document.getElementById('tab-chapter')?.click()); await wait(400);
     await page.evaluate(() => { const d = document.querySelector('details.card'); if (d) d.open = true; }); await wait(400);
     await page.evaluate(() => document.querySelectorAll('.recap.pickable')[1]?.click()); await wait(500);
     const field = await page.$('.paragraph-hint textarea, .paragraph-hint input');
     if (!field) throw new Error('Hinweisfeld fehlt');
     await field.type(t.hint);
-    await page.evaluate(() => { document.querySelectorAll('.recap.pickable')[1]?.scrollIntoView({ block: 'start' }); document.querySelector('.screen-main').scrollBy(0, -12); });
+    await page.evaluate(() => window.__below(document.querySelectorAll('.recap.pickable')[1]));
     await shot(18);
   }
   await go(k); await click(t.invite); await wait(600); await click(t.qr); await wait(400);
