@@ -51,6 +51,26 @@ function termsVersion(): number {
 }
 const termsOutdated = () => (account.termsAcceptedVersion ?? 0) < termsVersion();
 
+/**
+ * Registrierungsart und SL-Freigabe des Testservers (0.4.23). Zum Ausprobieren in localStorage setzen und neu laden:
+ * „taleward.mock.registration“ = invite_only | code | open | closed (allgemeiner Code: TAVERNE-2026),
+ * „taleward.mock.gmApproval“ = required, „taleward.mock.gmPermission“ (unten), „taleward.mock.gmDecision“ = granted | rejected (entscheidet eine offene
+ * Anfrage beim nächsten Laden des Profils). Ein neu angelegtes Konto startet ohne Freigabe.
+ */
+const mockSetting = (key: string): string | null => { try { return localStorage.getItem(`taleward.mock.${key}`); } catch { return null; } };
+const registrationSetting = () => {
+  const r = mockSetting('registration');
+  return r === 'code' || r === 'open' || r === 'closed' ? r : 'invite_only';
+};
+const gmRequired = () => mockSetting('gmApproval') === 'required';
+const MOCK_REGISTRATION_CODE = 'TAVERNE-2026';
+// „taleward.mock.gmPermission“ = none | pending | rejected: Startstand des Test-Kontos (sonst granted)
+{
+  const g = mockSetting('gmPermission');
+  if (g === 'none' || g === 'pending' || g === 'rejected') account.gmPermission = g;
+}
+let emailPendingSince = 0;
+
 function authed(req: Request): boolean {
   return (req.headers.get('Authorization') ?? '').startsWith(`Bearer ${TOKEN}`);
 }
@@ -622,9 +642,10 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.22',
+      apiVersion: nachbar ? '0.3.9' : '0.4.23',
       serverId: nachbar ? undefined : 'testserver',
-      registration: 'invite_only',
+      registration: nachbar ? 'invite_only' : registrationSetting(),
+      gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
       authMethods: ['password'],
       privacyPolicyUrl: null,
       // 0.4.22: Impressum und Nutzungsbedingungen des Betreibers
@@ -652,7 +673,7 @@ export const handlers = [
 
   http.post(`${B}/auth/register`, async ({ request }) => {
     await delay(300);
-    const body = (await request.json()) as { inviteCode?: string; username?: string; displayName?: string; password?: string; acceptPrivacy?: boolean; ageConfirmed?: boolean; registrationToken?: string; acceptTerms?: boolean; termsVersion?: number };
+    const body = (await request.json()) as { inviteCode?: string; registrationCode?: string; username?: string; displayName?: string; password?: string; acceptPrivacy?: boolean; ageConfirmed?: boolean; registrationToken?: string; acceptTerms?: boolean; termsVersion?: number };
     if (!body.acceptPrivacy || !body.ageConfirmed) return err(400, 'consent_required', 'Bitte Datenschutzhinweise und Alter bestätigen.');
     // 0.4.22: Nutzungsbedingungen (nur der Testserver, der Nachbarverein ist älter)
     if (new URL(request.url).hostname !== NACHBAR_HOST) {
@@ -671,9 +692,20 @@ export const handlers = [
       if (!body.password || body.password.length < 8) return err(400, 'weak_password', 'Das Passwort braucht mindestens 8 Zeichen.');
     }
     const host = hostKey(request);
-    if (!campaigns.some((c) => (c.host ?? 'local') === host && c.inviteCode.toUpperCase() === (body.inviteCode ?? '').trim().toUpperCase())) {
-      return err(404, 'invite_invalid', 'Dieser Einladungscode ist ungültig oder abgelaufen.');
+    // 0.4.23: Registrierungsarten (der Nachbarverein kennt nur Einladungen)
+    const reg = host === 'local' ? registrationSetting() : 'invite_only';
+    if (reg === 'closed') return err(403, 'registration_closed', 'Auf diesem Server gibt es gerade keine neuen Konten.');
+    if (body.registrationCode && reg === 'code') {
+      if (body.registrationCode.trim().toUpperCase() !== MOCK_REGISTRATION_CODE) return err(400, 'registration_code_invalid', 'Dieser Registrierungscode stimmt nicht.');
+    } else if (body.inviteCode || reg === 'invite_only') {
+      if (!campaigns.some((c) => (c.host ?? 'local') === host && c.inviteCode.toUpperCase() === (body.inviteCode ?? '').trim().toUpperCase())) {
+        return err(404, 'invite_invalid', 'Dieser Einladungscode ist ungültig oder abgelaufen.');
+      }
+    } else if (reg === 'code') {
+      return err(400, 'registration_code_required', 'Bitte den Code eingeben.');
     }
+    // Neues Konto: ohne SL-Freigabe (nur zählt, wenn der Server sie verlangt)
+    if (host === 'local') Object.assign(account, { gmPermission: 'none', gmDecidedAt: null });
     // Testmodus: alle „Server“ teilen denselben Benutzer
     return HttpResponse.json({ accessToken: TOKEN, expiresAt: new Date(Date.now() + 864e5 * 30).toISOString(), user: meUser() }, { status: 201 });
   }),
@@ -735,7 +767,25 @@ export const handlers = [
     return err(403, 'terms_required', 'Die Nutzungsbedingungen haben sich geändert. Bis du zustimmst, kannst du nur lesen.');
   }),
 
-  http.get(`${B}/me`, () => HttpResponse.json(meUser())),
+  http.get(`${B}/me`, () => {
+    // Testmodus: der Bestätigungslink gilt nach ein paar Sekunden als angeklickt, eine offene Anfrage wird entschieden
+    if (account.emailPending && Date.now() - emailPendingSince > 5000) Object.assign(account, { email: account.emailPending, emailPending: null });
+    const decision = mockSetting('gmDecision');
+    if (account.gmPermission === 'pending' && (decision === 'granted' || decision === 'rejected')) {
+      Object.assign(account, { gmPermission: decision, gmDecidedAt: new Date().toISOString() });
+    }
+    return HttpResponse.json(meUser());
+  }),
+
+  // 0.4.23: SL-Freigabe anfragen
+  http.post(`${B}/me/gm-request`, async () => {
+    await delay(300);
+    if (!gmRequired() || account.gmPermission === 'granted') return HttpResponse.json(meUser());
+    if (account.gmPermission === 'rejected') return err(409, 'gm_request_closed', 'Deine Anfrage wurde abgelehnt. Eine neue geht erst, wenn die Verwaltung sie wieder erlaubt.');
+    if (!account.email) return err(409, 'email_unverified', 'Bitte zuerst eine E-Mail-Adresse eintragen und bestätigen.');
+    account.gmPermission = 'pending';
+    return HttpResponse.json(meUser(), { status: 202 });
+  }),
 
   http.put(`${B}/me/terms`, async ({ request }) => {
     const body = (await request.json().catch(() => ({}))) as { accept?: boolean; version?: number };
@@ -749,6 +799,7 @@ export const handlers = [
     const { email } = (await request.json()) as { email?: string };
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return err(400, 'invalid_email', 'Das ist keine gültige E-Mail-Adresse.');
     account.emailPending = email.trim();
+    emailPendingSince = Date.now();
     return new HttpResponse(null, { status: 202 });
   }),
 
@@ -853,6 +904,9 @@ export const handlers = [
   }),
 
   http.post(`${B}/campaigns`, async ({ request }) => {
+    if (hostKey(request) === 'local' && gmRequired() && account.gmPermission !== 'granted') {
+      return err(403, 'gm_permission_required', 'Eigene Kampagnen legst du hier erst nach der SL-Freigabe an.');
+    }
     const body = (await request.json()) as { title: string; description?: string; language?: 'de' | 'en'; system?: MockCampaign['system']; systemName?: string | null };
     const c: MockCampaign = {
       id: 'c-' + crypto.randomUUID().slice(0, 8),
@@ -1159,6 +1213,9 @@ export const handlers = [
   }),
 
   http.post(`${B}/imports`, async ({ request }) => {
+    if (hostKey(request) === 'local' && gmRequired() && account.gmPermission !== 'granted') {
+      return err(403, 'gm_permission_required', 'Eigene Kampagnen legst du hier erst nach der SL-Freigabe an.');
+    }
     const { fileName, sizeBytes } = (await request.json()) as { fileName: string; sizeBytes: number };
     if (!fileName?.toLowerCase().endsWith('.zip')) return err(400, 'invalid_input', 'Bitte eine Datei taleward-kampagne-….zip wählen.');
     if (sizeBytes > 1024 ** 3) return HttpResponse.json({ code: 'import_too_large', message: 'Die Datei ist zu groß.', details: { maxBytes: 1024 ** 3 } }, { status: 413 });

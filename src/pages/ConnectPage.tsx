@@ -19,6 +19,7 @@ import { Divider, ErrorBox } from '../components/Screen';
 import { MusterTry } from '../components/Muster';
 import { isMusterUrl } from '../api/muster';
 import { Missing } from '../components/Missing';
+import { codeRequired, registrationCodes, registrationMode, type RegistrationMode } from '../auth/serverAccess';
 import { LanguageSwitch, getLang, t } from '../i18n';
 
 const DEFAULT_SERVER: string = import.meta.env.VITE_API_BASE ?? '';
@@ -117,10 +118,10 @@ export function ConnectPage() {
     }
   };
 
-  const finish = async (conn: Connection) => {
-    if (code.trim()) {
+  const finish = async (conn: Connection, invite: string | null) => {
+    if (invite) {
       // Nach einem Adresswechsel ist man meist schon dabei – dann einfach zur Kampagnenliste
-      const c = await apiFor(conn).joinCampaign(code.trim()).catch((e) => { if (moved) return null; throw e; });
+      const c = await apiFor(conn).joinCampaign(invite).catch((e) => { if (moved) return null; throw e; });
       navigate(c ? `/v/${conn.id}/k/${c.id}/willkommen` : '/', { replace: true });
     } else {
       navigate('/', { replace: true });
@@ -138,9 +139,13 @@ export function ConnectPage() {
       const fields = { baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, serverId: info.serverId ?? null };
       // Neue Adresse eines bekannten Servers: erst anmelden, ohne die gespeicherte Verbindung anzufassen
       const probe: Connection = moved ? { ...fields, id: '_probe', user: null } : saveConnection({ ...fields, user: null });
+      // Registrieren: Einladung oder allgemeiner Registrierungscode (ab 0.4.23); beim Anmelden ist ein Code immer eine Einladung
+      const codes = mode === 'login'
+        ? registrationCodes('invite_only', code, true)
+        : await codesFor(regMode, code, baseUrl, !!preview);
       const res = mode === 'login'
         ? await apiFor(probe).login(username.trim(), password)
-        : await apiFor(probe).register({ inviteCode: code.trim(), username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true, ...termsConsent(info) });
+        : await apiFor(probe).register({ ...codes, username: username.trim(), displayName: displayName.trim(), password, acceptPrivacy: true, ageConfirmed: true, ...termsConsent(info) });
       const login = { token: res.accessToken, expiresAt: res.expiresAt, user: res.user };
       let conn: Connection;
       if (moved && adoptsMovedConnection(moved.user?.id, res.user.id)) {
@@ -151,7 +156,7 @@ export function ConnectPage() {
         // Anderes Konto oder kein bekannter Server: eigene Verbindung, die alte bleibt, wie sie war
         conn = saveConnection({ ...fields, ...login });
       }
-      await finish(conn);
+      await finish(conn, codes.inviteCode ?? null);
     } catch (err) {
       setError(err);
       // Fassung hat sich gerade geändert: neue Angaben holen, Haken neu setzen lassen
@@ -163,12 +168,13 @@ export function ConnectPage() {
     }
   };
 
-  const canRegister = info?.registration === 'invite_only';
+  const regMode = registrationMode(info);
+  const canRegister = !!regMode && regMode !== 'closed';
   const pwMismatch = mode === 'register' && password2.length > 0 && password !== password2;
   // Was vor dem Anmelden noch fehlt – der Knopf bleibt antippbar und sagt es dann
   const missing = mode === 'login'
     ? (!username.trim() ? t('Bitte den Benutzernamen eingeben.') : !password ? t('Bitte das Passwort eingeben.') : null)
-    : !code.trim() ? t('Bitte den Einladungscode eingeben.')
+    : !code.trim() && codeRequired(regMode) ? (regMode === 'code' ? t('Bitte den Code eingeben.') : t('Bitte den Einladungscode eingeben.'))
     : !displayName.trim() ? t('Bitte deinen Namen eingeben.')
     : !username.trim() ? t('Bitte einen Benutzernamen eingeben.')
     : password.length < 8 ? t('Das Passwort braucht mindestens 8 Zeichen.')
@@ -297,10 +303,7 @@ export function ConnectPage() {
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {mode === 'register' && (
                 <>
-                  <div className="field">
-                    <label htmlFor="code">{t('Einladungscode')}</label>
-                    <input id="code" type="text" autoCapitalize="characters" value={code} onChange={(e) => setCode(e.target.value)} />
-                  </div>
+                  <CodeField id="code" mode={regMode} fromInvite={!!preview} operator={info.operator} value={code} onChange={setCode} />
                   <div className="field">
                     <label htmlFor="display">{t('Dein Name (sehen die anderen am Tisch)')}</label>
                     <input id="display" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
@@ -349,7 +352,9 @@ export function ConnectPage() {
               <ErrorBox error={error} />
               <Missing text={missing} shown={tried} />
               <button className="btn" type="submit" disabled={busy}>
-                {busy ? t('Einen Moment …') : mode === 'login' ? (code ? t('Anmelden und beitreten') : t('Anmelden')) : t('Konto anlegen und beitreten')}
+                {busy ? t('Einen Moment …')
+                  : mode === 'login' ? (code ? t('Anmelden und beitreten') : t('Anmelden'))
+                  : code.trim() && (regMode !== 'code' || preview) ? t('Konto anlegen und beitreten') : t('Konto anlegen')}
               </button>
               {MOCK && <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>{t('Testmodus: beliebiger Benutzername und beliebiges Passwort.')}</p>}
             </form>
@@ -421,7 +426,9 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [tried, setTried] = useState(false);
-  const missing = !code.trim() ? t('Bitte den Einladungscode eingeben.')
+  const regMode = registrationMode(info);
+  const fromInvite = !!pending.inviteCode && code.trim() === pending.inviteCode.trim();
+  const missing = !code.trim() && codeRequired(regMode) ? (regMode === 'code' ? t('Bitte den Code eingeben.') : t('Bitte den Einladungscode eingeben.'))
     : !displayName.trim() ? t('Bitte deinen Namen eingeben.')
     : !privacy ? t('Bitte bestätige, dass du die Datenschutzhinweise gelesen hast.')
     : info.termsVersion && !info.termsUrl ? t('Der Server nennt keine Adresse für seine Nutzungsbedingungen. Ein Konto geht hier erst, wenn sie lesbar sind – sag deiner SL Bescheid.')
@@ -436,14 +443,19 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
     setError(null);
     try {
       const probe = saveConnection({ baseUrl: pending.baseUrl, name: info.name, operator: info.operator, apiVersion: info.apiVersion, token: null, expiresAt: null, user: null });
+      const codes = await codesFor(regMode, code, pending.baseUrl, fromInvite);
       const res = await apiFor(probe).register({
-        inviteCode: code.trim(), registrationToken: pending.registrationToken, displayName: displayName.trim(), acceptPrivacy: true, ageConfirmed: true,
+        ...codes, registrationToken: pending.registrationToken, displayName: displayName.trim(), acceptPrivacy: true, ageConfirmed: true,
         ...termsConsent(info)
       });
       const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
       clearPendingRegister();
-      const c = await apiFor(conn).joinCampaign(code.trim());
-      navigate(`/v/${conn.id}/k/${c.id}/willkommen`, { replace: true });
+      if (codes.inviteCode) {
+        const c = await apiFor(conn).joinCampaign(codes.inviteCode);
+        navigate(`/v/${conn.id}/k/${c.id}/willkommen`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (e) {
       setError(e);
     } finally {
@@ -459,10 +471,7 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
           ? t('Angemeldet über {name} als {email}. Ein Passwort brauchst du nicht.', { name: providerLabel(pending.provider), email: pending.email })
           : t('Angemeldet über {name}. Ein Passwort brauchst du nicht.', { name: providerLabel(pending.provider) })}
       </p>
-      <div className="field">
-        <label htmlFor="reg-code">{t('Einladungscode')}</label>
-        <input id="reg-code" type="text" autoCapitalize="characters" value={code} onChange={(e) => setCode(e.target.value)} />
-      </div>
+      <CodeField id="reg-code" mode={regMode} fromInvite={fromInvite} operator={info.operator} value={code} onChange={setCode} />
       <div className="field">
         <label htmlFor="reg-name">{t('Dein Name (sehen die anderen am Tisch)')}</label>
         <input id="reg-name" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
@@ -490,7 +499,7 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
       <ErrorBox error={error} />
       <Missing text={missing} shown={tried} />
       <button type="button" className="btn" disabled={busy} onClick={submit}>
-        {busy ? t('Einen Moment …') : t('Konto anlegen und beitreten')}
+        {busy ? t('Einen Moment …') : code.trim() && (regMode !== 'code' || fromInvite) ? t('Konto anlegen und beitreten') : t('Konto anlegen')}
       </button>
     </section>
   );
@@ -517,4 +526,37 @@ export function oidcErrorText(code: string | null): string {
 /** Zustimmung zu den Nutzungsbedingungen mitschicken, wenn der Server welche hat (ab 0.4.22) */
 function termsConsent(info: ServerInfo): { acceptTerms?: true; termsVersion?: number } {
   return info.termsUrl && info.termsVersion ? { acceptTerms: true, termsVersion: info.termsVersion } : {};
+}
+
+/**
+ * Codefeld beim Registrieren, je nach Registrierungsart des Servers (ab 0.4.23): Einladung (Pflicht), Einladung oder
+ * allgemeiner Code des Betreibers, oder freiwillig (offener Server).
+ */
+function CodeField({ id, mode, fromInvite, operator, value, onChange }: {
+  id: string; mode: RegistrationMode | null; fromInvite: boolean; operator: string; value: string; onChange: (v: string) => void;
+}) {
+  const label = fromInvite || mode === 'invite_only' || !mode ? t('Einladungscode')
+    : mode === 'code' ? t('Einladungs- oder Registrierungscode')
+    : t('Einladungscode (wenn du einen hast)');
+  const hint = fromInvite ? null
+    : mode === 'code' ? t('Den Code bekommst du von deiner SL oder von {operator}. Mit dem Code des Servers legst du nur dein Konto an, ohne Kampagne.', { operator })
+    : mode === 'open' ? t('Ohne Einladung legst du nur dein Konto an. Mitspielen geht danach mit einer Einladung deiner SL.')
+    : null;
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="text" autoCapitalize="characters" value={value} onChange={(e) => onChange(e.target.value)} aria-describedby={hint ? `${id}-hint` : undefined} />
+      {hint && <span id={`${id}-hint`} className="muted small">{hint}</span>}
+    </div>
+  );
+}
+
+/**
+ * Welcher Code ist es? Bei `code` kann ein getippter Code eine Kampagneneinladung sein (dann gleich beitreten) oder der
+ * allgemeine Registrierungscode. Die Einladungsvorschau sagt es, ohne etwas anzulegen.
+ */
+async function codesFor(mode: RegistrationMode | null, code: string, baseUrl: string, knownInvite: boolean) {
+  if (mode !== 'code' || knownInvite || !code.trim()) return registrationCodes(mode, code, knownInvite);
+  const invite = await fetchInvitePreview(baseUrl, code.trim()).catch(() => null);
+  return registrationCodes(mode, code, !!invite);
 }

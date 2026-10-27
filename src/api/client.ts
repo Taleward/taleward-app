@@ -232,12 +232,14 @@ function makeApi(conn: () => Connection) {
   me: () => request<User>('GET', '/me'),
   info: () => request<ServerInfo>('GET', '/info').then(withSafeLinks),
   /** acceptTerms und termsVersion ab 0.4.22, wenn der Server Nutzungsbedingungen meldet */
-  register: (data: ({ inviteCode: string; username: string; displayName: string; password: string; acceptPrivacy: true; ageConfirmed: true }
-    | { inviteCode: string; registrationToken: string; displayName: string; acceptPrivacy: true; ageConfirmed: true })
-    & { acceptTerms?: true; termsVersion?: number }) =>
+  register: (data: ({ username: string; displayName: string; password: string; acceptPrivacy: true; ageConfirmed: true }
+    | { registrationToken: string; displayName: string; acceptPrivacy: true; ageConfirmed: true })
+    & { inviteCode?: string; registrationCode?: string; acceptTerms?: true; termsVersion?: number }) =>
     request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/register', { body: data }),
   /** Neuer Fassung der Nutzungsbedingungen zustimmen (ab 0.4.22) */
   acceptTerms: (version: number) => request<User>('PUT', '/me/terms', { body: { accept: true, version } }),
+  /** SL-Freigabe anfragen (ab 0.4.23): 202 pending, 200 schon erledigt; 409 email_unverified / gm_request_closed */
+  requestGm: () => request<User>('POST', '/me/gm-request'),
   exportMe: () => request<Blob>('GET', '/me/export'),
   /** Konten mit Passwort: { password }, ohne Passwort: { confirmUsername } */
   deleteMe: (confirm: { password: string } | { confirmUsername: string }) => request<void>('DELETE', '/me', { body: confirm }),

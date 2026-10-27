@@ -1,5 +1,8 @@
 import { listCharacters } from '../characters/store';
-import { TermsReminder } from '../components/Terms';
+import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
+import { GmRequest } from '../components/GmRequest';
+import { gmState, termsOutdated } from '../auth/serverAccess';
+import type { ServerInfo, User } from '../api/types';
 import { serverHasCharacters } from '../characters/sync';
 import { LinkInput } from '../components/LinkInput';
 import { NotifyPrompt } from '../notify/NotifySettings';
@@ -11,9 +14,9 @@ import type { CampaignSummary } from '../api/types';
 import { NewDot } from '../components/Screen';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
 import { getLang, t, tn } from '../i18n';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { apiFor, fetchServerInfo } from '../api/client';
+import { apiFor, fetchServerInfo, isApiError } from '../api/client';
 import { isMusterUrl } from '../api/muster';
 import { offlineSince } from '../api/readCopy';
 import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
@@ -39,6 +42,8 @@ function newSummary(c: CampaignSummary): string {
 const SEAL_COLORS = ['var(--tinte)'];
 
 type Entry = { conn: Connection; c: CampaignSummary };
+/** Was das Konto auf einem Server darf (Nutzungsbedingungen, SL-Freigabe) – nur geladen, wenn der Server danach fragt */
+type Access = { info: ServerInfo; user: User | null };
 
 export function Campaigns() {
   const { active, connections } = useAuth();
@@ -54,7 +59,18 @@ export function Campaigns() {
   const [systemName, setSystemName] = useState('');
   const [actionError, setActionError] = useState<unknown>(null);
   const [tried, setTried] = useState(false);
+  const [access, setAccess] = useState<Record<string, Access>>({});
+  // „Neue Kampagne anlegen“ wartet auf die Zustimmung zu neuen Nutzungsbedingungen
+  const afterTerms = useRef<string | null>(null);
   const location = useLocation();
+  const setUserOf = (connId: string, user: User) => setAccess((a) => (a[connId] ? { ...a, [connId]: { ...a[connId], user } } : a));
+  useEffect(() => onTermsAccepted((connId, user) => {
+    setUserOf(connId, user);
+    // Die alte Meldung „erst zustimmen“ gilt nicht mehr
+    setActionError((e: unknown) => (isApiError(e, 'terms_required') ? null : e));
+    if (afterTerms.current === connId) { setMode('new'); setValue(''); }
+    afterTerms.current = null;
+  }), []);
   // Das Formular steht unter der Liste: beim Öffnen dorthin scrollen, damit man es auf dem Handy sieht
   useEffect(() => {
     setTried(false);
@@ -92,6 +108,12 @@ export function Campaigns() {
         const tooOld = !!appInfo.minAppVersion && versionLess(APP_VERSION, appInfo.minAppVersion);
         updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null });
         if (tooOld || versionLess(info.apiVersion, MIN_API_VERSION)) return { conn, list: [] as CampaignSummary[], ok: true };
+        // Eigenes Profil nur, wenn es für das Anlegen zählt (SL-Freigabe ab 0.4.23, Nutzungsbedingungen ab 0.4.22)
+        if (hasValidToken(conn) && (info.gmApproval === 'required' || info.termsVersion)) {
+          apiFor(conn).me()
+            .then((user) => { if (alive) setAccess((a) => ({ ...a, [conn.id]: { info, user } })); })
+            .catch(() => undefined);
+        }
       } catch {
         /* Info nicht erreichbar – dann merkt es gleich die Kampagnenliste */
       }
@@ -113,6 +135,24 @@ export function Campaigns() {
   }, [active.map((c) => c.id + c.token).join()]);
 
   const targetServer = () => active.find((c) => c.id === serverId) ?? active[0];
+  // Auf welchen Servern darf dieses Konto eigene Kampagnen anlegen? Noch nicht geladen = ja (der Server prüft ohnehin)
+  const gmOf = (c: Connection) => gmState(access[c.id]?.info, access[c.id]?.user);
+  const creatable = active.filter((c) => gmOf(c) === 'ok');
+  const needsGm = active.filter((c) => gmOf(c) !== 'ok');
+  const newTarget = () => creatable.find((c) => c.id === serverId) ?? creatable[0];
+
+  const startNew = () => {
+    setValue('');
+    setActionError(null);
+    // Neue Nutzungsbedingungen: erst zustimmen, dann das Formular – nicht erst nach dem Ausfüllen scheitern
+    const only = creatable.length === 1 ? creatable[0] : null;
+    if (only && termsOutdated(access[only.id]?.info, access[only.id]?.user)) {
+      afterTerms.current = only.id;
+      askTerms(only.id);
+      return;
+    }
+    setMode('new');
+  };
 
   const missing = !value.trim()
     ? (mode === 'new' ? t('Bitte einen Namen für die Kampagne eingeben.') : t('Bitte den Einladungslink oder -code einfügen.'))
@@ -147,11 +187,20 @@ export function Campaigns() {
       }
       return;
     }
-    const conn = targetServer();
+    const conn = newTarget();
+    if (!conn) return;
     try {
       const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null);
       navigate(`/v/${conn.id}/k/${c.id}`);
     } catch (e) {
+      if (isApiError(e, 'gm_permission_required')) {
+        // Freigabe fehlt (oder wurde entzogen): Stand holen, dann zeigt die Liste die Anfrage statt des Formulars
+        const info = access[conn.id]?.info ?? await fetchServerInfo(conn.baseUrl).catch(() => null);
+        const user = await apiFor(conn).me().catch(() => null);
+        if (info && user) setAccess((a) => ({ ...a, [conn.id]: { info: { ...info, gmApproval: 'required' }, user } }));
+        setMode('none');
+        return;
+      }
       setActionError(e);
     }
   };
@@ -189,7 +238,13 @@ export function Campaigns() {
         </div>
       ))}
       {loading && <div className="empty">{t('Lade Kampagnen …')}</div>}
-      {entries?.length === 0 && failed.length === 0 && <div className="empty">{t('Du bist noch in keiner Kampagne. Leg eine an oder tritt mit einem Einladungscode bei.')}</div>}
+      {entries?.length === 0 && failed.length === 0 && (
+        <div className="empty">
+          {creatable.length > 0
+            ? t('Du bist noch in keiner Kampagne. Leg eine an oder tritt mit einem Einladungscode bei.')
+            : t('Du bist noch in keiner Kampagne. Mit einer Einladung deiner SL trittst du bei.')}
+        </div>
+      )}
 
       <div className="grid-cards">
       {entries?.filter(({ c }) => !c.archivedAt).map(({ conn, c }, i) => (
@@ -262,10 +317,15 @@ export function Campaigns() {
               <Link className="btn" to="/verbinden">{t('Eigene Kampagne anlegen')}</Link>
               <span className="muted small">{t('Dafür verbindest du dich zuerst mit einem Server – dem deines Vereins, deiner Gruppe oder einem eigenen. Die Musterkampagne bleibt dabei hier.')}</span>
             </div>
-          ) : (
-            <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={() => { setMode('new'); setValue(''); }}>
+          ) : creatable.length > 0 ? (
+            <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={startNew}>
               {t('Neue Kampagne anlegen')}
             </button>
+          ) : (
+            // Ohne SL-Freigabe: statt des Formulars der Stand der Anfrage (der Server sperrt das Anlegen ohnehin)
+            needsGm.map((c) => access[c.id]?.user && (
+              <GmRequest key={c.id} conn={c} info={access[c.id].info} user={access[c.id].user!} onUser={(u) => setUserOf(c.id, u)} />
+            ))
           )}
           <button className="btn outline" type="button" onClick={() => { setMode('join'); setValue(''); }}>
             {t('Einladung annehmen')}
@@ -279,11 +339,12 @@ export function Campaigns() {
               ? <LinkInput id="cval" value={value} onChange={setValue} autoFocus />
               : <input id="cval" type="text" value={value} autoFocus onChange={(e) => setValue(e.target.value)} />}
           </div>
-          {(mode === 'new' || (mode === 'join' && !parseInvite(value)?.baseUrl)) && active.length > 1 && (
+          {(mode === 'new' || (mode === 'join' && !parseInvite(value)?.baseUrl)) && (mode === 'new' ? creatable : active).length > 1 && (
             <div className="field">
               <label htmlFor="cserver">{t('Auf welchem Server?')}</label>
-              <select id="cserver" value={serverId || active[0].id} onChange={(e) => setServerId(e.target.value)}>
-                {active.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {/* Zum Anlegen nur Server, auf denen das Konto eigene Kampagnen anlegen darf */}
+              <select id="cserver" value={(mode === 'new' ? newTarget() : targetServer())?.id ?? ''} onChange={(e) => setServerId(e.target.value)}>
+                {(mode === 'new' ? creatable : active).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           )}
@@ -303,7 +364,7 @@ export function Campaigns() {
           <ErrorBox error={actionError} />
           <Missing text={missing} shown={tried} />
           <div className="row">
-            <button className="btn small" type="button" disabled={mode === 'new' && active.length === 0} onClick={submit}>
+            <button className="btn small" type="button" disabled={mode === 'new' && creatable.length === 0} onClick={submit}>
               {mode === 'new' ? t('Anlegen') : t('Beitreten')}
             </button>
             <button className="btn small ghost" type="button" onClick={() => setMode('none')}>

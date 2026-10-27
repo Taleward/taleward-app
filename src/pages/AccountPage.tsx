@@ -17,6 +17,7 @@ import { formatDateFull } from '../components/format';
 import { LanguageSwitch, t, tn } from '../i18n';
 import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
 import { ServerLegal } from '../components/Terms';
+import { gmState, type GmState } from '../auth/serverAccess';
 
 /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
 /** Quellcode dieser App – Pflicht nach AGPL §13 für Nutzer über das Netzwerk */
@@ -64,6 +65,15 @@ function ConnectionCard({ conn }: { conn: Connection }) {
   }, [openDelete]);
   const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Kampagne aus einer Datei übernehmen heißt: neue Kampagne als SL – auf manchen Servern erst nach der SL-Freigabe
+  const [gm, setGm] = useState<GmState>('ok');
+  useEffect(() => {
+    if (!hasValidToken(conn)) return;
+    const api = apiFor(conn);
+    api.info().then(async (info) => {
+      if (info.gmApproval === 'required') setGm(gmState(info, await api.me()));
+    }).catch(() => undefined);
+  }, [conn.id, conn.token]); // eslint-disable-line react-hooks/exhaustive-deps
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -171,9 +181,12 @@ function ConnectionCard({ conn }: { conn: Connection }) {
           <Link className="btn small outline" to={`/v/${conn.id}/profil/stimme`}>{t('Mein Stimmprofil')}</Link>
           <button type="button" className="btn small outline" onClick={signOut}>{t('Abmelden')}</button>
         </div>
-        <LoginSettings conn={conn} />
+        <LoginSettings conn={conn} open={params.get('email') === conn.id} />
         {/* Umzug von einem anderen Server (ab 0.4.8) – selten gebraucht, darum hier statt auf der Kampagnenliste */}
-        {apiAtLeast('0.4.8', conn) && (importing
+        {apiAtLeast('0.4.8', conn) && gm !== 'ok' && (
+          <span className="muted small">{t('Kampagne aus Datei übernehmen geht hier erst nach der SL-Freigabe. Anfragen kannst du unter „Deine Kampagnen“.')}</span>
+        )}
+        {apiAtLeast('0.4.8', conn) && gm === 'ok' && (importing
           ? <ImportCampaign servers={[conn]} onCancel={() => setImporting(false)} />
           : <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} onClick={() => setImporting(true)}>{t('Kampagne aus Datei übernehmen')}</button>)}
         {/* Selten gebraucht – eingeklappt */}

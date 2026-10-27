@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFor } from '../api/client';
 import { updateConnection, type Connection } from '../api/connections';
 import type { ServerInfo, User } from '../api/types';
@@ -11,7 +11,7 @@ import { ErrorBox } from './Screen';
  * Konten und Server → Anmeldung: freiwillige E-Mail (nur fürs Passwort-Zurücksetzen), verbundene Dienste,
  * Passwort setzen oder ändern (Schnittstelle 0.4.0). Auf älteren Servern unsichtbar.
  */
-export function LoginSettings({ conn }: { conn: Connection }) {
+export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean }) {
   const api = apiFor(conn);
   const [info, setInfo] = useState<ServerInfo | null>(null);
   const [user, setUser] = useState<User | null>(conn.user);
@@ -21,6 +21,11 @@ export function LoginSettings({ conn }: { conn: Connection }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // Von „E-Mail eintragen“ (SL-Freigabe): gleich aufgeklappt und im Blick
+  const box = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (open && info && user) box.current?.scrollIntoView({ block: 'start' });
+  }, [open, !!info, !!user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = async () => {
     const me = await api.me();
@@ -57,13 +62,17 @@ export function LoginSettings({ conn }: { conn: Connection }) {
   const providers = info.authProviders ?? [];
 
   return (
-    <details className="card" style={{ gap: 12 }}>
+    <details className="card" style={{ gap: 12 }} ref={box} open={open || undefined}>
       <summary style={{ fontWeight: 700 }}>{t('Anmeldung und E-Mail')}</summary>
 
       {/* E-Mail */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <strong>{t('E-Mail')}</strong>
-        <span className="muted small">{t('Freiwillig. Nur für „Passwort vergessen“ – niemand am Tisch sieht sie.')}</span>
+        <span className="muted small">
+          {info.gmApproval === 'required'
+            ? t('Freiwillig. Für „Passwort vergessen“ und die Antwort auf eine SL-Freigabe – niemand am Tisch sieht sie.')
+            : t('Freiwillig. Nur für „Passwort vergessen“ – niemand am Tisch sieht sie.')}
+        </span>
         {user.email && <span className="small">{user.email} · <span style={{ color: 'var(--salbei)' }}>{t('bestätigt')}</span></span>}
         {user.emailPending && <span className="small">{user.emailPending} · <span className="muted">{t('wartet auf Bestätigung – schau in dein Postfach')}</span></span>}
         <div className="row" style={{ gap: 8 }}>

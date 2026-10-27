@@ -38,6 +38,9 @@ export interface User {
   /** Zuletzt zugestimmte Fassung der Nutzungsbedingungen (ab 0.4.22); null = noch nie */
   termsAcceptedVersion?: number | null;
   termsAcceptedAt?: string | null;
+  /** Darf eigene Kampagnen anlegen (ab 0.4.23, zählt nur bei ServerInfo.gmApproval required); fehlt = wie granted */
+  gmPermission?: 'granted' | 'none' | 'pending' | 'rejected';
+  gmDecidedAt?: string | null;
 }
 
 export type AuthProviderId = 'google' | 'discord' | 'apple' | 'microsoft';
@@ -654,8 +657,13 @@ export interface ServerInfo {
   operator: string;
   contact: string | null;
   apiVersion: string;
-  /** Neue Konten nur mit Einladungscode oder gar nicht */
-  registration: 'invite_only' | 'closed';
+  /**
+   * Wie man ein Konto bekommt: Kampagneneinladung, allgemeiner Registrierungscode (ab 0.4.23), offen (ab 0.4.23) oder gar
+   * nicht. Unbekannte Werte wie invite_only (siehe registrationMode).
+   */
+  registration: 'invite_only' | 'code' | 'open' | 'closed' | (string & {});
+  /** Eigene Kampagnen nur mit SL-Freigabe (ab 0.4.23); fehlt = none */
+  gmApproval?: 'required' | 'none';
   /** Unterstützte Anmeldearten; später z. B. 'oidc' für einen zentralen Anmeldedienst oder 'passkey' */
   authMethods: string[];
   privacyPolicyUrl: string | null;

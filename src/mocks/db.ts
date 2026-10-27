@@ -12,7 +12,10 @@ export const account = {
   providers: [] as string[],
   // Nutzungsbedingungen (0.4.22): zugestimmte Fassung
   termsAcceptedVersion: 1 as number | null,
-  termsAcceptedAt: '2026-07-01T18:00:00Z' as string | null
+  termsAcceptedAt: '2026-07-01T18:00:00Z' as string | null,
+  // SL-Freigabe (0.4.23): das Test-Konto leitet schon Kampagnen, also freigegeben; neue Konten fangen bei none an
+  gmPermission: 'granted' as 'granted' | 'none' | 'pending' | 'rejected',
+  gmDecidedAt: null as string | null
 };
 
 /** Zweiter „Server“ im Testmodus, erreichbar über https://nachbarverein.test/api/v1 */

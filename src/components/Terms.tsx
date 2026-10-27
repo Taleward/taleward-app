@@ -34,6 +34,8 @@ function useTerms(conn: Connection) {
     }).catch(() => undefined);
     return () => { gone = true; };
   }, [conn.id, conn.token, valid, reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Zugestimmt an anderer Stelle (Fenster, Kampagnenliste): alle Karten dieses Servers verschwinden zugleich
+  useEffect(() => onTermsAccepted((id, user) => { if (id === conn.id) setState((s) => (s ? { ...s, user } : s)); }), [conn.id]);
   const outdated = !!state && (state.user.termsAcceptedVersion ?? 0) < (state.info.termsVersion ?? 0);
   return { state, outdated, refresh: () => setReload((n) => n + 1), setUser: (user: User) => setState((s) => (s ? { ...s, user } : s)) };
 }
@@ -49,6 +51,24 @@ export const TERMS_REQUIRED_EVENT = 'taleward:terms-required';
 // Nach „Später“ eine Weile Ruhe: Auch Hintergrund-Anfragen (z. B. „gelesen“) melden terms_required
 const quietUntil = new Map<string, number>();
 const QUIET_MS = 10 * 60_000;
+
+/** Das Fenster gezielt öffnen (z. B. vor dem Anlegen einer Kampagne), auch kurz nach „Später“ */
+export function askTerms(connId: string): void {
+  quietUntil.delete(connId);
+  window.dispatchEvent(new CustomEvent(TERMS_REQUIRED_EVENT, { detail: connId }));
+}
+
+/** Nach der Zustimmung: wer auf dem Server wartet, erfährt es (Banner weg, alte Fehlermeldung weg) */
+export const TERMS_ACCEPTED_EVENT = 'taleward:terms-accepted';
+
+export function onTermsAccepted(cb: (connId: string, user: User) => void): () => void {
+  const on = (e: Event) => {
+    const d = (e as CustomEvent<{ connId: string; user: User }>).detail;
+    if (d) cb(d.connId, d.user);
+  };
+  window.addEventListener(TERMS_ACCEPTED_EVENT, on);
+  return () => window.removeEventListener(TERMS_ACCEPTED_EVENT, on);
+}
 
 export function TermsGate() {
   const [connId, setConnId] = useState<string | null>(null);
@@ -109,6 +129,7 @@ export function useTermsNotice(conn: Connection, onAccepted?: () => void): React
       const user = await apiFor(conn).acceptTerms(info.termsVersion!);
       updateConnection(conn.id, { user: { ...(conn.user ?? user), ...user } });
       setUser(user);
+      window.dispatchEvent(new CustomEvent(TERMS_ACCEPTED_EVENT, { detail: { connId: conn.id, user } }));
       onAccepted?.();
     } catch (e) {
       // Inzwischen gibt es schon wieder eine neuere Fassung: neu laden und noch einmal zeigen
