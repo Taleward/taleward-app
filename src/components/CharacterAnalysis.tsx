@@ -1,3 +1,4 @@
+import { eur } from '../billing/CreditWaitNote';
 import { useEffect, useRef, useState } from 'react';
 import { api, isApiError } from '../api/client';
 import { currentConnection } from '../api/connections';
@@ -103,6 +104,7 @@ export function AnalysisPendingCard({ campaign, notice, info, onDone }: { campai
         {analysis.pagesLimited ? ' ' + (campaign.characterSheetLimits
           ? t('Ausgewertet werden nur die ersten {n} Seiten.', { n: campaign.characterSheetLimits.maxPages })
           : t('Ausgewertet werden nur die ersten Seiten.')) : ''}
+        {analysis.costEstimateCents != null ? ' ' + t('Kostet voraussichtlich {amount}.', { amount: eur(analysis.costEstimateCents) }) : ''}
       </span>
       <ErrorBox error={error} />
       <div className="row wrap" style={{ gap: 8 }}>

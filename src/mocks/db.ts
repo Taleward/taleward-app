@@ -133,6 +133,13 @@ export const sessions: MockSession[] = [
   pastSession('c-drache', 7, 'Die Brücke aus Eis', '2026-09-14T16:00:00Z')
 ];
 
+// Testmodus (0.4.25): Mit „taleward.mock.creditWait“ wartet eine weitere Runde auf das Guthaben
+try {
+  if (localStorage.getItem('taleward.mock.creditWait')) {
+    sessions.push({ ...pastSession('c-grau', 14, 'Unterwegs nach Kaltenfurt', '2026-10-03T17:00:00Z'), state: 'queued', publishedAt: null, audioDeletedAt: null });
+  }
+} catch { /* ohne Speicher: nichts */ }
+
 export const recaps: Record<string, Recap> = {
   's-c-grau-10': {
     sessionId: 's-c-grau-10', number: 10, title: 'Die Glocke schweigt', publishedAt: '2026-08-08T17:00:00Z',

@@ -18,6 +18,8 @@ import { LanguageSwitch, t, tn } from '../i18n';
 import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
 import { ServerLegal } from '../components/Terms';
 import { gmState, type GmState } from '../auth/serverAccess';
+import { billingOn } from '../billing/rules';
+import { CreditLink } from './CreditPage';
 
 /** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
 /** Quellcode dieser App – Pflicht nach AGPL §13 für Nutzer über das Netzwerk */
@@ -67,10 +69,13 @@ function ConnectionCard({ conn }: { conn: Connection }) {
   const [importing, setImporting] = useState(false);
   // Kampagne aus einer Datei übernehmen heißt: neue Kampagne als SL – auf manchen Servern erst nach der SL-Freigabe
   const [gm, setGm] = useState<GmState>('ok');
+  // Guthaben (ab 0.4.25): nur, wenn der Server damit abrechnet
+  const [billing, setBilling] = useState(false);
   useEffect(() => {
     if (!hasValidToken(conn)) return;
     const api = apiFor(conn);
     api.info().then(async (info) => {
+      setBilling(billingOn(info));
       if (info.gmApproval === 'required') setGm(gmState(info, await api.me()));
     }).catch(() => undefined);
   }, [conn.id, conn.token]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -183,6 +188,7 @@ function ConnectionCard({ conn }: { conn: Connection }) {
         <>
         <div className="row wrap" style={{ gap: 8 }}>
           <Link className="btn small outline" to={`/v/${conn.id}/profil/stimme`}>{t('Mein Stimmprofil')}</Link>
+          {billing && <CreditLink connId={conn.id} />}
           <button type="button" className="btn small outline" onClick={signOut}>{t('Abmelden')}</button>
         </div>
         <LoginSettings conn={conn} open={params.get('email') === conn.id} />

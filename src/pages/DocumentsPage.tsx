@@ -1,3 +1,4 @@
+import { CreditWaitNote } from '../billing/CreditWaitNote';
 import { confirmDialog } from '../components/confirm';
 import { p } from '../api/connections';
 import { useEffect, useState } from 'react';
@@ -138,7 +139,8 @@ export function DocumentsPage() {
           </div>
           <div className="small"><strong>{t(DOC_STATE[d.state])}</strong>{d.state === 'failed' && d.message ? ` – ${d.message}` : ''}</div>
           {/* Hinweis des Servers beim Warten, z. B. „Die SL hat das für diese Kampagne noch nicht erlaubt …“ */}
-          {d.message && (d.state === 'queued' || d.state === 'processing') && <div className="muted small">{d.message}</div>}
+          {d.message && (d.state === 'queued' || d.state === 'processing') && !d.creditWait && <div className="muted small">{d.message}</div>}
+          {d.state === 'queued' && d.creditWait && <CreditWaitNote wait={d.creditWait} />}
           {d.progress !== null && (d.state === 'processing' || d.state === 'queued') && (
             <div className="progress"><div style={{ width: `${d.progress * 100}%` }} /></div>
           )}

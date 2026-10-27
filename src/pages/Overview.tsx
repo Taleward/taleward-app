@@ -8,6 +8,8 @@ import { PrepCard } from '../components/PrepCard';
 import { useTermsNotice } from '../components/Terms';
 import { prepWhen } from '../prep/prep';
 import { isDeletedMember } from '../api/types';
+import { LockNote, SettingsLog, useCampaignSettings } from '../components/CampaignSettings';
+import { PayerSection } from '../billing/PayerSection';
 import { InviteBox } from '../components/InviteBox';
 import { confirmDialog } from '../components/confirm';
 import { PENDING_LABEL } from './Chronicle';
@@ -682,8 +684,10 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
         : t('Zusammenfassung über {provider} für „{campaign}“ auf „{server}“ erlauben? Text der Runde und Unterlagen gehen dann dorthin, keine Stimmen. Sag es vorher allen am Tisch.', { provider, campaign: campaign.title, server });
       if (!(await confirmDialog(q, { confirmLabel: t('Erlauben') }))) return;
     }
-    run(() => api.updateCampaign(campaign.id, { [field]: value }));
+    run(() => settings.change(field, value), () => undefined);
   };
+
+  const settings = useCampaignSettings(campaign, onChanged);
 
   const leave = async () => {
     if (await confirmDialog(t('Kampagne verlassen? Du siehst sie danach nicht mehr. Deine Kommentare bleiben stehen. Zurück geht es nur mit einer neuen Einladung.'), { confirmLabel: t('Verlassen'), danger: true })) {
@@ -702,13 +706,16 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
           <span className="muted small">{t('Gelten für alle am Tisch. Alle sehen sie unter „Was mit deinen Daten passiert“.')}</span>
         </>
       )}
+      {gm && settings.conflict && (
+        <div className="notice" role="status">{t('Inzwischen hat jemand die Einstellungen geändert. Hier ist der neue Stand, bitte noch einmal wählen.')}</div>
+      )}
       {gm && (externalProvider || summaryProvider) && (
         <>
           <span className="overline" style={{ marginTop: 6 }}>{t('Cloud-Dienste')}</span>
-          {externalProvider && (
+          {externalProvider && settings.lock('allowExternalTranscription') !== 'unavailable' && (
             <div className="field">
               <label className="check" style={{ alignItems: 'flex-start' }}>
-                <input type="checkbox" checked={!!campaign.allowExternalTranscription} disabled={busy}
+                <input type="checkbox" checked={settings.values.allowExternalTranscription} disabled={busy || !!settings.lock('allowExternalTranscription')}
                   onChange={(e) => setCloud('allowExternalTranscription', e.target.checked, externalProvider)} style={{ marginTop: 3, flexShrink: 0 }} />
                 <span>{t('Transkription über {provider} erlauben', { provider: externalProvider })}</span>
               </label>
@@ -717,18 +724,20 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
                   ? t('Dieser Server transkribiert Aufnahmen direkt über {provider}.', { provider: externalProvider })
                   : t('Nur wenn 24 Stunden lang kein Worker erreichbar ist, nutzt der Server als Ausweichlösung {provider}.', { provider: externalProvider })}
               </span>
+              <LockNote lock={settings.lock('allowExternalTranscription')} />
             </div>
           )}
-          {summaryProvider && (
+          {summaryProvider && settings.lock('allowCloudSummary') !== 'unavailable' && (
             <div className="field">
               <label className="check" style={{ alignItems: 'flex-start' }}>
-                <input type="checkbox" checked={!!campaign.allowCloudSummary} disabled={busy}
+                <input type="checkbox" checked={settings.values.allowCloudSummary} disabled={busy || !!settings.lock('allowCloudSummary')}
                   onChange={(e) => setCloud('allowCloudSummary', e.target.checked, summaryProvider)} style={{ marginTop: 3, flexShrink: 0 }} />
                 <span>{t('Zusammenfassung und Unterlagen über {provider} erlauben', { provider: summaryProvider })}</span>
               </label>
               <span className="muted small">
                 {t('Für Kapitel, Vorschläge und das Auswerten von Unterlagen geht Text an {provider} – Namen und Gespräche der Runde bzw. der Inhalt der Unterlage, keine Stimmen. Ohne Erlaubnis wartet beides auf ein lokales Modell.', { provider: summaryProvider })}
               </span>
+              <LockNote lock={settings.lock('allowCloudSummary')} />
             </div>
           )}
         </>
@@ -737,9 +746,13 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
       {gm && !muster && apiAtLeast('0.4.18') && (
         <>
           <span className="overline" style={{ marginTop: 6 }}>{t('Charaktere')}</span>
-          <AnalysisSwitch campaign={campaign} info={info} busy={busy} onChange={(value) => run(() => api.updateCampaign(campaign.id, { allowCharacterAnalysis: value }))} />
+          <AnalysisSwitch campaign={{ ...campaign, allowCharacterAnalysis: settings.values.allowCharacterAnalysis }} info={info}
+            busy={busy || !!settings.lock('allowCharacterAnalysis')} onChange={(value) => run(() => settings.change('allowCharacterAnalysis', value), () => undefined)} />
+          <LockNote lock={settings.lock('allowCharacterAnalysis')} />
         </>
       )}
+      {gm && settings.hasLog && <SettingsLog campaign={campaign} />}
+      {gm && !muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
       {gm && !muster && <h3 style={{ margin: (externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? '10px 0 0' : 0 }}>{t('Weitergeben')}</h3>}
       {gm && !muster && (
         <Link className="btn outline" to={p(`/k/${campaign.id}/spielleitung`)}>{t('Spielleitung übergeben')}</Link>

@@ -8,6 +8,13 @@ import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKno
 import type { InvitePreview, CharacterAnalysis,
   ApiError,
   Campaign,
+  CampaignBilling,
+  CampaignSettings,
+  CampaignSettingsIn,
+  CampaignSettingsLogEntry,
+  Credit,
+  CreditBooking,
+  CreditWaitingJob,
   CampaignSummary,
   CampaignExport,
   ImportStatus,
@@ -275,8 +282,28 @@ function makeApi(conn: () => Connection) {
     description = '',
     language?: 'de' | 'en',
     system?: GameSystem | null,
-    systemName?: string | null
-  ) => request<Campaign>('POST', '/campaigns', { body: { title, description, language, system, systemName } }),
+    systemName?: string | null,
+    /** Einstellungen gleich beim Anlegen (ab 0.4.25, nur an solche Server schicken) */
+    settings?: CampaignSettingsIn
+  ) => request<Campaign>('POST', '/campaigns', { body: { title, description, language, system, systemName, ...(settings ? { settings } : {}) } }),
+  // Kampagnen-Einstellungen an einem Ort (ab 0.4.25)
+  campaignSettings: (campaignId: string) => request<CampaignSettings>('GET', `/campaigns/${campaignId}/settings`),
+  updateCampaignSettings: (campaignId: string, version: number, change: CampaignSettingsIn) =>
+    request<CampaignSettings>('PATCH', `/campaigns/${campaignId}/settings`, { body: { ...change, version } }),
+  campaignSettingsLog: (campaignId: string) => request<CampaignSettingsLogEntry[]>('GET', `/campaigns/${campaignId}/settings/log`),
+  // Guthaben (ab 0.4.25) – bezahlt wird nie in der App
+  credits: () => request<Credit[]>('GET', '/credits'),
+  creditBookings: (creditId: string, before?: string) =>
+    request<CreditBooking[]>('GET', `/credits/${creditId}/bookings?limit=30${before ? `&before=${encodeURIComponent(before)}` : ''}`),
+  creditWaiting: (creditId: string) => request<CreditWaitingJob[]>('GET', `/credits/${creditId}/waiting`),
+  approveCreditJob: (creditId: string, jobId: string) => request<void>('POST', `/credits/${creditId}/waiting/${jobId}/approve`),
+  updateCreditSettings: (creditId: string, change: { approvalThresholdCents?: number; sheetMaxPages?: number; sheetsPerPlayer?: number }) =>
+    request<Credit>('PATCH', `/credits/${creditId}/settings`, { body: change }),
+  redeemVoucher: (creditId: string, code: string) =>
+    request<{ amountCents: number; credit: Credit }>('POST', `/credits/${creditId}/vouchers`, { body: { code } }),
+  offerPayment: (campaignId: string, memberId: string | null) =>
+    request<CampaignBilling>('POST', `/campaigns/${campaignId}/payer/offer`, { body: { memberId } }),
+  acceptPayment: (campaignId: string) => request<CampaignBilling>('POST', `/campaigns/${campaignId}/payer/accept`),
   /** Beitreten – ab 0.4.7 optional mit einem Charakter aus der Sammlung */
   joinCampaign: (code: string, characterName?: string, character?: Character | null) =>
     request<Campaign>('POST', '/campaigns/join', { body: { code, characterName, ...(character ? { character } : {}) } }),

@@ -2,6 +2,7 @@ import { http, HttpResponse, delay } from 'msw';
 import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
 import { textToPdf } from './minipdf';
 import { cleanAliases, findMatch, secretWarnings } from './checks';
+import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
 const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
@@ -392,7 +393,9 @@ function advanceAnalysis(a: (typeof characterAnalyses)[number], forGm: boolean):
     a.proposalCount = made.length;
   }
   const { phaseStartedAt: _p, ...rest } = a;
-  return forGm ? rest : { ...rest, proposalCount: null };
+  // 0.4.25: Kosten im Dialog der SL (nur mit Guthaben)
+  const cost = rest.state === 'awaiting_gm' ? mockAnalysisCost(forGm) : null;
+  return forGm ? { ...rest, costEstimateCents: cost } : { ...rest, proposalCount: null };
 }
 
 function analysisProposals(a: CharacterAnalysis): Pick<Proposal, 'entryType' | 'title' | 'detail' | 'gmNotes'>[] {
@@ -642,10 +645,12 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.24',
+      apiVersion: nachbar ? '0.3.9' : '0.4.25',
       serverId: nachbar ? undefined : 'testserver',
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
+      // 0.4.25: Guthaben (taleward.mock.billing)
+      billing: nachbar ? undefined : billingInfo(true),
       authMethods: ['password'],
       privacyPolicyUrl: null,
       // 0.4.22: Impressum und Nutzungsbedingungen des Betreibers
@@ -907,7 +912,7 @@ export const handlers = [
     if (hostKey(request) === 'local' && gmRequired() && account.gmPermission !== 'granted') {
       return err(403, 'gm_permission_required', 'Eigene Kampagnen legst du hier erst nach der SL-Freigabe an.');
     }
-    const body = (await request.json()) as { title: string; description?: string; language?: 'de' | 'en'; system?: MockCampaign['system']; systemName?: string | null };
+    const body = (await request.json()) as { title: string; description?: string; language?: 'de' | 'en'; system?: MockCampaign['system']; systemName?: string | null; settings?: Record<string, boolean> };
     const c: MockCampaign = {
       id: 'c-' + crypto.randomUUID().slice(0, 8),
       title: body.title,
@@ -921,10 +926,14 @@ export const handlers = [
       coverPreset: COVER_IDS[Math.floor(Math.random() * COVER_IDS.length)],
       nextSessionAt: null,
       inviteCode: 'NEU-' + Math.floor(1000 + Math.random() * 9000),
-      members: [{ id: 'm-' + crypto.randomUUID().slice(0, 8), userId: ME.id, displayName: ME.displayName, characterName: null, role: 'gm' }]
+      members: [{ id: 'm-' + crypto.randomUUID().slice(0, 8), userId: ME.id, displayName: ME.displayName, characterName: null, role: 'gm' }],
+      // 0.4.25: Einstellungen gleich beim Anlegen
+      allowCloudSummary: body.settings?.allowCloudSummary === true,
+      allowExternalTranscription: body.settings?.allowExternalTranscription === true,
+      allowCharacterAnalysis: body.settings?.allowCharacterAnalysis === true
     };
     campaigns.push(c);
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) }, { status: 201 });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) }, { status: 201 });
   }),
 
   http.post(`${B}/campaigns/join`, async ({ request }) => {
@@ -960,13 +969,13 @@ export const handlers = [
       (gmNotices[c.id] ??= []).push({ id: 'gn-' + crypto.randomUUID().slice(0, 8), code: 'member_joined', memberId: m.id, entryIds: [], createdAt: new Date().toISOString() });
       seen.chronicle[c.id] = seen.bible[c.id] = new Date().toISOString();
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) });
   }),
 
   http.get(`${B}/campaigns/:id`, ({ params }) => {
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
   }),
 
   // ---------------- Charaktere (0.4.7)
@@ -1118,6 +1127,7 @@ export const handlers = [
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
     if (!isGm(c.id)) return err(403, 'forbidden', 'Nur die Spielleitung kann die Kampagne bearbeiten.');
+    const settingsBefore = snapshot(c);
     const body = (await request.json()) as { title?: string; description?: string; worldInfo?: string; language?: 'de' | 'en'; coverPreset?: string | null; system?: MockCampaign['system']; systemName?: string | null };
     const SYSTEMS = ['dsa', 'dnd', 'pathfinder', 'cthulhu', 'shadowrun', 'splittermond', 'other'];
     if (body.system !== undefined && body.system !== null && !SYSTEMS.includes(body.system)) return err(400, 'invalid_input', 'Unbekanntes Spielsystem.');
@@ -1164,7 +1174,8 @@ export const handlers = [
       c.coverPreset = body.coverPreset;
       delete coverImages[c.id]; // Motiv gewählt: eigenes Bild entfällt
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, hotwords: c.hotwords ?? [], members: membersFor(c) });
+    recordChange(c, settingsBefore, myMember(c)?.id ?? null);
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), hotwords: c.hotwords ?? [], members: membersFor(c) });
   }),
 
   http.patch(`${B}/campaigns/:id/members/:mid`, async ({ params, request }) => {
@@ -1411,7 +1422,11 @@ export const handlers = [
     if (!c || !m) return err(404, 'not_found', 'Kampagne nicht gefunden.');
     // Spieler (ab 0.4.7): nur die eigenen Charakterbögen
     const mine = (d: (typeof documents)[number]) => isGm(c.id) || (d.kind === 'character_sheet' && d.uploadedByMemberId === m.id);
-    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id && mine(d)).map(advanceDoc).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    const withWait = (d: CampaignDocument): CampaignDocument => {
+      const wait = d.state === 'queued' || d.state === 'processing' ? mockCreditWait(isGm(c.id), 'document', d.id) : null;
+      return wait ? { ...d, state: 'queued', progress: null, message: null, creditWait: wait } : d;
+    };
+    return HttpResponse.json(documents.filter((d) => d.campaignId === params.id && mine(d)).map(advanceDoc).map(withWait).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
   }),
 
   http.post(`${B}/campaigns/:id/documents`, async ({ params, request }) => {
@@ -1649,7 +1664,7 @@ export const handlers = [
     if (data.byteLength > 5 * 1024 * 1024) return err(413, 'image_too_large', 'Das Bild ist zu groß (höchstens 5 MB).');
     coverImages[c.id] = { data, type, updatedAt: new Date().toISOString() };
     c.coverPreset = null;
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) });
   }),
 
   http.delete(`${B}/campaigns/:id/cover-image`, ({ params }) => {
@@ -1786,7 +1801,10 @@ export const handlers = [
   http.get(`${B}/sessions/:id/status`, ({ params }) => {
     const s = sessions.find((x) => x.id === params.id);
     if (!s) return err(404, 'not_found', 'Session nicht gefunden.');
-    return HttpResponse.json(advance(s));
+    const st = advance(s);
+    // 0.4.25: Wartegrund des Guthabens (Testmodus: taleward.mock.creditWait)
+    const wait = st.state === 'queued' || st.state === 'transcribing' || st.state === 'summarizing' ? mockCreditWait(isGm(s.campaignId), 'session', s.id) : null;
+    return HttpResponse.json(wait ? { ...st, state: 'queued', progress: null, message: null, creditWait: wait } : st);
   }),
 
   http.post(`${B}/sessions/:id/uploads`, async ({ params, request }) => {
@@ -2268,5 +2286,7 @@ export const handlers = [
     };
     entries.push(e);
     return HttpResponse.json(e, { status: 201 });
-  })
+  }),
+  // 0.4.25: Guthaben und Kampagnen-Einstellungen
+  ...billingHandlers(B, { myMember, terms: () => !termsOutdated() })
 ];

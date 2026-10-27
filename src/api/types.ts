@@ -225,7 +225,93 @@ export interface Campaign extends CampaignSummary {
   hotwords?: string[];
   /** Hinweise an die SL (ab 0.4.7) */
   gmNotices?: GmNotice[];
+  /** Fassung der Einstellungen (ab 0.4.25) */
+  settingsVersion?: number | null;
+  /** Wer zahlt – nur für SL und nur mit Guthaben (ab 0.4.25) */
+  billing?: CampaignBilling | null;
   members: Member[];
+}
+
+/** Ab 0.4.25: Wer für eine Kampagne zahlt (nur SL) */
+export interface CampaignBilling {
+  paidBy: 'gm' | 'organization' | 'nobody' | (string & {});
+  payerMemberId?: string | null;
+  isMe?: boolean;
+  offeredToMemberId?: string | null;
+}
+
+/** Ab 0.4.25: Warum ein Auftrag wegen der Abrechnung noch wartet (nur für SL) */
+export interface CreditWait {
+  reason: 'approval' | 'empty' | 'too_low' | 'no_payer' | 'pot' | (string & {});
+  /** Nur für Personen, die das zahlende Guthaben sehen dürfen */
+  estimateCents?: number | null;
+  creditId?: string | null;
+  jobId?: string | null;
+}
+
+/** Ab 0.4.25: ein Guthaben (eigenes oder Topf der Organisation) */
+export interface Credit {
+  id: string;
+  kind: 'account' | 'organization';
+  organizationId?: string | null;
+  organizationName?: string | null;
+  balanceCents: number;
+  status: 'good' | 'low' | 'empty' | 'negative' | (string & {});
+  approvalThresholdCents: number;
+  sheetMaxPages: number;
+  sheetsPerPlayer: number;
+  waitingCount?: number;
+  /** false = Ändern, „Verarbeiten“ und Gutscheine nur auf der Seite des Servers */
+  canManage: boolean;
+}
+
+export type JobKind = 'transcribe' | 'summarize' | 'revise' | 'document';
+
+export interface CreditBooking {
+  id: string;
+  kind: 'payment' | 'credit' | 'voucher' | 'usage' | 'chargeback' | 'refund' | 'correction' | (string & {});
+  amountCents: number;
+  createdAt: string;
+  reason?: string | null;
+  usage?: { jobKind: JobKind | (string & {}); campaignId?: string | null; campaignTitle?: string | null; sessionNumber?: number | null; documentTitle?: string | null } | null;
+}
+
+export interface CreditWaitingJob {
+  jobId: string;
+  jobKind: JobKind | (string & {});
+  campaignId: string;
+  campaignTitle: string;
+  sessionId?: string | null;
+  sessionNumber?: number | null;
+  documentId?: string | null;
+  documentTitle?: string | null;
+  analysisId?: string | null;
+  estimateCents: number;
+  reason: CreditWait['reason'];
+  createdAt?: string;
+}
+
+/** Ab 0.4.25: Einstellungen einer Kampagne an einem Ort */
+export type SettingField = 'allowCloudSummary' | 'allowExternalTranscription' | 'allowCharacterAnalysis';
+export type CampaignSettingsIn = Partial<Record<SettingField, boolean>>;
+export interface CampaignSettings {
+  version: number;
+  allowCloudSummary: boolean;
+  allowExternalTranscription: boolean;
+  allowCharacterAnalysis: boolean;
+  characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
+  locks: { field: SettingField | (string & {}); value: boolean; reason: 'unavailable' | 'operator' | (string & {}) }[];
+  updatedAt: string;
+  updatedByMemberId?: string | null;
+}
+export interface CampaignSettingsLogEntry {
+  at: string;
+  field: string;
+  oldValue: boolean | number | null;
+  newValue: boolean | number | null;
+  version: number;
+  byMemberId?: string | null;
+  byOperator: boolean;
 }
 
 /**
@@ -274,6 +360,8 @@ export interface ProcessingStatus {
   updatedAt: string;
   /** Geschätzte Restdauer in Sekunden, z. B. nach erneuter Transkription (ab 0.4.6) */
   estimatedSeconds?: number | null;
+  /** Wartet wegen der Abrechnung (ab 0.4.25) */
+  creditWait?: CreditWait | null;
 }
 
 export interface Speaker {
@@ -566,6 +654,8 @@ export interface CampaignDocument {
   state: 'queued' | 'processing' | 'awaiting_review' | 'done' | 'failed';
   progress: number | null;
   message: string | null;
+  /** Wartet wegen der Abrechnung (ab 0.4.25) */
+  creditWait?: CreditWait | null;
   proposalCount: number;
   openProposalCount: number;
   /** Vorschlag für den Welt-Hintergrund aus den öffentlichen Teilen, falls sinnvoll */
@@ -592,6 +682,9 @@ export interface CharacterAnalysis {
   message: string | null;
   /** Nur für die SL, sobald done */
   proposalCount: number | null;
+  /** Geschätzte Kosten, nur für Berechtigte und nur mit Guthaben (ab 0.4.25) */
+  costEstimateCents?: number | null;
+  creditWait?: CreditWait | null;
   createdAt: string;
   decidedAt: string | null;
 }
@@ -666,6 +759,8 @@ export interface ServerInfo {
   registration: 'invite_only' | 'code' | 'open' | 'closed' | (string & {});
   /** Eigene Kampagnen nur mit SL-Freigabe (ab 0.4.23); fehlt = none */
   gmApproval?: 'required' | 'none';
+  /** Abrechnung über Guthaben (ab 0.4.25); null/fehlt = aus */
+  billing?: { mode: 'credit' | 'pot' | (string & {}); currency: 'EUR' | (string & {}); topUpUrl?: string | null } | null;
   /** Unterstützte Anmeldearten; später z. B. 'oidc' für einen zentralen Anmeldedienst oder 'passkey' */
   authMethods: string[];
   privacyPolicyUrl: string | null;

@@ -1,3 +1,4 @@
+import { CreditWaitNote } from '../billing/CreditWaitNote';
 import { confirmDialog } from '../components/confirm';
 import { IconInfo } from '../components/Icons';
 import { p } from '../api/connections';
@@ -158,7 +159,9 @@ export function Processing() {
       </ol>
 
       {/* Hinweis des Servers während des Wartens, z. B. „Zurzeit ist kein Worker … verbunden“ */}
-      {(status?.message || status?.estimatedSeconds) && !failed && (
+      {/* Wartet wegen des Guthabens (ab 0.4.25): eigener Satz statt des Server-Hinweises */}
+      {status?.creditWait && !failed && <CreditWaitNote wait={status.creditWait} />}
+      {(status?.message || status?.estimatedSeconds) && !failed && !status.creditWait && (
         <div className="notice">
           <span style={{ flexShrink: 0, color: 'var(--ink-muted)' }}><IconInfo /></span>
           <span>
@@ -179,7 +182,7 @@ export function Processing() {
             : t('Extern transkribiert – kein Worker war erreichbar.')}
         </p>
       )}
-      {status?.queuePosition != null && <p className="muted" style={{ margin: 0 }}>{t('Platz {n} in der Warteschlange.', { n: status.queuePosition })}</p>}
+      {status?.queuePosition != null && !status.creditWait && <p className="muted" style={{ margin: 0 }}>{t('Platz {n} in der Warteschlange.', { n: status.queuePosition })}</p>}
       {status && RUNNING.includes(status.state) && status.state !== 'uploading' && (
         <p className="muted small" style={{ margin: 0 }}>{t('Du kannst die App schließen.')}</p>
       )}

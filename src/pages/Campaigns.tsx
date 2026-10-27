@@ -2,7 +2,7 @@ import { listCharacters } from '../characters/store';
 import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
 import { GmDecision, GmRequest } from '../components/GmRequest';
 import { gmState, termsOutdated } from '../auth/serverAccess';
-import type { ServerInfo, User } from '../api/types';
+import type { CampaignSettingsIn, ServerInfo, User } from '../api/types';
 import { serverHasCharacters } from '../characters/sync';
 import { LinkInput } from '../components/LinkInput';
 import { NotifyPrompt } from '../notify/NotifySettings';
@@ -10,6 +10,7 @@ import { MusterNotice } from '../components/Muster';
 import { UpdateNotices } from '../components/UpdateNotices';
 import type { GameSystem } from '../api/types';
 import { GameSystemFields } from '../components/GameSystemFields';
+import { StartSettings } from '../components/CampaignSettings';
 import type { CampaignSummary } from '../api/types';
 import { NewDot } from '../components/Screen';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
@@ -19,7 +20,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiFor, fetchServerInfo, isApiError } from '../api/client';
 import { isMusterUrl } from '../api/muster';
 import { offlineSince } from '../api/readCopy';
-import { APP_VERSION, MIN_API_VERSION, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
+import { APP_VERSION, MIN_API_VERSION, apiAtLeast, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
 import { IconInfo } from '../components/Icons';
 import { useAuth } from '../auth/AuthContext';
 import { Divider, ErrorBox, Screen } from '../components/Screen';
@@ -57,6 +58,7 @@ export function Campaigns() {
   const [language, setLanguage] = useState<'de' | 'en'>(getLang());
   const [system, setSystem] = useState<GameSystem | null>(null);
   const [systemName, setSystemName] = useState('');
+  const [startSettings, setStartSettings] = useState<CampaignSettingsIn>({});
   const [actionError, setActionError] = useState<unknown>(null);
   const [tried, setTried] = useState(false);
   const [access, setAccess] = useState<Record<string, Access>>({});
@@ -190,7 +192,8 @@ export function Campaigns() {
     const conn = newTarget();
     if (!conn) return;
     try {
-      const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null);
+      const chosen = apiAtLeast('0.4.25', conn) && Object.keys(startSettings).length ? startSettings : undefined;
+      const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null, chosen);
       navigate(`/v/${conn.id}/k/${c.id}`);
     } catch (e) {
       if (isApiError(e, 'gm_permission_required')) {
@@ -363,6 +366,7 @@ export function Campaigns() {
               </select>
             </div>
           )}
+          {mode === 'new' && newTarget() && <StartSettings conn={newTarget()!} value={startSettings} onChange={setStartSettings} />}
           <ErrorBox error={actionError} />
           <Missing text={missing} shown={tried} />
           <div className="row">

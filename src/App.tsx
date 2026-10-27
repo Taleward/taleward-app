@@ -24,6 +24,7 @@ import { Recording } from './pages/Recording';
 import { Review } from './pages/Review';
 import { NamesPage } from './pages/NamesPage';
 import { Speakers } from './pages/Speakers';
+import { CreditPage } from './pages/CreditPage';
 import { VoiceProfile } from './pages/VoiceProfile';
 import { WelcomePage } from './pages/WelcomePage';
 import { BroughtPage } from './pages/BroughtPage';
@@ -93,6 +94,7 @@ function Routed() {
       <Route path="/v/:conn/s/:sessionId/freigabe" element={scoped(<Review />)} />
       <Route path="/v/:conn/s/:sessionId/recap" element={scoped(<RecapPage />)} />
       <Route path="/v/:conn/profil/stimme" element={scoped(<VoiceProfile />)} />
+      <Route path="/v/:conn/guthaben" element={scoped(<CreditPage />)} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
     </>
