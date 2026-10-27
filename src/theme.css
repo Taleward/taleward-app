@@ -1999,6 +1999,11 @@ button.table-group-face {
 .review-foot details.card.secret textarea { min-height: 72px; }
 .review-publish { display: flex; flex-direction: column; gap: 8px; }
 .review-publish > .muted { text-align: center; }
+/* Schmal: drei Bereiche (Kapitel, Vorschläge, Freigabe), oben fest */
+.review-split [hidden] { display: none !important; }
+.review-steps { position: sticky; top: 0; z-index: 5; background: var(--paper); box-shadow: 0 0 0 6px var(--paper); }
+.review-steps button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1.2; min-height: 52px; }
+.review-steps button .small { font-weight: 400; opacity: 0.85; }
 .recap-sheet-head { padding-bottom: 4px; }
 .proposal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .proposal-actions > .btn { flex: 1 1 120px; }

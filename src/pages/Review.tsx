@@ -17,6 +17,8 @@ import { namesSkipped, serverHasNameCheck } from './NamesPage';
 import { ParagraphHint, RevisionBox, RevisionDraft, paragraphRef, revisionOpen } from '../review/Revision';
 import { mentions } from '../review/mentions';
 
+type Section = 'chapter' | 'proposals' | 'publish';
+
 export function Review() {
   const { sessionId = '' } = useParams();
   const navigate = useNavigate();
@@ -128,6 +130,18 @@ export function Review() {
   const wide = useWorkspace();
   // Fährt man über einen Vorschlag, werden die Absätze hervorgehoben, in denen er vorkommt
   const [hoverTitle, setHoverTitle] = useState<string | null>(null);
+  // Schmal: drei Bereiche nacheinander statt einer langen Strecke (der Arbeitsplatz zeigt alles nebeneinander)
+  const [section, setSection] = useState<Section>('chapter');
+  const show = (s: Section) => wide || section === s;
+  const goTo = (s: Section) => {
+    setSection(s);
+    // Gescrollt wird im Hauptbereich der Seite, nicht im Fenster
+    const main = document.querySelector('.screen-main');
+    if (main && main.scrollHeight > main.clientHeight) main.scrollTo({ top: 0 });
+    else window.scrollTo({ top: 0 });
+  };
+  const secretCount = recap?.gmWarnings?.length ?? 0;
+  const chapterHints = secretCount + termCount;
 
   const tools = [
     termCount > 0 && (
@@ -151,8 +165,25 @@ export function Review() {
     >
       <ErrorBox error={error} />
 
+      {!wide && proposals && (
+        <div className="segmented review-steps" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }} role="group" aria-label={t('Bereiche der Prüfung')}>
+          <button type="button" aria-pressed={section === 'chapter'} onClick={() => goTo('chapter')}>
+            <span>{t('Das Kapitel')}</span>
+            <span className="small">{chapterHints ? tn(chapterHints, '{n} Hinweis', '{n} Hinweise') : t('gelesen?')}</span>
+          </button>
+          <button type="button" aria-pressed={section === 'proposals'} onClick={() => goTo('proposals')}>
+            <span>{t('Vorschläge')}</span>
+            <span className="small">{openCount ? tn(openCount, '{n} offen', '{n} offen') : t('erledigt')}</span>
+          </button>
+          <button type="button" aria-pressed={section === 'publish'} onClick={() => goTo('publish')}>
+            <span>{t('Freigabe')}</span>
+            <span className="small">{t('zum Schluss')}</span>
+          </button>
+        </div>
+      )}
+
       <div className="split review-split">
-      <div className="a">
+      <div className="a" hidden={!show('chapter')}>
       {/* Werkzeuge als eine schmale Zeile */}
       {tools.length > 0 && <div className="review-tools">{tools}</div>}
       {recap && <SecretWarnings recap={recap} entries={entries} onJump={jumpToParagraph} />}
@@ -164,10 +195,15 @@ export function Review() {
           {t('Kapitel neu schreiben')}
         </button>
       )}
+      {!wide && proposals && (
+        <button type="button" className="btn outline" style={{ marginTop: 12 }} onClick={() => goTo('proposals')}>
+          {t('Weiter zu den Vorschlägen')}
+        </button>
+      )}
       </div>
 
       <div className="b">
-      <div className="review-proposals-head">
+      <div className="review-proposals-head" hidden={!show('proposals')}>
         <div className="row between wrap" style={{ gap: 8 }}>
           <strong>{proposals ? t('Vorschläge ({n})', { n: proposals.length }) : t('Vorschläge')}</strong>
           {/* Bei vielen Vorschlägen: alles Offene auf einmal entscheiden */}
@@ -184,7 +220,7 @@ export function Review() {
         <p className="muted small" style={{ margin: 0 }}>{t('Nur Übernommenes kommt in die Bibel.')}</p>
       </div>
 
-      <div className="review-proposals">
+      <div className="review-proposals" hidden={!show('proposals')}>
       {proposals?.map((p) => (
         <div key={p.id} onMouseEnter={() => setHoverTitle(p.title)} onMouseLeave={() => setHoverTitle(null)}
           onFocus={() => setHoverTitle(p.title)} onBlur={() => setHoverTitle(null)}>
@@ -196,11 +232,27 @@ export function Review() {
       {proposals?.length === 0 && (
         <div className="empty">{t('Für dieses Kapitel gibt es keine Vorschläge für die Bibel.')}</div>
       )}
+      {!wide && proposals && (
+        <button type="button" className="btn outline" onClick={() => goTo('publish')}>{t('Weiter zur Freigabe')}</button>
+      )}
       </div>
 
       {/* Fußzeile: SL-Notiz zum Aufklappen, Stand und Veröffentlichen – im Arbeitsplatz immer sichtbar */}
       {proposals && (
-        <div className="review-foot">
+        <div className="review-foot" hidden={!show('publish')}>
+          {/* Schmal: was vor dem Veröffentlichen noch offen ist, mit Weg dorthin */}
+          {!wide && (openCount > 0 || secretCount > 0) && (
+            <div className="notice" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
+              {secretCount > 0 && (
+                <button type="button" className="linklike small tap-link" onClick={() => goTo('chapter')}>{t('Das Kapitel nennt noch Geheimes.')}</button>
+              )}
+              {openCount > 0 && (
+                <button type="button" className="linklike small tap-link" onClick={() => goTo('proposals')}>
+                  {tn(openCount, '{n} Vorschlag ist noch offen.', '{n} Vorschläge sind noch offen.')}
+                </button>
+              )}
+            </div>
+          )}
           {/* Schmal offen, wenn schon etwas drinsteht; im Arbeitsplatz zu, damit die Vorschläge Platz haben */}
           <details className="card secret" open={(!wide && !!note.trim()) || undefined}>
             <summary className="row" style={{ gap: 8, fontFamily: 'var(--display)', fontWeight: 700 }}>
