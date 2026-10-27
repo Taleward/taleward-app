@@ -2001,9 +2001,20 @@ button.table-group-face {
 .review-publish > .muted { text-align: center; }
 /* Schmal: drei Bereiche (Kapitel, Vorschläge, Freigabe), oben fest */
 .review-split [hidden] { display: none !important; }
-.review-steps { position: sticky; top: 0; z-index: 5; background: var(--paper); box-shadow: 0 0 0 6px var(--paper); }
-.review-steps button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; line-height: 1.2; min-height: 52px; }
-.review-steps button .small { font-weight: 400; opacity: 0.85; }
+.review-steps {
+  position: sticky; top: 0; z-index: 5;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: var(--paper); border-bottom: 1px solid var(--line-strong);
+}
+.review-steps button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+  min-height: 52px; padding: 6px 4px; margin-bottom: -1px;
+  background: none; border: 0; border-bottom: 3px solid transparent;
+  color: var(--ink-soft); font: 700 calc(15px * var(--ts))/1.25 var(--font-sans); cursor: pointer;
+}
+.review-steps button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--tinte); }
+.review-steps button .small { font-weight: 400; color: var(--ink-muted); }
+.review-steps button:focus-visible { outline: 2px solid var(--tinte); outline-offset: -2px; }
 .recap-sheet-head { padding-bottom: 4px; }
 .proposal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .proposal-actions > .btn { flex: 1 1 120px; }

@@ -282,6 +282,8 @@ export interface Speaker {
   speakingSeconds: number;
   sampleText: string;
   suggestedMemberId: string | null;
+  /** Vorschlag: diese Stimme ist ein Gast der Runde (ab 0.4.24); schließt suggestedMemberId aus */
+  suggestedGuestName?: string | null;
   confidence: number;
   source: 'intro_round' | 'voice_match' | 'discord_track' | 'none';
   /** Als Gast benannt (ab 0.4.7) */

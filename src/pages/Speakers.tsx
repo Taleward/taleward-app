@@ -13,6 +13,13 @@ import { swapAssignment } from '../voice/swap';
 const IGNORE = '__ignore';
 const GUEST = 'guest:';
 
+/** Vorschlag des Servers als Wert der Auswahl: Mitglied oder (ab 0.4.24) Gast der Runde, sonst leer */
+function suggestion(s: Speaker): string {
+  if (s.suggestedMemberId) return s.suggestedMemberId;
+  if (s.suggestedGuestName?.trim()) return GUEST + s.suggestedGuestName.trim();
+  return '';
+}
+
 export function Speakers() {
   const { sessionId = '' } = useParams();
   const navigate = useNavigate();
@@ -36,14 +43,14 @@ export function Speakers() {
         setCampaign(c);
         setSpeakers(sp);
         const named = serverHasCharacters(currentConnection())
-          ? [...new Set([...session.attendees.map((a) => a.guestName?.trim() ?? ''), ...sp.map((s) => s.assignedGuestName?.trim() ?? '')].filter(Boolean))]
+          ? [...new Set([...session.attendees.map((a) => a.guestName?.trim() ?? ''), ...sp.map((s) => s.assignedGuestName?.trim() ?? ''), ...sp.map((s) => s.suggestedGuestName?.trim() ?? '')].filter(Boolean))]
           : [];
         setGuests(named);
         setSession(session);
         const start = Object.fromEntries(sp.map((s) => [s.id,
           s.assignedGuestName ? GUEST + s.assignedGuestName
             : s.assignedMemberId !== undefined ? (s.assignedMemberId ?? IGNORE)
-              : s.suggestedMemberId ?? '']));
+              : suggestion(s)]));
         setMapping(start);
         setInitial(start);
       } catch (e) {
@@ -148,7 +155,7 @@ export function Speakers() {
             </ul>
             {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
             {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
-            {!review && s.suggestedMemberId && s.confidence < 0.8 && mapping[s.id] === s.suggestedMemberId && (
+            {!review && suggestion(s) && s.confidence < 0.8 && mapping[s.id] === suggestion(s) && (
               <div className="small" style={{ color: 'var(--siegel-text)', fontWeight: 500 }}>{t('Unsicher – bitte prüfen.')}</div>
             )}
             {/* Ab 0.4.21: Anrede oder Selbstnennung passt nicht zur Zuordnung – nur, solange sie noch nicht passt */}

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Taleward API
-  version: 0.4.23
+  version: 0.4.24
   description: |
     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
 
@@ -235,6 +235,8 @@ info:
     POST /campaigns und POST /imports. Bestehende Konten, die schon SL einer Kampagne sind oder ein Verwaltungskonto
     haben, bekommen beim Update `granted`, alle anderen `none`. Ältere Apps behandeln unbekannte registration-Werte
     wie invite_only und sehen bei fehlender Freigabe den Fehler beim Anlegen.
+    Änderungen in 0.4.24 (Stimmvorschläge für Gäste): Speaker.suggestedGuestName – der Server schlägt eine Stimme einem
+    Gast der Runde vor (z. B. aus der Vorstellungsrunde). Ältere Apps sehen keinen Vorschlag für diese Stimme.
 
 servers:
   - url: https://taleward.example.org/api/v1
@@ -3856,6 +3858,13 @@ components:
                 count: { type: integer, minimum: 1 }
             - { type: "null" }
         suggestedMemberId: { type: [string, "null"] }
+        suggestedGuestName:
+          type: [string, "null"]
+          description: |
+            Ab 0.4.24: Vorschlag, diese Stimme einem Gast zuzuordnen – genau einer der guestName-Werte der Anwesenden
+            dieser Runde. Schließt suggestedMemberId aus (dann null). confidence und source gelten für diesen Vorschlag;
+            unter 0,8 zeigt die App ihn deutlich als Vorschlag. Bestätigt wird wie immer mit PUT (memberId null,
+            guestName). Fehlt das Feld oder ist es null: kein Gast-Vorschlag.
         confidence: { type: number, minimum: 0, maximum: 1 }
         source: { type: string, enum: [intro_round, voice_match, discord_track, none] }
         assignedGuestName: { type: [string, "null"], description: "Ab 0.4.7: als Gast benannt (nach PUT)" }

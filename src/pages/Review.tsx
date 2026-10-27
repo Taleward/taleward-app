@@ -133,12 +133,21 @@ export function Review() {
   // Schmal: drei Bereiche nacheinander statt einer langen Strecke (der Arbeitsplatz zeigt alles nebeneinander)
   const [section, setSection] = useState<Section>('chapter');
   const show = (s: Section) => wide || section === s;
+  const panel = (s: Section) => (wide ? {} : { role: 'tabpanel', 'aria-labelledby': `tab-${s}` });
   const goTo = (s: Section) => {
     setSection(s);
     // Gescrollt wird im Hauptbereich der Seite, nicht im Fenster
     const main = document.querySelector('.screen-main');
     if (main && main.scrollHeight > main.clientHeight) main.scrollTo({ top: 0 });
     else window.scrollTo({ top: 0 });
+  };
+  // Reiter mit Pfeiltasten wechseln (wie es Screenreader von Reitern erwarten)
+  const tabKeys = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const order: Section[] = ['chapter', 'proposals', 'publish'];
+    const next = order[(order.indexOf(section) + (e.key === 'ArrowRight' ? 1 : 2)) % 3];
+    goTo(next);
+    document.getElementById(`tab-${next}`)?.focus();
   };
   const secretCount = recap?.gmWarnings?.length ?? 0;
   const chapterHints = secretCount + termCount;
@@ -166,16 +175,16 @@ export function Review() {
       <ErrorBox error={error} />
 
       {!wide && proposals && (
-        <div className="segmented review-steps" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }} role="group" aria-label={t('Bereiche der Prüfung')}>
-          <button type="button" aria-pressed={section === 'chapter'} onClick={() => goTo('chapter')}>
+        <div className="review-steps" role="tablist" aria-label={t('Bereiche der Prüfung')} onKeyDown={tabKeys}>
+          <button type="button" role="tab" id="tab-chapter" aria-selected={section === 'chapter'} tabIndex={section === 'chapter' ? 0 : -1} onClick={() => goTo('chapter')}>
             <span>{t('Das Kapitel')}</span>
             <span className="small">{chapterHints ? tn(chapterHints, '{n} Hinweis', '{n} Hinweise') : t('gelesen?')}</span>
           </button>
-          <button type="button" aria-pressed={section === 'proposals'} onClick={() => goTo('proposals')}>
+          <button type="button" role="tab" id="tab-proposals" aria-selected={section === 'proposals'} tabIndex={section === 'proposals' ? 0 : -1} onClick={() => goTo('proposals')}>
             <span>{t('Vorschläge')}</span>
             <span className="small">{openCount ? tn(openCount, '{n} offen', '{n} offen') : t('erledigt')}</span>
           </button>
-          <button type="button" aria-pressed={section === 'publish'} onClick={() => goTo('publish')}>
+          <button type="button" role="tab" id="tab-publish" aria-selected={section === 'publish'} tabIndex={section === 'publish' ? 0 : -1} onClick={() => goTo('publish')}>
             <span>{t('Freigabe')}</span>
             <span className="small">{t('zum Schluss')}</span>
           </button>
@@ -183,7 +192,7 @@ export function Review() {
       )}
 
       <div className="split review-split">
-      <div className="a" hidden={!show('chapter')}>
+      <div className="a" hidden={!show('chapter')} {...panel('chapter')}>
       {/* Werkzeuge als eine schmale Zeile */}
       {tools.length > 0 && <div className="review-tools">{tools}</div>}
       {recap && <SecretWarnings recap={recap} entries={entries} onJump={jumpToParagraph} />}
@@ -220,7 +229,7 @@ export function Review() {
         <p className="muted small" style={{ margin: 0 }}>{t('Nur Übernommenes kommt in die Bibel.')}</p>
       </div>
 
-      <div className="review-proposals" hidden={!show('proposals')}>
+      <div className="review-proposals" hidden={!show('proposals')} {...panel('proposals')}>
       {proposals?.map((p) => (
         <div key={p.id} onMouseEnter={() => setHoverTitle(p.title)} onMouseLeave={() => setHoverTitle(null)}
           onFocus={() => setHoverTitle(p.title)} onBlur={() => setHoverTitle(null)}>
@@ -239,7 +248,7 @@ export function Review() {
 
       {/* Fußzeile: SL-Notiz zum Aufklappen, Stand und Veröffentlichen – im Arbeitsplatz immer sichtbar */}
       {proposals && (
-        <div className="review-foot" hidden={!show('publish')}>
+        <div className="review-foot" hidden={!show('publish')} {...panel('publish')}>
           {/* Schmal: was vor dem Veröffentlichen noch offen ist, mit Weg dorthin */}
           {!wide && (openCount > 0 || secretCount > 0) && (
             <div className="notice" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
