@@ -1,6 +1,6 @@
 import { listCharacters } from '../characters/store';
 import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
-import { GmRequest } from '../components/GmRequest';
+import { GmDecision, GmRequest } from '../components/GmRequest';
 import { gmState, termsOutdated } from '../auth/serverAccess';
 import type { ServerInfo, User } from '../api/types';
 import { serverHasCharacters } from '../characters/sync';
@@ -225,6 +225,8 @@ export function Campaigns() {
       ))}
       {/* Neue Nutzungsbedingungen (ab 0.4.22): bis zur Zustimmung nur lesen */}
       {active.map((c) => <TermsReminder key={'terms-' + c.id} conn={c} />)}
+      {/* SL-Freigabe entschieden: einmal zum Bestätigen */}
+      {active.map((c) => access[c.id]?.user && <GmDecision key={'gm-' + c.id} conn={c} info={access[c.id].info} user={access[c.id].user!} />)}
       {offline.map(({ conn: c, since }) => (
         <div key={c.id} className="notice" role="status">
           <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>

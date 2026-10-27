@@ -3538,7 +3538,7 @@ components:
             rejected = abgelehnt (neue Anfrage erst, wenn die Verwaltung sie erlaubt), granted = freigegeben. Entzieht
             die Verwaltung die Freigabe, steht hier wieder none bzw. rejected; bestehende Kampagnen bleiben. Fehlt das
             Feld (Server vor 0.4.23), wie granted. Unbekannte Werte wie none.
-        gmDecidedAt: { type: [string, "null"], format: date-time, description: "Ab 0.4.23: Zeitpunkt der letzten Entscheidung (granted/rejected), sonst null" }
+        gmDecidedAt: { type: [string, "null"], format: date-time, description: "Ab 0.4.23: Zeitpunkt der letzten Entscheidung der Verwaltung (granted/rejected), sonst null – auch bei Konten, die beim Update granted bekommen. Die App zeigt eine neue Entscheidung einmal an." }
 
     VoiceProfile:
       type: object
