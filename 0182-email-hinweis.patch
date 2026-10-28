@@ -1,0 +1,210 @@
+From 483cad0539e018206949a8858696e2bdee1cb81a Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 09:44:23 +0100
+Subject: [PATCH 182/183] Hinweis zur E-Mail nach dem Anlegen, Craig-Hinweis
+ mit Link
+
+---
+ src/components/EmailNudge.tsx    | 56 ++++++++++++++++++++++++++++++++
+ src/components/LoginSettings.tsx | 12 ++++++-
+ src/i18n/en.ts                   |  9 +++++
+ src/pages/Campaigns.tsx          |  2 ++
+ src/pages/ConnectPage.tsx        |  8 ++++-
+ src/pages/Overview.tsx           |  2 ++
+ src/pages/Recording.tsx          |  8 +++--
+ 7 files changed, 93 insertions(+), 4 deletions(-)
+ create mode 100644 src/components/EmailNudge.tsx
+
+diff --git a/src/components/EmailNudge.tsx b/src/components/EmailNudge.tsx
+new file mode 100644
+index 0000000..de1ea6b
+--- /dev/null
++++ b/src/components/EmailNudge.tsx
+@@ -0,0 +1,56 @@
++import { useEffect, useState } from 'react';
++import { useNavigate } from 'react-router-dom';
++import { apiFor } from '../api/client';
++import type { Connection } from '../api/connections';
++import { termsOutdated } from '../auth/serverAccess';
++import { getLive, onLiveChange } from '../recorder/live';
++import { t } from '../i18n';
++
++/*
++ * Einmal nach dem Anlegen eines Kontos: freundlicher Hinweis, eine E-Mail fürs Passwort-Zurücksetzen zu hinterlegen.
++ * Freiwillig, je Server und Konto genau einmal („Nein danke“ = nie wieder), nur wenn der Server Mails verschicken kann,
++ * nicht während einer Aufnahme und nicht neben den Nutzungsbedingungen.
++ */
++const key = (connId: string) => `taleward.emailNudge.${connId}`;
++
++/** Nach dem Registrieren aufrufen */
++export function markNewAccount(connId: string): void {
++  try { localStorage.setItem(key(connId), 'due'); } catch { /* ohne Speicher eben kein Hinweis */ }
++}
++
++function due(connId: string): boolean {
++  try { return localStorage.getItem(key(connId)) === 'due'; } catch { return false; }
++}
++function done(connId: string): void {
++  try { localStorage.setItem(key(connId), 'done'); } catch { /* egal */ }
++}
++
++export function EmailNudge({ conn }: { conn: Connection }) {
++  const navigate = useNavigate();
++  const [show, setShow] = useState(false);
++  const [recording, setRecording] = useState(!!getLive());
++  useEffect(() => onLiveChange(() => setRecording(!!getLive())), []);
++  useEffect(() => {
++    if (!conn.token || !due(conn.id)) return;
++    let alive = true;
++    const api = apiFor(conn);
++    Promise.all([api.info(), api.me()]).then(([info, user]) => {
++      if (!alive) return;
++      if (user.email || user.emailPending) { done(conn.id); return; }
++      setShow(!!info.passwordReset && !termsOutdated(info, user));
++    }).catch(() => undefined);
++    return () => { alive = false; };
++  }, [conn.id, conn.token]); // eslint-disable-line react-hooks/exhaustive-deps
++
++  if (!show || recording) return null;
++  return (
++    <section className="card" aria-label={t('E-Mail hinterlegen')}>
++      <strong>{t('Willst du eine E-Mail hinterlegen?')}</strong>
++      <span className="small">{t('Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.')}</span>
++      <div className="row wrap" style={{ gap: 8 }}>
++        <button type="button" className="btn small outline" onClick={() => { done(conn.id); navigate(`/konto?email=${encodeURIComponent(conn.id)}`); }}>{t('Eintragen')}</button>
++        <button type="button" className="btn small ghost" onClick={() => { done(conn.id); setShow(false); }}>{t('Nein danke')}</button>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/components/LoginSettings.tsx b/src/components/LoginSettings.tsx
+index 40970ac..1eee504 100644
+--- a/src/components/LoginSettings.tsx
++++ b/src/components/LoginSettings.tsx
+@@ -64,5 +64,15 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
+   return (
+     <details className="card" style={{ gap: 12 }} ref={box} open={open || undefined}>
+-      <summary style={{ fontWeight: 700 }}>{t('Anmeldung und E-Mail')}</summary>
++      <summary style={{ fontWeight: 700 }}>
++        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
++          {t('Anmeldung und E-Mail')}
++          {/* Auch zugeklappt sichtbar, solange keine Adresse bestätigt ist */}
++          {!user.email && info.passwordReset && (
++            <span className="muted small" style={{ fontWeight: 400 }}>
++              {user.emailPending ? t('E-Mail: wartet auf Bestätigung') : t('E-Mail: noch keine – fürs Passwort-Zurücksetzen')}
++            </span>
++          )}
++        </span>
++      </summary>
+ 
+       {/* E-Mail */}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 3c6dae7..db8ee27 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1529,3 +1529,12 @@ export const en: Record<string, string> = {
+   "Inzwischen hat jemand die Einstellungen geändert. Hier ist der neue Stand, bitte noch einmal wählen.": "Someone changed the settings in the meantime. Here is the current state, please choose again.",
+   "Kapitel schreiben": "Write chapter",
++  "E-Mail hinterlegen": "Add an email address",
++  "Willst du eine E-Mail hinterlegen?": "Would you like to add an email address?",
++  "Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.": "Then you can reset your password yourself. It stays optional, and nobody at the table sees it.",
++  "Nein danke": "No thanks",
++  "E-Mail: wartet auf Bestätigung": "Email: waiting for confirmation",
++  "E-Mail: noch keine – fürs Passwort-Zurücksetzen": "Email: none yet – for resetting your password",
++  "Ohne hinterlegte E-Mail hilft dir die Verwaltung deines Servers.": "Without an email address on file, your server's administrators can help you.",
++  "Craig ist ein eigener Dienst und bewahrt die Aufnahme bis zum Herunterladen auf seinen Servern auf, nicht sicher in der EU. Sagt das am Tisch dazu.": "Craig is a separate service and keeps the recording on its servers until you download it, not necessarily in the EU. Mention that at the table.",
++  "Mehr dazu": "More about this",
+ };
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 9c0845b..284233c 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -1,4 +1,5 @@
+ import { listCharacters } from '../characters/store';
+ import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
++import { EmailNudge } from '../components/EmailNudge';
+ import { GmDecision, GmRequest } from '../components/GmRequest';
+ import { gmState, termsOutdated } from '../auth/serverAccess';
+@@ -229,4 +230,5 @@ export function Campaigns() {
+       {/* Neue Nutzungsbedingungen (ab 0.4.22): bis zur Zustimmung nur lesen */}
+       {active.map((c) => <TermsReminder key={'terms-' + c.id} conn={c} />)}
++      {active.map((c) => <EmailNudge key={'mail-' + c.id} conn={c} />)}
+       {/* SL-Freigabe entschieden: einmal zum Bestätigen */}
+       {active.map((c) => access[c.id]?.user && <GmDecision key={'gm-' + c.id} conn={c} info={access[c.id].info} user={access[c.id].user!} />)}
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index 11807a0..21a63f5 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -7,4 +7,5 @@ import { Wordmark } from '../components/Wordmark';
+ import { useEffect, useState, type FormEvent } from 'react';
+ import { useLocation, useNavigate } from 'react-router-dom';
++import { markNewAccount } from '../components/EmailNudge';
+ import { apiFor, fetchInvitePreview, fetchServerInfo, isApiError } from '../api/client';
+ import {
+@@ -157,4 +158,5 @@ export function ConnectPage() {
+         conn = saveConnection({ ...fields, ...login });
+       }
++      if (mode !== 'login') markNewAccount(conn.id);
+       await finish(conn, codes.inviteCode ?? null);
+     } catch (err) {
+@@ -389,6 +391,8 @@ function ForgotPassword({ info, baseUrl }: { info: ServerInfo; baseUrl: string }
+       : t('Die Verwaltung eures Servers schickt dir einen Link zum Zurücksetzen.')}</div>;
+   }
++  // Für alle gleich, damit die Seite nicht verrät, ob ein Konto eine Adresse hat
++  const noMail = t('Ohne hinterlegte E-Mail hilft dir die Verwaltung deines Servers.');
+   if (sent) {
+-    return <div className="notice">{t('Wenn es zu diesem Konto eine bestätigte E-Mail gibt, ist ein Link unterwegs. Er gilt eine Stunde.')}</div>;
++    return <div className="notice">{t('Wenn es zu diesem Konto eine bestätigte E-Mail gibt, ist ein Link unterwegs. Er gilt eine Stunde.')} {noMail}</div>;
+   }
+   return (
+@@ -411,4 +415,5 @@ function ForgotPassword({ info, baseUrl }: { info: ServerInfo; baseUrl: string }
+         }
+       }}>{t('Link schicken')}</button>
++      <span className="muted small">{noMail}</span>
+     </div>
+   );
+@@ -450,4 +455,5 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
+       });
+       const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
++      markNewAccount(conn.id);
+       clearPendingRegister();
+       if (codes.inviteCode) {
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 228efb9..d492876 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -32,4 +32,5 @@ import { IconCheck, IconInfo, IconLock, IconScreen, IconSearch } from '../compon
+ import { LinkButtons, safeLinks } from '../components/Links';
+ import { MusterBanner } from '../components/Muster';
++import { EmailNudge } from '../components/EmailNudge';
+ import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+ import { formatDateFull, formatDateTime } from '../components/format';
+@@ -114,4 +115,5 @@ export function Overview() {
+ 
+           <MusterBanner />
++          <EmailNudge conn={currentConnection()} />
+           {campaign.archivedAt && (
+             <div className="notice"><strong>{t('Abgeschlossen')}</strong>&nbsp;{t('– nur noch zum Nachlesen, keine neuen Kapitel.')}</div>
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index 1984022..b3d3d27 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -7,5 +7,5 @@ import { brandMarkShapes } from '../components/Wordmark';
+ import { currentConnection, p } from '../api/connections';
+ import { Avatar } from '../components/Avatar';
+-import { t } from '../i18n';
++import { getLang, t } from '../i18n';
+ import { useEffect, useRef, useState } from 'react';
+ import { useNavigate, useParams } from 'react-router-dom';
+@@ -451,5 +451,9 @@ export function Recording() {
+               <input id="file-discord" type="file" accept="audio/*" multiple aria-describedby="discord-hint" disabled={!allConsented} onChange={(e) => pickDiscord(e.target.files)} />
+               {/* Woher solche Spuren kommen: heute über Craig, später über den eigenen Bot */}
+-              <span id="discord-hint" className="muted small">{t('Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.')}</span>
++              <span id="discord-hint" className="muted small">
++                {t('Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.')}{' '}
++                {t('Craig ist ein eigener Dienst und bewahrt die Aufnahme bis zum Herunterladen auf seinen Servern auf, nicht sicher in der EU. Sagt das am Tisch dazu.')}{' '}
++                <a href={getLang() === 'de' ? 'https://taleward.org/fuer-gruppen/#frage-discord' : 'https://taleward.org/en/for-groups/#frage-discord'} target="_blank" rel="noopener noreferrer">{t('Mehr dazu')}</a>
++              </span>
+             </div>
+             {discordFiles.map((d, i) => (
