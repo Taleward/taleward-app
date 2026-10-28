@@ -1622,4 +1622,5 @@ export const en: Record<string, string> = {
   "Danach bei keiner Figur mehr": "Afterwards no character has it",
   "Geht an {name}": "Goes to {name}",
   "Personen, Orte und Aufträge, die deine Figur kennt. Die Suche dort findet Namen auch halb erinnert.": "People, places and quests your character knows. The search there finds names even when half remembered.",
+  "Per Link oder QR-Code": "By link or QR code",
 };

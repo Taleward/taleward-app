@@ -2291,3 +2291,9 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 /* Zustimmung aufgeklappt in „Kampagne verwalten“ */
 .list-body.consent-open { border-top: 1px solid var(--line); padding-top: var(--space-3); }
 .list-box > .list-body.consent-open:first-child { border-top: none; }
+
+/* „Mitspielende einladen“ als Zeile in „Am Tisch“ */
+.invite-row { min-height: 52px; gap: 10px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line); padding: 6px 0 0; margin-top: 4px; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
+.invite-plus { width: 40px; height: 40px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px dashed var(--line-strong); color: var(--ink); }
+@media (hover: hover) { .invite-row:hover .invite-plus { background: var(--paper-sunken); } }
+.invite-open { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 0 6px; }

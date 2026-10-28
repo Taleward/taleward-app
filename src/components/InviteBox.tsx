@@ -1,3 +1,4 @@
+import { IconPlus } from './Icons';
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../api/client';
@@ -9,7 +10,8 @@ import { formatDateFull } from './format';
 import { ErrorBox } from './Screen';
 
 /** Mitspielende einladen: fertiger Link zum Teilen, Kopieren oder als QR-Code am Tisch */
-export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; campaignTitle?: string }) {
+/** row: als letzte Zeile in „Am Tisch“ (Übersicht); sonst als eigener Knopf (z. B. beim Übergeben der Spielleitung) */
+export function InviteBox({ campaignId, campaignTitle, row }: { campaignId: string; campaignTitle?: string; row?: boolean }) {
   const [invite, setInvite] = useState<{ code: string; expiresAt: string; link: string } | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
@@ -39,6 +41,21 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
     ? t('Komm in unsere Runde „{title}“ bei Taleward:', { title: campaignTitle })
     : t('Komm in unsere Runde bei Taleward:');
 
+  if (!invite && row) {
+    return (
+      <>
+        <button type="button" className="row invite-row" onClick={create}>
+          <span className="invite-plus" aria-hidden><IconPlus /></span>
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <span>{t('Mitspielende einladen')}</span>
+            <span className="muted small">{t('Per Link oder QR-Code')}</span>
+          </span>
+        </button>
+        <ErrorBox error={error} />
+      </>
+    );
+  }
+
   if (!invite) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -49,8 +66,8 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
   }
 
   return (
-    <section className="card">
-      <h2>{t('Einladung')}</h2>
+    <section className={row ? 'invite-open' : 'card'}>
+      {row ? <strong>{t('Einladung')}</strong> : <h2>{t('Einladung')}</h2>}
       <div className="notice" style={{ flexDirection: 'column', gap: 4 }}>
         <span className="small" style={{ wordBreak: 'break-all' }}>{invite.link}</span>
         <span className="muted small">{t('Code {code} · gültig bis {date}', { code: invite.code, date: formatDateFull(invite.expiresAt) })}</span>

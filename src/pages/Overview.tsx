@@ -199,7 +199,6 @@ export function Overview() {
           {/* Stimmprofil ist freiwillig: erst wenn die Zustimmung steht und (bei der SL) die erste Runde aufgenommen ist */}
           <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && sessions?.length === 0)} />
 
-          {gm && <div id="invite" data-tour="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} onPickCover={() => {
             setPickingCover(true);
             document.querySelector('.screen-main')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -550,6 +549,8 @@ function Members({ campaign, onChanged, voiceHint }: { campaign: Campaign; onCha
             <span aria-hidden style={{ color: 'var(--ink-faint)' }}>›</span>
           </Link>
         ))}
+        {/* Einladen als letzte Zeile am Tisch statt als eigener großer Knopf */}
+        {gm && <div id="invite" data-tour="invite"><InviteBox row campaignId={campaign.id} campaignTitle={campaign.title} /></div>}
       </div>
       {/* Ausgetretene und gelöschte Konten bleiben im Hintergrund (Kapitel, Kommentare), stehen aber nicht mehr am Tisch */}
       {former.length > 0 && (
