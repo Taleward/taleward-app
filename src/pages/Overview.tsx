@@ -28,7 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Campaign, CharacterAnalysis, GameSystem, GmNotice, Member, ServerInfo, SessionSummary, Usage } from '../api/types';
-import { IconCheck, IconInfo, IconLock, IconScreen } from '../components/Icons';
+import { IconCheck, IconInfo, IconLock, IconPencil, IconScreen } from '../components/Icons';
 import { LinkButtons, safeLinks } from '../components/Links';
 import { MusterBanner } from '../components/Muster';
 import { EmailNudge } from '../components/EmailNudge';
@@ -184,14 +184,15 @@ export function Overview() {
           )}
 
           <CloudNotice info={serverInfo} campaign={campaign} onOpen={openDataSummary} />
-          <Divider />
+          {/* Spielende sehen „Die Welt“ erst, wenn die SL etwas eingetragen hat */}
+          {(gm || !!campaign.worldInfo?.trim() || safeLinks(campaign.links).some((l) => l.shared)) && <Divider />}
           {safeLinks(campaign.links).some((l) => l.shared) && (
             <section className="overview-links" aria-labelledby="group-links">
               <span className="overline" id="group-links">{t('Links der Gruppe')}</span>
               <LinkButtons links={(campaign.links ?? []).filter((l) => l.shared)} compact />
             </section>
           )}
-          <div id="world"><WorldInfo campaign={campaign} onSaved={setCampaign} /></div>
+          {(gm || !!campaign.worldInfo?.trim()) && <div id="world"><WorldInfo campaign={campaign} onSaved={setCampaign} /></div>}
           </div>
 
           <div className="b">
@@ -482,7 +483,11 @@ export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved: 
             <span aria-hidden="true" className="fold-chevron">›</span>
           </button>
         </h2>
-        {gm && <button type="button" className="btn ghost small" onClick={() => setEditing(true)}>{t('Bearbeiten')}</button>}
+        {gm && (
+          <button type="button" className="btn ghost square" aria-label={t('Die Welt bearbeiten')} title={t('Die Welt bearbeiten')} onClick={() => setEditing(true)}>
+            <IconPencil />
+          </button>
+        )}
       </div>
       {closed ? null : paragraphs.length > 0 ? (
         <div id="world-text" className="card recap" style={{ gap: 12 }}>
@@ -595,17 +600,17 @@ export function MoveConsent({ campaign, me, onChanged }: { campaign: Campaign; m
       setBusy(false);
     }
   };
+  // Als Zeile mit Häkchen (steht in der Liste unter dem eigenen Charakter)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label className="check">
+    <>
+      <label className="list-row check-row">
         <input type="checkbox" checked={!!me.moveConsentAt} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
-        <span>{t('Meine Charakterdaten dürfen bei einem Umzug mit')}</span>
+        <span className="lr-text">{t('Meine Charakterdaten dürfen bei einem Umzug mit')}
+          <span className="lr-sub">{t('Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.')}</span>
+        </span>
       </label>
-      <span className="muted small" style={{ marginLeft: 28 }}>
-        {t('Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.')}
-      </span>
       <ErrorBox error={error} />
-    </div>
+    </>
   );
 }
 

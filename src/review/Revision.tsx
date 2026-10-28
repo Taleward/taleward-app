@@ -87,6 +87,8 @@ export function ParagraphHint({ value, onChange, onRemove, focusKey }: {
   );
 }
 
+const TIP_KEY = 'taleward.revisionTipSeen';
+
 /** Die Zeile am Ende: eigener Hinweis (z. B. was fehlt) und der eine Pfeil, der alles Gesammelte abschickt */
 function RevisionLine({ note, setNote, count, busy, onSend, onSelfEdit, }: {
   note: string;
@@ -98,6 +100,9 @@ function RevisionLine({ note, setNote, count, busy, onSend, onSelfEdit, }: {
 }) {
   const [focused, setFocused] = useState(false);
   const ready = note.trim().length > 0 || count > 0;
+  // Tipp nur beim ersten Prüfen auf diesem Gerät
+  const [tip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
+  useEffect(() => { if (tip) try { localStorage.setItem(TIP_KEY, '1'); } catch { /* egal */ } }, [tip]);
   return (
     <div className="revision-line">
       <HintInput value={note} onChange={setNote} busy={busy} onSend={ready ? onSend : undefined} onFocusChange={setFocused}
@@ -108,7 +113,7 @@ function RevisionLine({ note, setNote, count, busy, onSend, onSelfEdit, }: {
         : focused || ready
           ? <span className="muted small">{t('Nur du siehst das. Geändert werden nur die betroffenen Absätze, und du entscheidest danach.')}</span>
           : onSelfEdit && <button type="button" className="btn small subtle revision-self" onClick={onSelfEdit}>{t('Selbst bearbeiten')}</button>}
-      {count === 0 && !focused && !ready && <span className="muted small revision-tip">{t('Tipp: Tippe einen Absatz an, um genau dort etwas anzumerken.')}</span>}
+      {tip && count === 0 && !focused && !ready && <span className="muted small revision-tip">{t('Tipp: Tippe einen Absatz an, um genau dort etwas anzumerken.')}</span>}
     </div>
   );
 }

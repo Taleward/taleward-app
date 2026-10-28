@@ -180,7 +180,7 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
     <section className="card" style={{ gap: 10 }}>
       <h2>{t('Für die Spielleitung auswerten')}</h2>
       <span className="muted small">
-        {t('Aus deinem Hintergrund und deinem Charakterbogen werden Vorschläge für die Bibel, über die die Spielleitung entscheidet. Was geheim ist, sehen nur sie und du. Ausgewertet wird erst, wenn sie zustimmt.')}{' '}
+        {t('Daraus werden Vorschläge für die Bibel, sobald die Spielleitung zustimmt. Geheimes sehen nur ihr beide.')}{' '}
         {reader(info, campaign)}
       </span>
       <ErrorBox error={error} />

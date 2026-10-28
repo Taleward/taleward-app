@@ -116,14 +116,14 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
               <div style={{ whiteSpace: 'pre-wrap' }}>{k.text}</div>
             )}
             {editingId !== k.id && (own || gm) && (
-              <div className="row" style={{ gap: 4 }}>
+              // Als leise Textlinks: zwei Knöpfe unter jedem Kommentar machen die Liste unruhig; die Rückfrage bleibt
+              <div className="row comment-actions" style={{ gap: 16 }}>
                 {own && (
-                  <button type="button" className="btn ghost small" onClick={() => { setEditingId(k.id); setEditText(k.text); }}>
+                  <button type="button" className="linklike tap-link small" onClick={() => { setEditingId(k.id); setEditText(k.text); }}>
                     {t('Bearbeiten')}
                   </button>
                 )}
-                {/* Leise wie „Bearbeiten“: ein roter Knopf an jedem Kommentar wirkt wie eine Warnung; die Rückfrage bleibt */}
-                <button type="button" className="btn ghost small" onClick={() => remove(k)}>{t('Löschen')}</button>
+                <button type="button" className="linklike tap-link small" onClick={() => remove(k)}>{t('Löschen')}</button>
               </div>
             )}
           </div>

@@ -193,7 +193,7 @@ export function Processing() {
 
       {/* Abgebrochene oder unbrauchbare Aufnahme loswerden – nur vor dem Veröffentlichen (ab 0.4.5) */}
       {role === 'gm' && session && status && status.state !== 'published' && (
-        <button type="button" className="btn small danger outline" style={{ alignSelf: 'flex-start', marginTop: 12 }} onClick={async () => {
+        <button type="button" className="quiet-link danger" style={{ marginTop: 12 }} onClick={async () => {
           if (!(await confirmDialog(t('Kapitel {n} verwerfen? Aufnahme, Abschrift und Vorschläge werden gelöscht. Spätere Kapitel rücken um eins auf.', { n: session.number }), { confirmLabel: t('Verwerfen'), danger: true }))) return;
           try {
             await api.deleteSession(sessionId);

@@ -615,6 +615,8 @@ textarea {
   width: 22px;
   height: 22px;
   margin: 0;
+  /* Bei langem Text daneben nicht schrumpfen */
+  flex-shrink: 0;
   accent-color: var(--tinte);
 }
 
@@ -2323,3 +2325,5 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 300ms; }
 /* Ohne Leiste unten (z. B. während der Aufnahme): Abstand zur Gestenleiste des Handys */
 .screen:not(.with-nav) > .screen-main { padding-bottom: calc(var(--space-6) + var(--safe-bottom)); }
+.comment-actions { margin: -8px 0 -12px; color: var(--ink-muted); }
+.voice-hint .btn.square { background: none; border-color: transparent; color: var(--ink-muted); }

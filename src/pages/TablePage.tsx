@@ -6,7 +6,7 @@ import { useLive } from '../recorder/useLive';
 import type { Campaign, CampaignSummary } from '../api/types';
 import { Dialog } from '../components/Dialog';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
-import { IconBack } from '../components/Icons';
+import { IconBack, IconExpand } from '../components/Icons';
 import { ErrorBox, rememberCampaign } from '../components/Screen';
 import { t, tk, tn } from '../i18n';
 import { BackgroundRecorder, hasNativeRecorder, type NativeStatus } from '../recorder/native';
@@ -108,7 +108,7 @@ function SwitchCampaign({ current }: { current: string }) {
   }, [open, list, current]);
   return (
     <>
-      <button type="button" className="btn small ghost" onClick={() => setOpen(true)}>{t('Kampagne wechseln')}</button>
+      <button type="button" className="linklike tap-link small" onClick={() => setOpen(true)}>{t('Kampagne wechseln')}</button>
       {open && (
         <Dialog title={t('Kampagne wechseln')} onClose={() => setOpen(false)}>
           <ErrorBox error={error} />
@@ -155,7 +155,12 @@ function Card({ id, forceCompact, onCompact, onExpand, style, edge = '', childre
       aria-label={label(id)} style={style}>
       <div className="table-panel-head">
         <h2 className="table-panel-title">{label(id)}</h2>
-        {compact && <button type="button" className="btn small ghost" onClick={onExpand}>{t('Groß öffnen')}</button>}
+        {/* Als Zeichen statt als Wortknopf: drei gleiche Knöpfe am Handy machen den Schirm unruhig */}
+        {compact && (
+          <button type="button" className="btn ghost square" aria-label={t('{name} groß öffnen', { name: label(id) })} title={t('Groß öffnen')} onClick={onExpand}>
+            <IconExpand />
+          </button>
+        )}
       </div>
       {children(compact)}
     </section>

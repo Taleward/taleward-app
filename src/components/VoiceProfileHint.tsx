@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { currentConnectionId } from '../api/connections';
 import { t } from '../i18n';
+import { IconMic } from './Icons';
 
 const KEY = 'taleward.voiceHintDismissed';
 
@@ -40,14 +41,19 @@ export function VoiceProfileHint() {
     setShow(false);
   };
 
+  // Eine Zeile statt einer Karte: freiwillig, also leise; „Nicht jetzt“ als ×
   return (
-    <section className="card" aria-labelledby="voice-hint-title">
-      <strong id="voice-hint-title">{t('Stimmprofil, freiwillig')}</strong>
-      <span className="small">{t('Der Server erkennt dich dann in Aufnahmen, auch ohne Vorstellungsrunde. Dafür liest du einmal einen kurzen Text vor.')}</span>
-      <span className="muted small">{t('Gespeichert wird nur ein Stimmabdruck, keine Aufnahme. Jederzeit löschbar.')}</span>
-      <div className="row wrap" style={{ gap: 8 }}>
-        <Link className="btn small outline" to={`/v/${connId}/profil/stimme`}>{t('Stimmprofil anlegen')}</Link>
-        <button type="button" className="btn small ghost" onClick={dismiss}>{t('Nicht jetzt')}</button>
+    <section className="list-box voice-hint" aria-label={t('Stimmprofil, freiwillig')}>
+      <div className="row" style={{ gap: 4 }}>
+        <Link className="list-row" style={{ flex: 1 }} to={`/v/${connId}/profil/stimme`}>
+          <IconMic size={20} />
+          <span className="lr-text">{t('Stimmprofil anlegen')}
+            <span className="lr-sub">{t('Freiwillig. Der Server erkennt dich dann auch ohne Vorstellungsrunde.')}</span>
+          </span>
+        </Link>
+        <button type="button" className="btn ghost square" aria-label={t('Nicht jetzt')} title={t('Nicht jetzt')} onClick={dismiss}>
+          <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>×</span>
+        </button>
       </div>
     </section>
   );

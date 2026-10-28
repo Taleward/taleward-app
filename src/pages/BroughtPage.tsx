@@ -50,10 +50,11 @@ export function BroughtPage() {
   return (
     <Screen back overline={campaign?.title ?? ' '} title={t('Mitgebrachte Welt')}>
       <ErrorBox error={error} />
-      <p className="muted small" style={{ margin: 0 }}>
-        {t('Was die Charaktere mitbringen: Übernehmen legt den Eintrag sofort in der Bibel an, Ablehnen verwirft ihn. Vorher kannst du alles bearbeiten.')}
+      {/* Erklärung nur, wenn es etwas zu entscheiden gibt */}
+      {open.length > 0 && <p className="muted small" style={{ margin: 0 }}>
+        {t('Übernehmen legt den Eintrag gleich in der Bibel an. Vorher kannst du alles bearbeiten.')}
         {analyses.length > 0 && ' ' + t('Vorschläge aus Charakterbögen und Hintergründen sind zunächst nur für dich und die Spielerin sichtbar.')}
-      </p>
+      </p>}
       {proposals && open.length === 0 && <div className="empty">{t('Nichts Neues mitgebracht.')}</div>}
 
       {campaign && bySubmitter.map((id) => {

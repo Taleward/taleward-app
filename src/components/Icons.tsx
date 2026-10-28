@@ -132,3 +132,12 @@ export const IconPencil = ({ size = 20 }: { size?: number }) => (
 export const IconRoute = ({ size = 22 }: { size?: number }) => (
   <svg {...base(size)}><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
 );
+export const IconUser = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 0 0-16 0" /></svg>
+);
+export const IconLink = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+);
+export const IconExpand = ({ size = 20 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" /></svg>
+);

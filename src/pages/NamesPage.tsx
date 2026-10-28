@@ -159,11 +159,12 @@ export function NamesPage() {
           </button>
           {canRetranscribe && (
             <>
-              <button type="button" className="btn outline" disabled={busy || decided === 0} onClick={() => apply(true)}>
+              {/* Seltener Weg: leise unter dem Hauptknopf */}
+              <button type="button" className="quiet-link" disabled={busy || decided === 0} onClick={() => apply(true)}>
                 {t('Übernehmen und neu transkribieren')}
               </button>
-              <p className="muted small" style={{ margin: 0 }}>
-                {t('Neu transkribieren hört mit den richtigen Namen noch einmal genau hin. Das dauert etwa so lange wie beim ersten Mal.')}
+              <p className="muted small" style={{ margin: '-8px 0 0' }}>
+                {t('Hört mit den richtigen Namen noch einmal hin und dauert so lange wie beim ersten Mal.')}
                 {data.audioDeletesAt ? ' ' + t('Die Aufnahme ist noch bis {date} da.', { date: formatDate(data.audioDeletesAt, 'long') }) : ''}
               </p>
             </>

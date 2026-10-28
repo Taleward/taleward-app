@@ -240,7 +240,7 @@ export function DatePollPage() {
           </section>
 
           {gm && (
-            <button type="button" className="btn small danger outline" disabled={busy} onClick={async () => {
+            <button type="button" className="quiet-link danger" disabled={busy} onClick={async () => {
               if (await confirmDialog(t('Abstimmung abbrechen? Alle Vorschläge gehen verloren.'), { confirmLabel: t('Abstimmung abbrechen'), cancelLabel: t('Zurück'), danger: true })) run(() => api.cancelDatePoll(open.id));
             }}>
               {t('Abstimmung abbrechen')}

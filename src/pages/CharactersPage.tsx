@@ -62,7 +62,7 @@ export function CharactersPage() {
         <>
           {list.length === 0 && (
             <div className="empty">
-              {t('Hier sammelst du deine Charaktere – mit Bild, Hintergrund, privaten Notizen und allem, was sie in die Welt mitbringen. Du nimmst sie in jede Kampagne mit.')}
+              {t('Hier sammelst du deine Charaktere und nimmst sie in jede Kampagne mit.')}
             </div>
           )}
           {showFilter && (
@@ -104,13 +104,15 @@ export function CharactersPage() {
           </div>
           <button type="button" className="btn" onClick={() => setCreating(true)}>{t('Neuer Charakter')}</button>
           <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
-            {t('Deine Sammlung liegt nur auf diesem Gerät. Kampagnen bekommen eine Kopie von Name, Bild, Beschreibung und Hintergrund – private Notizen nie.')}
+            {t('Die Sammlung liegt nur auf diesem Gerät. Private Notizen gehen nie an eine Kampagne.')}
           </p>
           {/* Sicherung: Handy weg oder App gelöscht – dann ist die Datei der einzige Rückweg */}
           <details className="card" open={list.length === 0 || undefined}>
             <summary style={{ fontWeight: 700 }}>{t('Sammlung sichern')}</summary>
-            <span className="small">{t('Sichere deine Charaktere ab und zu als Datei. Auf einem neuen Gerät holst du sie damit zurück. Die Datei enthält auch deine privaten Notizen – gib sie nicht weiter.')}</span>
-            <span className="muted small">{t('„Aus Datei zurückholen“ nimmt auch einzelne Charakter-Dateien an. Gibt es den Charakter hier schon, gewinnt der neuere Stand; Chroniken und mitgebrachte Welt werden zusammengeführt.')}</span>
+            <p className="small" style={{ margin: '8px 0' }}>
+              {t('Sichere sie ab und zu als Datei, auf einem neuen Gerät holst du sie damit zurück. Die Datei enthält deine privaten Notizen.')}{' '}
+              <span className="muted">{t('Gibt es einen Charakter schon, gewinnt der neuere Stand.')}</span>
+            </p>
             <ErrorBox error={backupError} />
             {restored && <span className="small" role="status">{restored}</span>}
             <div className="row wrap" style={{ gap: 8 }}>

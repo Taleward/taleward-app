@@ -82,7 +82,7 @@ export function MovePage() {
               <li>{t('Alle bekommen dort einen freien Platz. Wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst darauf.')}</li>
             </ol>
             <span className="muted small">{t('Hier auf „{server}“ bleibt alles, wie es ist. Löschen kannst du die Kampagne später selbst.', { server: currentConnection().name })}</span>
-            <span className="muted small">{t('Auf dem neuen Server fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme dort neu zu. Cloud-Freigaben und Stimmprofile richtet ihr dort neu ein. Das ist Absicht: Zustimmungen und Freigaben gelten immer nur für einen Server.')}</span>
+            <span className="muted small">{t('Dort braucht jede Person ein eigenes Konto und stimmt neu zu, Cloud-Freigaben und Stimmprofile richtet ihr neu ein.')}</span>
           </section>
 
           {unpublished > 0 && (

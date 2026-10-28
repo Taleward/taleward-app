@@ -12,8 +12,8 @@ import { t, tk, tn } from '../i18n';
 
 const KINDS: { value: DocumentKind; label: string; hint: string }[] = [
   { value: 'gm', label: tk('SL-Unterlage'), hint: tk('Alles bleibt geheim. Du gibst später gezielt frei.') },
-  { value: 'mixed', label: tk('Gemischt'), hint: tk('Die KI schlägt vor, was Spieler wissen dürfen – voreingestellt bleibt trotzdem alles geheim.') },
-  { value: 'handout', label: tk('Spielerhandout'), hint: tk('Karten, Briefe, Gerüchte: alles ist für die Spieler gedacht.') }
+  { value: 'mixed', label: tk('Gemischt'), hint: tk('Taleward schlägt vor, was Spieler wissen dürfen. Geheim bleibt es trotzdem, bis du freigibst.') },
+  { value: 'handout', label: tk('Spielerhandout'), hint: tk('Karten, Briefe, Gerüchte für die Spieler.') }
 ];
 
 export const DOC_STATE: Record<CampaignDocument['state'], string> = {
@@ -121,12 +121,12 @@ export function DocumentsPage() {
           <span>{t('Tipp: Geheime Abschnitte mit „[SL]“ markieren.')}</span>
         </div>
         <button type="button" className="btn" disabled={!file || busy} onClick={upload}>
-          {busy ? t('Wird hochgeladen …') : t('Hochladen und auswerten')}
+          {busy ? t('Wird hochgeladen …') : t('Auswerten lassen')}
         </button>
-        <span className="muted small">{t('Nur für dich sichtbar. Gescannte Seiten ohne Text gehen noch nicht.')}</span>
+        <span className="muted small">{t('Gescannte Seiten ohne Text gehen noch nicht.')}</span>
       </section>
 
-      {docs && docs.length > 0 && <h2>{t('Hochgeladen')}</h2>}
+      {docs && docs.length > 0 && <h2>{t('Deine Unterlagen')}</h2>}
       <div className="grid-cards">
       {docs?.map((d) => (
         <div key={d.id} className={d.state === 'awaiting_review' || d.state === 'failed' ? 'card warn' : 'card'}>
@@ -154,7 +154,7 @@ export function DocumentsPage() {
             {d.state === 'failed' && (
               <button type="button" className="btn small outline" onClick={() => api.retryDocument(d.id).then(load).catch(setError)}>{t('Erneut versuchen')}</button>
             )}
-            <button type="button" className="btn small danger outline" onClick={() => remove(d)}>{t('Löschen')}</button>
+            <button type="button" className="linklike tap-link small" style={{ marginLeft: 'auto' }} onClick={() => remove(d)}>{t('Löschen')}</button>
           </div>
         </div>
       ))}

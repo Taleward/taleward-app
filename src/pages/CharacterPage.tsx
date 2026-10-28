@@ -1,7 +1,7 @@
 import { confirmDialog } from '../components/confirm';
 import { isDeletedMember } from '../api/types';
 import { currentConnection, currentConnectionId, p } from '../api/connections';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Campaign, Member } from '../api/types';
@@ -10,7 +10,7 @@ import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { CharacterForm, MissingHint, missingParts } from '../components/CharacterForm';
-import { IconLock } from '../components/Icons';
+import { IconLock, IconPencil, IconUser } from '../components/Icons';
 import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { t } from '../i18n';
 import { MoveConsent } from './Overview';
@@ -128,14 +128,20 @@ export function CharacterPage() {
           {own && (
             <>
               <Divider />
+              {/* Eigener Charakter: alle Wege als eine ruhige Liste */}
               {member.role === 'player' && serverHasCharacters(currentConnection())
-                ? <CollectionActions campaign={campaign} member={member} onChanged={load} onEdit={() => setEditing(true)} />
-                : (
-                  <button type="button" className="btn outline" onClick={() => setEditing(true)}>
-                    {member.role === 'gm' ? t('Bild ändern') : t('Charakter bearbeiten')}
-                  </button>
+                ? (
+                  <CollectionActions campaign={campaign} member={member} onChanged={load} onEdit={() => setEditing(true)}>
+                    {apiAtLeast('0.4.8') && <MoveConsent campaign={campaign} me={member} onChanged={load} />}
+                  </CollectionActions>
+                ) : (
+                  <div className="list-box">
+                    <button type="button" className="list-row nav" onClick={() => setEditing(true)}>
+                      <IconPencil /><span className="lr-text">{member.role === 'gm' ? t('Bild ändern') : t('Charakter bearbeiten')}</span>
+                    </button>
+                    {member.role === 'player' && apiAtLeast('0.4.8') && <MoveConsent campaign={campaign} me={member} onChanged={load} />}
+                  </div>
                 )}
-              {member.role === 'player' && apiAtLeast('0.4.8') && <MoveConsent campaign={campaign} me={member} onChanged={load} />}
               {member.role === 'player' && campaign.allowCharacterAnalysis && apiAtLeast('0.4.18') && <MyAnalyses campaign={campaign} me={member} info={info} />}
             </>
           )}
@@ -145,17 +151,21 @@ export function CharacterPage() {
               <Divider />
               <h2>{t('Rolle in der Kampagne')}</h2>
               <ErrorBox error={manageError} />
-              {member.role === 'player' && (
-                <button type="button" className="btn outline" disabled={busy} onClick={() => changeRole('gm')}>{t('Zur Spielleitung machen')}</button>
-              )}
-              {member.role === 'gm' && (otherGms > 0 ? (
-                <button type="button" className="btn outline" disabled={busy} onClick={() => changeRole('player')}>
-                  {own ? t('SL-Rolle abgeben') : t('SL-Rolle entziehen')}
-                </button>
-              ) : own && <span className="muted small">{t('Du bist die einzige Spielleitung. Ernenne erst eine zweite, dann kannst du die Rolle abgeben.')}</span>)}
-              {!own && (
-                <button type="button" className="btn danger outline" disabled={busy} onClick={remove}>{t('Aus der Kampagne entfernen')}</button>
-              )}
+              {/* Seltene Schritte als Zeilen statt großer Knöpfe; die Rückfragen bleiben */}
+              {(member.role === 'player' || otherGms > 0 || !own) && <div className="list-box">
+                {member.role === 'player' && (
+                  <button type="button" className="list-row nav" disabled={busy} onClick={() => changeRole('gm')}><span className="lr-text">{t('Zur Spielleitung machen')}</span></button>
+                )}
+                {member.role === 'gm' && otherGms > 0 && (
+                  <button type="button" className="list-row nav" disabled={busy} onClick={() => changeRole('player')}>
+                    <span className="lr-text">{own ? t('SL-Rolle abgeben') : t('SL-Rolle entziehen')}</span>
+                  </button>
+                )}
+                {!own && (
+                  <button type="button" className="list-row nav danger" disabled={busy} onClick={remove}><span className="lr-text">{t('Aus der Kampagne entfernen')}</span></button>
+                )}
+              </div>}
+              {member.role === 'gm' && otherGms === 0 && own && <span className="muted small">{t('Du bist die einzige Spielleitung. Ernenne erst eine zweite, dann kannst du die Rolle abgeben.')}</span>}
             </section>
           )}
         </>
@@ -168,7 +178,7 @@ export function CharacterPage() {
  * Eigener Charakter auf Servern ab 0.4.7: Bearbeitet wird in der Sammlung. Ältere Charaktere (vor der Sammlung
  * angelegt) lassen sich einmal übernehmen; danach gilt der Stand aus der App.
  */
-function CollectionActions({ campaign, member, onChanged, onEdit }: { campaign: Campaign; member: Member; onChanged: () => void; onEdit: () => void }) {
+function CollectionActions({ campaign, member, onChanged, onEdit, children }: { campaign: Campaign; member: Member; onChanged: () => void; onEdit: () => void; children?: ReactNode }) {
   const navigate = useNavigate();
   const connId = currentConnectionId() ?? currentConnection().id;
   const linked = characterForCampaign(connId, campaign.id);
@@ -212,25 +222,38 @@ function CollectionActions({ campaign, member, onChanged, onEdit }: { campaign: 
             {busy ? t('Schicke …') : t('Neuen Stand aus der Sammlung schicken')}
           </button>
         )}
-        <Link className="btn outline" to={`/charaktere/${linked.id}`}>{t('In meiner Sammlung öffnen')}</Link>
+        <div className="list-box">
+          <Link className="list-row" to={`/charaktere/${linked.id}`}><IconUser /><span className="lr-text">{t('In meiner Sammlung öffnen')}</span></Link>
+          {children}
+        </div>
       </>
     );
   }
   if (member.characterId) {
-    return <span className="muted small" style={{ textAlign: 'center' }}>{t('Dieser Charakter liegt in der Sammlung auf einem anderen Gerät.')}</span>;
+    return (
+      <>
+        <span className="muted small" style={{ textAlign: 'center' }}>{t('Dieser Charakter liegt in der Sammlung auf einem anderen Gerät.')}</span>
+        {children && <div className="list-box">{children}</div>}
+      </>
+    );
   }
   return (
     <>
       <ErrorBox error={error} />
-      {member.characterName ? (
-        <>
-          <button type="button" className="btn outline" disabled={busy} onClick={adopt}>{busy ? t('Übernehme …') : t('In meine Sammlung übernehmen')}</button>
-          <span className="muted small">{t('Dann kannst du ihn in andere Kampagnen mitnehmen, Notizen führen und Welt mitbringen.')}</span>
-        </>
-      ) : (
-        <Link className="btn outline" to="/charaktere">{t('Aus meiner Sammlung wählen')}</Link>
-      )}
-      <button type="button" className="btn ghost" disabled={busy} onClick={onEdit}>{t('Nur hier bearbeiten')}</button>
+      <div className="list-box">
+        {member.characterName ? (
+          <button type="button" className="list-row nav" disabled={busy} onClick={adopt}>
+            <IconUser />
+            <span className="lr-text">{busy ? t('Übernehme …') : t('In meine Sammlung übernehmen')}
+              <span className="lr-sub">{t('Dann nimmst du ihn in andere Kampagnen mit.')}</span>
+            </span>
+          </button>
+        ) : (
+          <Link className="list-row" to="/charaktere"><IconUser /><span className="lr-text">{t('Aus meiner Sammlung wählen')}</span></Link>
+        )}
+        <button type="button" className="list-row nav" disabled={busy} onClick={onEdit}><IconPencil /><span className="lr-text">{t('Nur hier bearbeiten')}</span></button>
+        {children}
+      </div>
     </>
   );
 }

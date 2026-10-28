@@ -22,7 +22,7 @@ import { apiFor, fetchServerInfo, isApiError } from '../api/client';
 import { isMusterUrl } from '../api/muster';
 import { offlineSince } from '../api/readCopy';
 import { APP_VERSION, MIN_API_VERSION, apiAtLeast, hasValidToken, parseInvite, sameServerHost, updateConnection, versionLess, type Connection } from '../api/connections';
-import { IconInfo } from '../components/Icons';
+import { IconInfo, IconLink, IconPlus, IconServer, IconUser } from '../components/Icons';
 import { useAuth } from '../auth/AuthContext';
 import { Divider, ErrorBox, Screen } from '../components/Screen';
 import { Missing } from '../components/Missing';
@@ -325,18 +325,14 @@ export function Campaigns() {
               <span className="muted small">{t('Dafür verbindest du dich zuerst mit einem Server – dem deines Vereins, deiner Gruppe oder einem eigenen. Die Musterkampagne bleibt dabei hier.')}</span>
             </div>
           ) : creatable.length > 0 ? (
-            <button className={firstStep ? 'btn' : 'btn outline'} type="button" onClick={startNew}>
-              {t('Neue Kampagne anlegen')}
-            </button>
+            // Erste Kampagne: Hauptknopf; danach eine Zeile in der Liste darunter
+            firstStep ? <button className="btn" type="button" onClick={startNew}>{t('Neue Kampagne anlegen')}</button> : null
           ) : (
             // Ohne SL-Freigabe: statt des Formulars der Stand der Anfrage (der Server sperrt das Anlegen ohnehin)
             needsGm.map((c) => access[c.id]?.user && (
               <GmRequest key={c.id} conn={c} info={access[c.id].info} user={access[c.id].user!} onUser={(u) => setUserOf(c.id, u)} />
             ))
           )}
-          <button className="btn outline" type="button" onClick={() => { setMode('join'); setValue(''); }}>
-            {t('Einladung annehmen')}
-          </button>
         </>
       ) : (
         <div className="card">
@@ -382,10 +378,20 @@ export function Campaigns() {
         </div>
       )}
 
-      <div className="row wrap list-more" style={{ gap: 4 }}>
-        {active.some(serverHasCharacters) || listCharacters().length > 0
-          ? <Link className="btn ghost small" to="/charaktere">{t('Meine Charaktere')}</Link> : null}
-        <Link className="btn ghost small" to="/konto">{t('Konten und Server')}</Link>
+      {/* Weitere Wege als ruhige Liste statt vier Knöpfen */}
+      <div className="list-box">
+        {mode === 'none' && !onlyMuster && creatable.length > 0 && !firstStep && (
+          <button type="button" className="list-row nav" onClick={startNew}><IconPlus /><span className="lr-text">{t('Neue Kampagne anlegen')}</span></button>
+        )}
+        {mode === 'none' && (
+          <button type="button" className="list-row nav" onClick={() => { setMode('join'); setValue(''); }}>
+            <IconLink /><span className="lr-text">{t('Einladung annehmen')}</span>
+          </button>
+        )}
+        {(active.some(serverHasCharacters) || listCharacters().length > 0) && (
+          <Link className="list-row" to="/charaktere"><IconUser /><span className="lr-text">{t('Meine Charaktere')}</span></Link>
+        )}
+        <Link className="list-row" to="/konto"><IconServer /><span className="lr-text">{t('Konten und Server')}</span></Link>
       </div>
       </div>
     </Screen>
