@@ -1,0 +1,63 @@
+From 5048706bf519c90577310f86cd140562cded1075 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 16:54:52 +0100
+Subject: [PATCH] Aufnahme: Gast als leise Zeile statt Knopf
+
+---
+ src/i18n/en.ts          |  2 ++
+ src/pages/Recording.tsx | 13 ++++++++++---
+ src/theme.css           |  2 ++
+ 3 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index a997053..3635be1 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1624,3 +1624,5 @@ export const en: Record<string, string> = {
+   "Personen, Orte und Aufträge, die deine Figur kennt. Die Suche dort findet Namen auch halb erinnert.": "People, places and quests your character knows. The search there finds names even when half remembered.",
+   "Per Link oder QR-Code": "By link or QR code",
++  "Gast dazunehmen": "Add a guest",
++  "Ohne Konto, stimmt hier selbst zu": "No account, agrees right here",
+ };
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index b3d3d27..d2bb96f 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -14,5 +14,5 @@ import type { Attendee, Member } from '../api/types';
+ import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } from '../api/upload';
+ import { ConsentHandover } from '../components/ConsentHandover';
+-import { IconCheck, IconMic } from '../components/Icons';
++import { IconCheck, IconMic, IconPlus } from '../components/Icons';
+ import { CONSENT_ON_SITE } from '../consent';
+ import { MicDenied } from '../components/MicDenied';
+@@ -403,5 +403,5 @@ export function Recording() {
+               </div>
+             ))}
+-            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
++            <div style={{ borderTop: '1px solid var(--line)', paddingTop: addingGuest ? 10 : 0 }}>
+               {addingGuest ? (
+                 <div className="row" style={{ gap: 8 }}>
+@@ -413,5 +413,12 @@ export function Recording() {
+                 </div>
+               ) : (
+-                <button type="button" className="btn small quiet" onClick={() => setAddingGuest(true)}>+ {t('Gast')}</button>
++                // Wie „Mitspielende einladen“ auf der Übersicht: eine leise Zeile statt eines Knopfs
++                <button type="button" className="row invite-row flat" onClick={() => setAddingGuest(true)}>
++                  <span className="invite-plus small" aria-hidden><IconPlus size={18} /></span>
++                  <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
++                    <span>{t('Gast dazunehmen')}</span>
++                    <span className="muted small">{t('Ohne Konto, stimmt hier selbst zu')}</span>
++                  </span>
++                </button>
+               )}
+             </div>
+diff --git a/src/theme.css b/src/theme.css
+index 3bc72b9..db15ebf 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2298,2 +2298,4 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ @media (hover: hover) { .invite-row:hover .invite-plus { background: var(--paper-sunken); } }
+ .invite-open { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 0 6px; }
++.invite-row.flat { border-top: 0; margin-top: 0; padding-top: 0; }
++.invite-plus.small { width: 32px; height: 32px; }
