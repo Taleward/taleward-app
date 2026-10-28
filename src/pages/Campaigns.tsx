@@ -1,5 +1,6 @@
 import { listCharacters } from '../characters/store';
 import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
+import { EmailNudge } from '../components/EmailNudge';
 import { GmDecision, GmRequest } from '../components/GmRequest';
 import { gmState, termsOutdated } from '../auth/serverAccess';
 import type { CampaignSettingsIn, ServerInfo, User } from '../api/types';
@@ -228,6 +229,7 @@ export function Campaigns() {
       ))}
       {/* Neue Nutzungsbedingungen (ab 0.4.22): bis zur Zustimmung nur lesen */}
       {active.map((c) => <TermsReminder key={'terms-' + c.id} conn={c} />)}
+      {active.map((c) => <EmailNudge key={'mail-' + c.id} conn={c} />)}
       {/* SL-Freigabe entschieden: einmal zum Bestätigen */}
       {active.map((c) => access[c.id]?.user && <GmDecision key={'gm-' + c.id} conn={c} info={access[c.id].info} user={access[c.id].user!} />)}
       {offline.map(({ conn: c, since }) => (

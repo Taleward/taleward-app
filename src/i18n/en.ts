@@ -1528,4 +1528,13 @@ export const en: Record<string, string> = {
   "Einlösen": "Redeem",
   "Inzwischen hat jemand die Einstellungen geändert. Hier ist der neue Stand, bitte noch einmal wählen.": "Someone changed the settings in the meantime. Here is the current state, please choose again.",
   "Kapitel schreiben": "Write chapter",
+  "E-Mail hinterlegen": "Add an email address",
+  "Willst du eine E-Mail hinterlegen?": "Would you like to add an email address?",
+  "Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.": "Then you can reset your password yourself. It stays optional, and nobody at the table sees it.",
+  "Nein danke": "No thanks",
+  "E-Mail: wartet auf Bestätigung": "Email: waiting for confirmation",
+  "E-Mail: noch keine – fürs Passwort-Zurücksetzen": "Email: none yet – for resetting your password",
+  "Ohne hinterlegte E-Mail hilft dir die Verwaltung deines Servers.": "Without an email address on file, your server's administrators can help you.",
+  "Craig ist ein eigener Dienst und bewahrt die Aufnahme bis zum Herunterladen auf seinen Servern auf, nicht sicher in der EU. Sagt das am Tisch dazu.": "Craig is a separate service and keeps the recording on its servers until you download it, not necessarily in the EU. Mention that at the table.",
+  "Mehr dazu": "More about this",
 };

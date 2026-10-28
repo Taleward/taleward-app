@@ -31,6 +31,7 @@ import type { Campaign, CharacterAnalysis, GameSystem, GmNotice, Member, ServerI
 import { IconCheck, IconInfo, IconLock, IconScreen, IconSearch } from '../components/Icons';
 import { LinkButtons, safeLinks } from '../components/Links';
 import { MusterBanner } from '../components/Muster';
+import { EmailNudge } from '../components/EmailNudge';
 import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { formatDateFull, formatDateTime } from '../components/format';
 import { CONSENT_STANDING, CONSENT_SUMMARY } from '../consent';
@@ -113,6 +114,7 @@ export function Overview() {
           )}
 
           <MusterBanner />
+          <EmailNudge conn={currentConnection()} />
           {campaign.archivedAt && (
             <div className="notice"><strong>{t('Abgeschlossen')}</strong>&nbsp;{t('– nur noch zum Nachlesen, keine neuen Kapitel.')}</div>
           )}

@@ -6,6 +6,7 @@ import { DownloadButton } from '../components/UpdateNotices';
 import { Wordmark } from '../components/Wordmark';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { markNewAccount } from '../components/EmailNudge';
 import { apiFor, fetchInvitePreview, fetchServerInfo, isApiError } from '../api/client';
 import {
   APP_VERSION, getConnection, isOutdated, listConnections, normalizeBaseUrl, versionLess, parseInvite, REQUIRED_API_VERSION,
@@ -156,6 +157,7 @@ export function ConnectPage() {
         // Anderes Konto oder kein bekannter Server: eigene Verbindung, die alte bleibt, wie sie war
         conn = saveConnection({ ...fields, ...login });
       }
+      if (mode !== 'login') markNewAccount(conn.id);
       await finish(conn, codes.inviteCode ?? null);
     } catch (err) {
       setError(err);
@@ -388,8 +390,10 @@ function ForgotPassword({ info, baseUrl }: { info: ServerInfo; baseUrl: string }
       ? t('Im Taleward-Programm unter Einstellungen → Erweitert → Passwort vergessen.')
       : t('Die Verwaltung eures Servers schickt dir einen Link zum Zurücksetzen.')}</div>;
   }
+  // Für alle gleich, damit die Seite nicht verrät, ob ein Konto eine Adresse hat
+  const noMail = t('Ohne hinterlegte E-Mail hilft dir die Verwaltung deines Servers.');
   if (sent) {
-    return <div className="notice">{t('Wenn es zu diesem Konto eine bestätigte E-Mail gibt, ist ein Link unterwegs. Er gilt eine Stunde.')}</div>;
+    return <div className="notice">{t('Wenn es zu diesem Konto eine bestätigte E-Mail gibt, ist ein Link unterwegs. Er gilt eine Stunde.')} {noMail}</div>;
   }
   return (
     <div className="card">
@@ -410,6 +414,7 @@ function ForgotPassword({ info, baseUrl }: { info: ServerInfo; baseUrl: string }
           setBusy(false);
         }
       }}>{t('Link schicken')}</button>
+      <span className="muted small">{noMail}</span>
     </div>
   );
 }
@@ -449,6 +454,7 @@ function RegisterWithProvider({ info, pending }: { info: ServerInfo; pending: Pe
         ...termsConsent(info)
       });
       const conn = saveConnection({ ...probe, token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
+      markNewAccount(conn.id);
       clearPendingRegister();
       if (codes.inviteCode) {
         const c = await apiFor(conn).joinCampaign(codes.inviteCode);

@@ -6,7 +6,7 @@ import { confirmDialog } from '../components/confirm';
 import { brandMarkShapes } from '../components/Wordmark';
 import { currentConnection, p } from '../api/connections';
 import { Avatar } from '../components/Avatar';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
@@ -450,7 +450,11 @@ export function Recording() {
               <label htmlFor="file-discord">{t('Discord-Spuren (eine Datei pro Person)')}</label>
               <input id="file-discord" type="file" accept="audio/*" multiple aria-describedby="discord-hint" disabled={!allConsented} onChange={(e) => pickDiscord(e.target.files)} />
               {/* Woher solche Spuren kommen: heute über Craig, später über den eigenen Bot */}
-              <span id="discord-hint" className="muted small">{t('Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.')}</span>
+              <span id="discord-hint" className="muted small">
+                {t('Ihr spielt über Discord? Der Bot Craig nimmt dort jede Person einzeln auf. Die Dateien lädst du hier hoch.')}{' '}
+                {t('Craig ist ein eigener Dienst und bewahrt die Aufnahme bis zum Herunterladen auf seinen Servern auf, nicht sicher in der EU. Sagt das am Tisch dazu.')}{' '}
+                <a href={getLang() === 'de' ? 'https://taleward.org/fuer-gruppen/#frage-discord' : 'https://taleward.org/en/for-groups/#frage-discord'} target="_blank" rel="noopener noreferrer">{t('Mehr dazu')}</a>
+              </span>
             </div>
             {discordFiles.map((d, i) => (
               <div key={d.file.name} className="field">

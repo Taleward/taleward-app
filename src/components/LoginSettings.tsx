@@ -63,7 +63,17 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
 
   return (
     <details className="card" style={{ gap: 12 }} ref={box} open={open || undefined}>
-      <summary style={{ fontWeight: 700 }}>{t('Anmeldung und E-Mail')}</summary>
+      <summary style={{ fontWeight: 700 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {t('Anmeldung und E-Mail')}
+          {/* Auch zugeklappt sichtbar, solange keine Adresse bestätigt ist */}
+          {!user.email && info.passwordReset && (
+            <span className="muted small" style={{ fontWeight: 400 }}>
+              {user.emailPending ? t('E-Mail: wartet auf Bestätigung') : t('E-Mail: noch keine – fürs Passwort-Zurücksetzen')}
+            </span>
+          )}
+        </span>
+      </summary>
 
       {/* E-Mail */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
