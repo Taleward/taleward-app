@@ -1,0 +1,101 @@
+From 3d643aae98cd5bdfbecc331ec85e83a1978c7a89 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 16:50:37 +0100
+Subject: [PATCH] =?UTF-8?q?=E2=80=9EMitspielende=20einladen=E2=80=9C=20als?=
+ =?UTF-8?q?=20Zeile=20in=20=E2=80=9EAm=20Tisch=E2=80=9C?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/InviteBox.tsx | 23 ++++++++++++++++++++---
+ src/i18n/en.ts               |  1 +
+ src/pages/Overview.tsx       |  3 ++-
+ src/theme.css                |  6 ++++++
+ 4 files changed, 29 insertions(+), 4 deletions(-)
+
+diff --git a/src/components/InviteBox.tsx b/src/components/InviteBox.tsx
+index 36cb2a3..a576d56 100644
+--- a/src/components/InviteBox.tsx
++++ b/src/components/InviteBox.tsx
+@@ -1,2 +1,3 @@
++import { IconPlus } from './Icons';
+ import { useEffect, useState } from 'react';
+ import QRCode from 'qrcode';
+@@ -10,5 +11,6 @@ import { ErrorBox } from './Screen';
+ 
+ /** Mitspielende einladen: fertiger Link zum Teilen, Kopieren oder als QR-Code am Tisch */
+-export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; campaignTitle?: string }) {
++/** row: als letzte Zeile in „Am Tisch“ (Übersicht); sonst als eigener Knopf (z. B. beim Übergeben der Spielleitung) */
++export function InviteBox({ campaignId, campaignTitle, row }: { campaignId: string; campaignTitle?: string; row?: boolean }) {
+   const [invite, setInvite] = useState<{ code: string; expiresAt: string; link: string } | null>(null);
+   const [qr, setQr] = useState<string | null>(null);
+@@ -40,4 +42,19 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
+     : t('Komm in unsere Runde bei Taleward:');
+ 
++  if (!invite && row) {
++    return (
++      <>
++        <button type="button" className="row invite-row" onClick={create}>
++          <span className="invite-plus" aria-hidden><IconPlus /></span>
++          <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
++            <span>{t('Mitspielende einladen')}</span>
++            <span className="muted small">{t('Per Link oder QR-Code')}</span>
++          </span>
++        </button>
++        <ErrorBox error={error} />
++      </>
++    );
++  }
++
+   if (!invite) {
+     return (
+@@ -50,6 +67,6 @@ export function InviteBox({ campaignId, campaignTitle }: { campaignId: string; c
+ 
+   return (
+-    <section className="card">
+-      <h2>{t('Einladung')}</h2>
++    <section className={row ? 'invite-open' : 'card'}>
++      {row ? <strong>{t('Einladung')}</strong> : <h2>{t('Einladung')}</h2>}
+       <div className="notice" style={{ flexDirection: 'column', gap: 4 }}>
+         <span className="small" style={{ wordBreak: 'break-all' }}>{invite.link}</span>
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index f0aa22e..a997053 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1623,3 +1623,4 @@ export const en: Record<string, string> = {
+   "Geht an {name}": "Goes to {name}",
+   "Personen, Orte und Aufträge, die deine Figur kennt. Die Suche dort findet Namen auch halb erinnert.": "People, places and quests your character knows. The search there finds names even when half remembered.",
++  "Per Link oder QR-Code": "By link or QR code",
+ };
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 933105b..9e173bc 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -200,5 +200,4 @@ export function Overview() {
+           <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && sessions?.length === 0)} />
+ 
+-          {gm && <div id="invite" data-tour="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
+           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} onPickCover={() => {
+             setPickingCover(true);
+@@ -551,4 +550,6 @@ function Members({ campaign, onChanged, voiceHint }: { campaign: Campaign; onCha
+           </Link>
+         ))}
++        {/* Einladen als letzte Zeile am Tisch statt als eigener großer Knopf */}
++        {gm && <div id="invite" data-tour="invite"><InviteBox row campaignId={campaign.id} campaignTitle={campaign.title} /></div>}
+       </div>
+       {/* Ausgetretene und gelöschte Konten bleiben im Hintergrund (Kapitel, Kommentare), stehen aber nicht mehr am Tisch */}
+diff --git a/src/theme.css b/src/theme.css
+index 9bd0839..3bc72b9 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2292,2 +2292,8 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ .list-body.consent-open { border-top: 1px solid var(--line); padding-top: var(--space-3); }
+ .list-box > .list-body.consent-open:first-child { border-top: none; }
++
++/* „Mitspielende einladen“ als Zeile in „Am Tisch“ */
++.invite-row { min-height: 52px; gap: 10px; width: 100%; background: none; border: 0; border-top: 1px solid var(--line); padding: 6px 0 0; margin-top: 4px; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
++.invite-plus { width: 40px; height: 40px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px dashed var(--line-strong); color: var(--ink); }
++@media (hover: hover) { .invite-row:hover .invite-plus { background: var(--paper-sunken); } }
++.invite-open { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 0 6px; }
