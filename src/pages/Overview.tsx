@@ -200,10 +200,8 @@ export function Overview() {
           <Divider />
           {/* Stimmprofil ist freiwillig: erst wenn die Zustimmung steht und (bei der SL) die erste Runde aufgenommen ist */}
           <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && sessions?.length === 0)} />
-          {me?.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
 
           {gm && <div id="invite" data-tour="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
-          {me && <DataSummary campaign={campaign} info={serverInfo} gm={gm} />}
           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} onPickCover={() => {
             setPickingCover(true);
             document.querySelector('.screen-main')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -286,7 +284,7 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => 
 }
 
 /** Eigene, stehende Zustimmung zu Aufnahmen in dieser Kampagne. Ohne Zustimmung: auffällig oben. */
-export function RecordingConsent({ campaign, onChanged, quiet }: { campaign: Campaign; onChanged: () => void; quiet?: boolean }) {
+export function RecordingConsent({ campaign, onChanged, quiet, row }: { campaign: Campaign; onChanged: () => void; quiet?: boolean; row?: boolean }) {
   const { user } = useAuth();
   // Frist und Cloud-Dienst gehören in den Wortlaut, den die Person bestätigt
   const info = useServerInfo();
@@ -318,6 +316,18 @@ export function RecordingConsent({ campaign, onChanged, quiet }: { campaign: Cam
     }
   };
 
+  // Unter „Kampagne verwalten“ als Zeile, aufgeklappt ohne eigene Karte
+  if (row && granted && !open) {
+    return (
+      <button type="button" className="list-row nav" onClick={() => setOpen(true)}>
+        <span className="lr-text">{t('Aufnahmen')}
+          <span className="lr-sub">{t('Zugestimmt seit {date}', { date: formatDateFull(me.recordingConsentAt!) })}</span>
+        </span>
+        <span className="lr-val">{t('Ändern')}</span>
+      </button>
+    );
+  }
+
   if (granted && !open) {
     return (
       <button type="button" className="row between" onClick={() => setOpen(true)}
@@ -329,8 +339,8 @@ export function RecordingConsent({ campaign, onChanged, quiet }: { campaign: Cam
   }
 
   return (
-    <section className={granted ? 'card' : 'card warn'}>
-      <h2>{t('Aufnahmen')}</h2>
+    <section className={row ? 'list-body consent-open' : granted ? 'card' : 'card warn'}>
+      {row ? <strong>{t('Aufnahmen')}</strong> : <h2>{t('Aufnahmen')}</h2>}
       <p style={{ margin: 0 }}>{CONSENT_SUMMARY(consentCtx)}</p>
       <details>
         <summary className="small" style={{ fontWeight: 700 }}>{t('Genauer Wortlaut')}</summary>
@@ -698,12 +708,6 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
     }
   };
 
-  const showData = () => {
-    const d = document.getElementById('data-summary') as HTMLDetailsElement | null;
-    if (!d) return;
-    d.open = true;
-    d.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  };
   const cloudRow = (field: 'allowExternalTranscription' | 'allowCloudSummary', provider: string, label: string, sub: string) => (
     settings.lock(field) !== 'unavailable' && (
       <label className="list-row check-row">
@@ -717,7 +721,7 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
 
   return (
     <details className="card manage" style={{ gap: 10 }}>
-      <summary style={{ fontWeight: 700 }}>{gm ? t('Kampagne verwalten') : t('Kampagne verlassen')}</summary>
+      <summary style={{ fontWeight: 700 }}>{t('Kampagne verwalten')}</summary>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
       <ErrorBox error={error} />
       {gm && settings.conflict && (
@@ -738,11 +742,15 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
                 busy={busy || !!settings.lock('allowCharacterAnalysis')} note={<LockNote lock={settings.lock('allowCharacterAnalysis')} />}
                 onChange={(value) => run(() => settings.change('allowCharacterAnalysis', value), () => undefined)} />
             )}
-            <button type="button" className="list-row nav" onClick={showData}><span className="lr-text">{t('Was mit den Daten passiert')}</span></button>
             {settings.hasLog && <SettingsLog campaign={campaign} />}
           </div>
         </>
       )}
+      <h3 className="list-head">{t('Deine Daten')}</h3>
+      <div className="list-box flat">
+        {me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={onChanged} row />}
+        <DataSummary campaign={campaign} info={info} gm={gm} />
+      </div>
       {gm && (
         <>
           <h3 className="list-head">{t('Kampagne')}</h3>

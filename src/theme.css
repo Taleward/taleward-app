@@ -2302,3 +2302,6 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .list-row.check-row > input[type='checkbox'] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--tinte); }
 .list-row:disabled { opacity: .55; cursor: default; }
 .card.manage .list-head { margin-top: var(--space-3); font-size: calc(17px * var(--ts)); }
+/* Zustimmung aufgeklappt in „Kampagne verwalten“ */
+.list-body.consent-open { border-top: 1px solid var(--line); padding-top: var(--space-3); }
+.list-box > .list-body.consent-open:first-child { border-top: none; }

@@ -1612,4 +1612,7 @@ export const en: Record<string, string> = {
   "Hier braucht jede Person ein eigenes Konto und stimmt neu zu. Cloud-Freigaben und Stimmprofile richtet ihr neu ein.": "Here everyone needs their own account and agrees again. You set up cloud permissions and voice profiles anew.",
   "Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.": "Then description, backstory, picture and your public comments come along. Otherwise only your character's name.",
   "Namen aus euren Runden, damit die Transkription sie erkennt. Nur du siehst sie.": "Names from your sessions, so the transcription recognises them. Only you see them.",
+  "So sehen es alle am Tisch. Ändern kannst du es oben unter „Für alle am Tisch“.": "This is what everyone at the table sees. You can change it above under “For everyone at the table”.",
+  "Zugestimmt seit {date}": "Agreed since {date}",
+  "Deine Daten": "Your data",
 };

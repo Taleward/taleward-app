@@ -52,10 +52,12 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
     text: t('Notizen der Spielleitung, offene Vorschläge und die Abschrift sieht nur die Spielleitung. Deine privaten Notizen in der Sammlung verlassen dein Gerät nie – außer in Sicherungen, die du selbst speicherst.')
   });
 
+  // Steht als Zeile unter „Kampagne verwalten“
   return (
-    <details id="data-summary" className="card data-summary" style={{ gap: 10 }}>
-      <summary style={{ fontWeight: 700 }}>{t('Was mit deinen Daten passiert')}</summary>
-      <dl style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '8px 0 0' }}>
+    <details id="data-summary" className="list-item data-summary">
+      <summary className="list-row"><span className="lr-text">{t('Was mit deinen Daten passiert')}</span></summary>
+      <div className="list-body">
+      <dl style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: 0 }}>
         {rows.map((r) => (
           <div key={r.title} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <dt className="overline">{r.title}</dt>
@@ -67,9 +69,10 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
         {isMusterUrl(currentConnection().baseUrl)
           ? t('In der Musterkampagne gibt es nichts einzustellen.')
           : gm
-          ? t('So sehen es alle am Tisch. Ändern kannst du es unter „Kampagne verwalten“ → „Einstellungen“.')
+          ? t('So sehen es alle am Tisch. Ändern kannst du es oben unter „Für alle am Tisch“.')
           : t('Diese Einstellungen legt die Spielleitung fest.')}
       </span>
+      </div>
     </details>
   );
 }
@@ -78,6 +81,9 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
 export function openDataSummary() {
   const d = document.getElementById('data-summary') as HTMLDetailsElement | null;
   if (!d) return;
+  // Liegt in „Kampagne verwalten“: die Karte mit aufklappen
+  const outer = d.parentElement?.closest('details');
+  if (outer) outer.open = true;
   d.open = true;
   d.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   d.querySelector('summary')?.focus();
