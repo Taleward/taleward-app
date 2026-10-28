@@ -31,7 +31,7 @@ export function CreditPage() {
 
   const off = (info && !billingOn(info)) || isApiError(error) && error.status === 404;
   return (
-    <Screen narrow backTo={{ to: '/konto', label: t('Konten und Server') }} overline={conn.name} title={t('Guthaben')} nav={false}>
+    <Screen narrow backTo={{ to: `/konto/${encodeURIComponent(conn.id)}`, label: conn.name }} overline={conn.name} title={t('Guthaben')} nav={false}>
       {off ? (
         <p className="muted" style={{ margin: 0 }}>{t('Dieser Server rechnet nicht über Guthaben ab.')}</p>
       ) : (

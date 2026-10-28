@@ -9,7 +9,7 @@ import type { JSX } from 'react';
 import { LanguageProvider } from './i18n';
 import { ConnectionScope } from './components/ConnectionScope';
 import { ConnectPage } from './pages/ConnectPage';
-import { AccountPage } from './pages/AccountPage';
+import { AccountPage, ServerAccountPage } from './pages/AccountPage';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
@@ -69,6 +69,7 @@ function Routed() {
       <Route path="/" element={<Campaigns />} />
       <Route path="/verbinden" element={<ConnectRoute />} />
       <Route path="/konto" element={<AccountPage />} />
+      <Route path="/konto/:connId" element={<ServerAccountPage />} />
       {/* Feste Adresse für Taleward Desktop: SL-Schirm der zuletzt geöffneten eigenen Kampagne */}
       <Route path="/schirm" element={<LastTableRedirect />} />
       <Route path="/charaktere" element={<CharactersPage />} />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { t, tk } from '../i18n';
 import { claimLegacyCharacters } from '../characters/sync';
 import {
@@ -33,7 +33,8 @@ const KINDS: { key: keyof NotifyKinds; label: string }[] = [
 ];
 
 /** Einstellungen unter „Konten und Server“ (nur Android-App) */
-export function NotifySettingsSection() {
+/** Benachrichtigungen als aufklappbare Zeile (Konten und Server) */
+export function NotifySettingsSection({ icon }: { icon?: ReactNode }) {
   const [s, setS] = useState(notifySettings);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => { notificationsAllowed().then(setAllowed); }, []);
@@ -50,8 +51,13 @@ export function NotifySettingsSection() {
   };
 
   return (
-    <section className="card">
-      <h2>{t('Benachrichtigungen')}</h2>
+    <details className="list-item">
+      <summary className="list-row">
+        {icon}
+        <span className="lr-text">{t('Benachrichtigungen')}</span>
+        <span className="lr-val">{s.enabled ? t('An') : t('Aus')}</span>
+      </summary>
+      <div className="list-body">
       <label className="check">
         <input type="checkbox" checked={s.enabled} onChange={(e) => toggle(e.target.checked)} />
         <span>{t('Bei Neuem in meinen Kampagnen benachrichtigen')}</span>
@@ -77,7 +83,8 @@ export function NotifySettingsSection() {
           {t('Jetzt nachsehen')}
         </button>
       )}
-    </section>
+      </div>
+    </details>
   );
 }
 

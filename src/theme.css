@@ -2214,3 +2214,50 @@ button.table-group-face {
 @media (prefers-reduced-motion: no-preference) {
   .tour-ring { transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease; }
 }
+
+/* Listen mit Zeilen (Konten und Server, Kampagne verwalten): ganze Zeile antippbar, Pfeil rechts */
+.list-head { margin: var(--space-2) 0 0; font: 700 calc(18px * var(--ts))/1.3 var(--font-serif); color: var(--ink-muted); }
+.list-box {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 var(--space-4);
+}
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: 500 calc(16px * var(--ts))/1.3 var(--font-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.list-box > .list-row:first-child, .list-box > :first-child > .list-row { border-top: none; }
+.list-row > svg { flex-shrink: 0; color: var(--ink-muted); }
+.list-row .lr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.list-row .lr-sub { font-weight: 400; font-size: calc(13px * var(--ts)); color: var(--ink-muted); }
+.list-row .lr-val { font-weight: 400; font-size: calc(14px * var(--ts)); color: var(--ink-muted); }
+.list-row.danger, .list-row.danger > svg { color: var(--siegel-text); }
+a.list-row::after, button.list-row.nav::after {
+  content: '›';
+  flex-shrink: 0;
+  width: 1em;
+  text-align: center;
+  font-size: 1.25em;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+.list-row select { width: auto; max-width: 55%; min-height: 44px; }
+@media (hover: hover) { .list-row:hover { background: var(--paper-sunken); } }
+.list-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+details.list-item > .list-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 var(--space-4); }

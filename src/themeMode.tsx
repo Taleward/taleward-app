@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { t, tk } from './i18n';
 import { syncSystemBars } from './display/systemBars';
 
@@ -31,7 +31,7 @@ export function setThemeMode(mode: ThemeMode): void {
   applyThemeMode(mode);
 }
 
-const OPTIONS: { value: ThemeMode; label: string }[] = [
+export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: 'system', label: tk('Wie das Handy') },
   { value: 'light', label: tk('Pergament (hell)') },
   { value: 'dark', label: tk('Spielabend (dunkel)') }
@@ -43,9 +43,23 @@ export function ThemeSwitch() {
     <div className="field">
       <label htmlFor="theme">{t('Darstellung')}</label>
       <select id="theme" value={mode} onChange={(e) => { const m = e.target.value as ThemeMode; setMode(m); setThemeMode(m); }}>
-        {OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
+        {THEME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
       </select>
       <span className="muted small">{t('Spielabend ist für gedimmtes Licht am Tisch gedacht.')}</span>
     </div>
+  );
+}
+
+/** Darstellung als Zeile in einer Liste (Konten und Server) */
+export function ThemeRow({ icon }: { icon?: ReactNode }) {
+  const [mode, setMode] = useState<ThemeMode>(getThemeMode());
+  return (
+    <label className="list-row">
+      {icon}
+      <span className="lr-text">{t('Darstellung')}</span>
+      <select value={mode} onChange={(e) => { const m = e.target.value as ThemeMode; setMode(m); setThemeMode(m); }}>
+        {THEME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
+      </select>
+    </label>
   );
 }

@@ -97,6 +97,19 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   return <div key={lang} style={{ display: 'contents' }}>{children}</div>;
 }
 
+/** Sprache als Zeile in einer Liste (Konten und Server) */
+export function LanguageRow({ icon }: { icon?: ReactNode }) {
+  return (
+    <label className="list-row">
+      {icon}
+      <span className="lr-text">{t('Sprache')}</span>
+      <select value={current} onChange={(e) => setLang(e.target.value as Lang)}>
+        {LANGUAGES.map((l) => <option key={l.code} value={l.code} lang={l.code}>{l.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /** Auswahl „Sprache“ – alle Sprachen in ihrem eigenen Namen */
 export function LanguageSwitch() {
   return (

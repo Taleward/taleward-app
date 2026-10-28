@@ -91,3 +91,44 @@ export const IconSend = ({ size = 18 }: { size?: number }) => (
 export const IconSearch = ({ size = 18 }: { size?: number }) => (
   <svg {...base(size)}><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
 );
+
+/** Zeilen in Listen (Lucide-Formen: mail, wallet, mic, download, info, trash-2, log-out, globe, moon, bell, play, plus, server, image, pencil) */
+export const IconMail = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
+);
+export const IconWallet = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" /><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /></svg>
+);
+export const IconDownload = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
+);
+export const IconTrash = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+);
+export const IconLogOut = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /></svg>
+);
+export const IconGlobe = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>
+);
+export const IconMoon = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
+);
+export const IconBell = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg>
+);
+export const IconPlus = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M5 12h14" /><path d="M12 5v14" /></svg>
+);
+export const IconServer = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><rect width="20" height="8" x="2" y="2" rx="2" /><rect width="20" height="8" x="2" y="14" rx="2" /><path d="M6 6h.01" /><path d="M6 18h.01" /></svg>
+);
+export const IconImage = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" /></svg>
+);
+export const IconPencil = ({ size = 20 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /></svg>
+);
+export const IconRoute = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+);

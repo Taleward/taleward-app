@@ -6,6 +6,7 @@ import { startProviderLogin } from '../auth/oidc';
 import { t } from '../i18n';
 import { confirmDialog } from './confirm';
 import { ErrorBox } from './Screen';
+import { IconMail } from './Icons';
 
 /**
  * Konten und Server → Anmeldung: freiwillige E-Mail (nur zum Zurücksetzen des Passworts), verbundene Dienste,
@@ -57,23 +58,30 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
   if (!info || !user) return null;
   // Server ohne 0.4.0: Funktion nur für diesen Server ausblenden, mit dezentem Hinweis
   if (user.hasPassword === undefined) {
-    return <p className="muted small" style={{ margin: 0 }}>{t('E-Mail und Anmelden mit Google & Co.: Dieser Server kann das noch nicht – der Betreiber muss aktualisieren.')}</p>;
+    return (
+      <div className="list-row" style={{ cursor: 'default' }}>
+        <IconMail />
+        <span className="lr-text">{t('Anmeldung und E-Mail')}<span className="lr-sub">{t('Kann dieser Server noch nicht.')}</span></span>
+      </div>
+    );
   }
   const providers = info.authProviders ?? [];
 
   return (
-    <details className="card" style={{ gap: 12 }} ref={box} open={open || undefined}>
-      <summary style={{ fontWeight: 700 }}>
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <details className="list-item" ref={box} open={open || undefined}>
+      <summary className="list-row">
+        <IconMail />
+        <span className="lr-text">
           {t('Anmeldung und E-Mail')}
           {/* Auch zugeklappt sichtbar, solange keine Adresse bestätigt ist */}
           {!user.email && info.passwordReset && (
-            <span className="muted small" style={{ fontWeight: 400 }}>
-              {user.emailPending ? t('E-Mail: wartet auf Bestätigung') : t('E-Mail: noch keine – zum Zurücksetzen des Passworts')}
+            <span className="lr-sub">
+              {user.emailPending ? t('E-Mail wartet auf Bestätigung') : t('Noch keine E-Mail hinterlegt')}
             </span>
           )}
         </span>
       </summary>
+      <div className="list-body">
 
       {/* E-Mail */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -161,6 +169,7 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
 
       {msg && <div className="notice">{msg}</div>}
       <ErrorBox error={error} />
+      </div>
     </details>
   );
 }
