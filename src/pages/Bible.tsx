@@ -1,44 +1,81 @@
 import { isDeletedMember } from '../api/types';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { confirmDialog } from '../components/confirm';
-import { SecretBox, VisTag } from '../components/VisTag';
+import { SecretBox } from '../components/VisTag';
 import { LinkButtons } from '../components/Links';
 import { apiAtLeast, p } from '../api/connections';
 import { aliasesText, parseAliases } from '../bible/aliases';
 import { Link } from 'react-router-dom';
-import { t, tk } from '../i18n';
-import { useEffect, useState } from 'react';
+import { t, tk, tn } from '../i18n';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { fuzzyFilter } from '../search/fuzzy';
+import { fuzzyFilter, matchScore } from '../search/fuzzy';
 import { api } from '../api/client';
 import type { Campaign, Entry, EntryType, Member } from '../api/types';
 import { Dialog } from '../components/Dialog';
 import { AssignFigureDialog } from '../components/Seats';
-import { IconEye } from '../components/Icons';
-import { IconLock } from '../components/Icons';
+import { ENTRY_KIND } from '../components/ProposalCard';
+import { IconEye, IconLock, IconPlus } from '../components/Icons';
 import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSet } from '../components/Screen';
 
-const TABS: { type: EntryType; label: string }[] = [
+type Tab = 'all' | EntryType;
+
+const TABS: { type: Tab; label: string }[] = [
+  { type: 'all', label: tk('Alles') },
   { type: 'npc', label: tk('NSCs') },
   { type: 'location', label: tk('Orte') },
   { type: 'quest', label: tk('Quests') },
   { type: 'item', label: tk('Beute') }
 ];
 
-function Tag({ entry }: { entry: Entry }) {
-  if (entry.visibility === 'gm_only') return <VisTag gm />;
-  if (entry.type === 'quest' && entry.status === 'active') return <span className="pill brass">{t('aktiv')}</span>;
-  if (entry.type === 'quest' && entry.status === 'done') return <span className="pill moss">{t('erledigt')}</span>;
-  return null;
+/** Überschriften der Suchergebnisse, in dieser Reihenfolge */
+const GROUPS: { type: EntryType; label: string }[] = [
+  { type: 'npc', label: tk('NSCs') },
+  { type: 'location', label: tk('Orte') },
+  { type: 'quest', label: tk('Quests') },
+  { type: 'item', label: tk('Beute') },
+  { type: 'faction', label: tk('Fraktionen') },
+  { type: 'pc', label: tk('Spielercharaktere') },
+  { type: 'other', label: tk('Sonstiges') }
+];
+
+const ADD_TYPES: EntryType[] = ['npc', 'location', 'quest', 'item', 'faction', 'other'];
+
+const isTab = (v: string | null): v is Tab => !!v && TABS.some((x) => x.type === v);
+
+/** Hebt wörtliche Vorkommen der Suche hervor; leicht verschriebene Treffer bleiben ohne Markierung */
+function highlight(text: string, query: string): ReactNode {
+  const q = query.trim().toLowerCase();
+  if (!q) return text;
+  const low = text.toLowerCase();
+  const out: ReactNode[] = [];
+  let i = 0;
+  for (let at = low.indexOf(q); at >= 0; at = low.indexOf(q, i)) {
+    out.push(text.slice(i, at), <mark key={at}>{text.slice(at, at + q.length)}</mark>);
+    i = at + q.length;
+  }
+  out.push(text.slice(i));
+  return out;
+}
+
+/** Ausschnitt um den ersten wörtlichen Treffer, damit er in der ersten Zeile sichtbar ist */
+function snippet(text: string, query: string): string {
+  const at = text.toLowerCase().indexOf(query.trim().toLowerCase());
+  if (at < 40) return text;
+  const start = text.lastIndexOf(' ', at - 30);
+  return '… ' + text.slice(start < 0 ? at - 30 : start + 1);
 }
 
 export function Bible() {
   const { campaignId = '' } = useParams();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [tab, setTab] = useState<EntryType>('npc');
-  // Suche aus der Übersicht kommt als ?q= mit
-  const [params] = useSearchParams();
+  // Reiter, Suche und offener Eintrag stehen in der Adresse: „Zurück“ führt dorthin, wo man war
+  const [params, setParams] = useSearchParams();
+  const art = params.get('art');
+  const tab: Tab = isTab(art) ? art : 'all';
+  // Die Suche tippt in einen eigenen Zustand und schreibt erst danach in die Adresse – sonst gehen bei schnellem Tippen Zeichen verloren
   const [query, setQuery] = useState(() => params.get('q') ?? '');
+  const openId = params.get('e');
   const [all, setAll] = useState<Entry[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [adding, setAdding] = useState(false);
@@ -59,77 +96,202 @@ export function Bible() {
     api.entries(campaignId).then(setAll).catch(setError);
   }, [campaignId, reload]);
 
-  const entries = all && (query.trim()
-    ? fuzzyFilter(all, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? ''])
-    : all.filter((e) => e.type === tab));
+  const gm = campaign?.myRole === 'gm';
+  const players = campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? [];
   const holder = (id: string | null | undefined) => {
     const m = campaign?.members.find((x) => x.id === id);
     return m ? t('Bei {name}', { name: m.characterName ?? m.displayName }) : null;
   };
 
+  const withParam = (key: string, value: string | null) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value); else next.delete(key);
+    return next;
+  };
+  const setParam = (key: string, value: string | null) => setParams((prev) => {
+    const next = new URLSearchParams(prev);
+    if (value) next.set(key, value); else next.delete(key);
+    return next;
+  }, { replace: true });
+  // Was wir selbst in die Adresse geschrieben haben, nicht zurücklesen; nur fremde Änderungen (Zurück, Link) übernehmen
+  const written = useRef(query);
+  const urlQuery = params.get('q') ?? '';
+  useEffect(() => {
+    if (urlQuery !== query) {
+      written.current = query;
+      setParam('q', query || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  useEffect(() => {
+    if (urlQuery !== written.current) {
+      written.current = urlQuery;
+      setQuery(urlQuery);
+    }
+  }, [urlQuery]);
+
+  if (openId) {
+    const entry = all?.find((x) => x.id === openId);
+    return (
+      <Screen overline={campaign?.title ?? ' '} title={entry?.name ?? t('Kampagnenbibel')} hero={{ campaign }}
+        backTo={{ to: `?${withParam('e', null).toString()}`, label: t('Kampagnenbibel') }}>
+        <ErrorBox error={error} />
+        {all && !entry && <div className="empty">{t('Diesen Eintrag gibt es nicht mehr.')}</div>}
+        {entry && (
+          <EntryDetail key={entry.id} entry={entry} gm={gm} holder={holder(entry.holderMemberId)} campaign={campaign} players={players}
+            onChanged={(u) => {
+              setAll((list) => (u ? list?.map((x) => (x.id === u.id ? u : x)) : list?.filter((x) => x.id !== entry.id)) ?? null);
+              if (!u) setParam('e', null);
+            }} />
+        )}
+      </Screen>
+    );
+  }
+
+  const href = (id: string) => `?${withParam('e', id).toString()}`;
+  const sorted = all && [...all].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+  const hits = sorted && query.trim()
+    ? fuzzyFilter(sorted, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? ''])
+    : null;
+  const shown = sorted && (tab === 'all' ? sorted : sorted.filter((e) => e.type === tab));
+  const count = (type: Tab) => (type === 'all' ? all?.length : all?.filter((e) => e.type === type).length) ?? 0;
+
   return (
     <Screen overline={campaign?.title ?? ' '} title={t('Kampagnenbibel')} hero={{ campaign }}>
       <ErrorBox error={error} />
-      {campaign?.myRole === 'gm' && (
-        <Link to={p(`/k/${campaignId}/unterlagen`)} className="btn outline small" style={{ alignSelf: 'flex-start' }}>
-          {t('Unterlagen hochladen und auswerten')}
-        </Link>
-      )}
-      <div className="field">
-        <label htmlFor="search">{t('Suchen')}</label>
-        <input id="search" type="search" placeholder={t('Name, Ort, Gegenstand …')} value={query} onChange={(e) => setQuery(e.target.value)} />
-      </div>
-
-      {!query && (
-        <div className="segmented" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-          {TABS.map((item) => (
-            <button key={item.type} type="button" aria-pressed={tab === item.type} onClick={() => setTab(item.type)}>
-              {t(item.label)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {entries?.length === 0 && (
-        <div className="empty">
-          {query ? t('Nichts gefunden für „{q}“.', { q: query })
-            : all && all.length > 0 ? t('In dieser Rubrik steht noch nichts.')
-            : campaign?.myRole === 'gm'
-              ? t('Noch leer. Nach jeder Runde schlägt Taleward Personen, Orte und Aufträge vor; was du übernimmst, steht hier. Du kannst auch gleich selbst etwas eintragen.')
-              : t('Noch leer. Hier steht, was deine Figur aus den Runden weiß, sobald die Spielleitung es freigibt.')}
-        </div>
-      )}
-
-      {/* Karten einer Reihe gleich hoch – sonst enden sie mit Löchern darunter */}
-      <div className="grid-cards even">
-      {entries?.map((e) => (
-        <EntryCard key={e.id} entry={e} gm={campaign?.myRole === 'gm'} holder={holder(e.holderMemberId)} campaign={campaign}
-          players={campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? []}
-          onChanged={(u) => setAll((list) => (u ? list?.map((x) => (x.id === u.id ? u : x)) : list?.filter((x) => x.id !== e.id)) ?? null)} />
-      ))}
-      </div>
-
-      {campaign?.myRole === 'gm' &&
-        (adding ? (
-          <AddEntry
-            campaignId={campaignId}
-            type={tab}
-            onDone={(saved) => {
-              setAdding(false);
-              if (saved) setReload((n) => n + 1);
-            }}
-          />
-        ) : (
-          // Leere Bibel: Selbst eintragen ist der nächste Schritt
-          <button type="button" className={all?.length === 0 ? 'btn' : 'btn dashed'} onClick={() => setAdding(true)}>
-            {t('Eintrag von Hand hinzufügen')}
+      <div className="bible-bar">
+        <input type="search" aria-label={t('In der ganzen Bibel suchen')} placeholder={t('Wer war das? Alles durchsuchen …')}
+          value={query} onChange={(e) => setQuery(e.target.value)} />
+        {gm && (
+          <button type="button" className="btn outline square" aria-label={t('Eintrag hinzufügen')} aria-expanded={adding}
+            onClick={() => setAdding((v) => !v)}>
+            <IconPlus />
           </button>
-        ))}
+        )}
+      </div>
+
+      {gm && adding && (
+        <AddEntry campaignId={campaignId} type={tab === 'all' ? 'npc' : tab}
+          onDone={(saved) => {
+            setAdding(false);
+            if (saved) setReload((n) => n + 1);
+          }} />
+      )}
+
+      {hits ? (
+        <SearchResults hits={hits} query={query} gm={gm} href={href} />
+      ) : (
+        <>
+          <div className="tabs" role="group" aria-label={t('Arten')}>
+            {TABS.map((item) => (
+              <button key={item.type} type="button" aria-pressed={tab === item.type}
+                onClick={() => setParam('art', item.type === 'all' ? null : item.type)}>
+                {t(item.label)}<span className="n">{all ? count(item.type) : ' '}</span>
+              </button>
+            ))}
+          </div>
+
+          {shown?.length === 0 && (
+            <div className="empty">
+              {all && all.length > 0 ? t('In dieser Rubrik steht noch nichts.')
+                : gm ? t('Noch leer. Nach jeder Runde schlägt Taleward Einträge vor, und du kannst selbst welche anlegen.')
+                : t('Noch leer. Hier steht, was deine Figur weiß, sobald die SL es freigibt.')}
+            </div>
+          )}
+          {gm && all?.length === 0 && !adding && (
+            <button type="button" className="btn" onClick={() => setAdding(true)}>{t('Eintrag hinzufügen')}</button>
+          )}
+
+          {!!shown?.length && (
+            <div className="list-box">
+              {shown.map((e) => (
+                <EntryRow key={e.id} entry={e} gm={gm} href={href(e.id)} holder={holder(e.holderMemberId)} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {gm && (
+        <Link to={p(`/k/${campaignId}/unterlagen`)} className="quiet-link">{t('Unterlagen auswerten lassen')}</Link>
+      )}
     </Screen>
   );
 }
 
-function AddEntry({ campaignId, type, onDone }: { campaignId: string; type: EntryType; onDone: (saved: boolean) => void }) {
+/** Kurze Zeile unter dem Namen: Kapitel, Status, bei wem, für die SL Notiz und Verbergen */
+function metaLine(e: Entry, gm: boolean, holder: string | null): string {
+  const parts: string[] = [];
+  const n = e.lastSessionNumber ?? e.firstSessionNumber;
+  if (n) parts.push(t('Kapitel {n}', { n }));
+  if (e.type === 'quest' && e.status === 'active') parts.push(t('aktiv'));
+  if (e.type === 'quest' && e.status === 'done') parts.push(t('erledigt'));
+  if (e.type === 'item' && holder) parts.push(holder);
+  if (gm && e.gmNotes) parts.push(t('mit SL-Notiz'));
+  const hidden = e.hiddenFromMemberIds?.length ?? 0;
+  if (gm && hidden) parts.push(t('verborgen vor {n}', { n: hidden }));
+  return parts.join(' · ');
+}
+
+function EntryRow({ entry: e, gm, href, holder }: { entry: Entry; gm: boolean; href: string; holder: string | null }) {
+  const meta = metaLine(e, gm, holder);
+  return (
+    <Link className="list-row entry" to={href}>
+      <span className="lr-text">
+        <span className="lr-sub">{t(ENTRY_KIND[e.type] ?? '')}</span>
+        <span className="entry-name">{e.name}</span>
+        {e.summary && <span className="entry-sum">{e.summary}</span>}
+        {e.visibility === 'gm_only'
+          ? <span className="entry-tag"><IconLock size={14} /> {t('Nur SL')}</span>
+          : meta && <span className="lr-sub">{meta}</span>}
+      </span>
+    </Link>
+  );
+}
+
+function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string; gm: boolean; href: (id: string) => string }) {
+  if (hits.length === 0) {
+    return <div className="empty">{t('Nichts gefunden für „{q}“.', { q: query })}</div>;
+  }
+  return (
+    <>
+      <span className="muted small">{tn(hits.length, '{n} Treffer in der ganzen Bibel', '{n} Treffer in der ganzen Bibel', { n: hits.length })}</span>
+      {GROUPS.map((g) => {
+        const list = hits.filter((e) => e.type === g.type);
+        if (!list.length) return null;
+        return (
+          <Fragment key={g.type}>
+            <h2 className="list-head">{t(g.label)}</h2>
+            <div className="list-box">
+              {list.map((e) => {
+                // Wo hat die Suche gegriffen? Die SL-Notiz nur nennen, wenn sonst nichts passt
+                const inName = matchScore(query, e.name) > 0;
+                const alias = !inName ? e.aliases?.find((a) => matchScore(query, a) > 0) : undefined;
+                const inSummary = !!e.summary && matchScore(query, e.summary) > 0;
+                const inNotes = gm && !inName && !alias && !inSummary && !!e.gmNotes && matchScore(query, e.gmNotes) > 0;
+                return (
+                  <Link key={e.id} className="list-row entry" to={href(e.id)}>
+                    <span className="lr-text">
+                      <span className="entry-name">{highlight(e.name, query)}</span>
+                      {alias && <span className="lr-sub">{t('Auch genannt: {names}', { names: '' })}{highlight(alias, query)}</span>}
+                      {inNotes
+                        ? <span className="entry-sum">{highlight(snippet(e.gmNotes!, query), query)}</span>
+                        : e.summary && <span className="entry-sum">{highlight(inSummary ? snippet(e.summary, query) : e.summary, query)}</span>}
+                      {inNotes && <span className="entry-tag"><IconLock size={14} /> {t('Treffer in der SL-Notiz')}</span>}
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
+function AddEntry({ campaignId, type: initialType, onDone }: { campaignId: string; type: EntryType; onDone: (saved: boolean) => void }) {
+  const [type, setType] = useState<EntryType>(initialType);
   const [name, setName] = useState('');
   const [summary, setSummary] = useState('');
   const [secret, setSecret] = useState(false);
@@ -154,7 +316,13 @@ function AddEntry({ campaignId, type, onDone }: { campaignId: string; type: Entr
 
   return (
     <div className="card">
-      <h2>{t('Neuer Eintrag: {kind}', { kind: t(TABS.find((tab) => tab.type === type)?.label ?? '') })}</h2>
+      <h2>{t('Neuer Eintrag')}</h2>
+      <div className="field">
+        <label htmlFor="e-type">{t('Art')}</label>
+        <select id="e-type" value={type} onChange={(e) => setType(e.target.value as EntryType)}>
+          {ADD_TYPES.map((x) => <option key={x} value={x}>{t(ENTRY_KIND[x])}</option>)}
+        </select>
+      </div>
       <div className="field">
         <label htmlFor="e-name">{t('Name')}</label>
         <input id="e-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
@@ -165,7 +333,7 @@ function AddEntry({ campaignId, type, onDone }: { campaignId: string; type: Entr
       </div>
       <div className="field">
         <label htmlFor="e-gm" className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Nur SL (geheimer Teil)')}</label>
-        <textarea id="e-gm" value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} placeholder={t('Was Spieler (noch) nicht wissen dürfen')} />
+        <textarea id="e-gm" value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} />
       </div>
       <label className="check">
         <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
@@ -180,8 +348,8 @@ function AddEntry({ campaignId, type, onDone }: { campaignId: string; type: Entr
   );
 }
 
-/** Ein Bibeleintrag; die SL kann bearbeiten, Sätze zwischen öffentlich und geheim verschieben, freigeben, löschen */
-function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
+/** Ein Bibeleintrag, ganz geöffnet; die SL kann bearbeiten, Sichtbarkeit ändern, freigeben, löschen */
+function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
   entry: Entry;
   gm: boolean;
   holder: string | null;
@@ -189,7 +357,7 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
   players: Member[];
   onChanged: (updated: Entry | null) => void;
 }) {
-  const [hiding, setHiding] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [editing, setEditing] = useState(false);
   // NSC, der aus der Figur eines ausgetretenen Spielers entstanden ist (0.4.9, nur SL)
@@ -217,19 +385,30 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
     }
   };
 
-  const hiddenNames = (e.hiddenFromMemberIds ?? [])
+  const hiddenIds = e.hiddenFromMemberIds ?? [];
+  const hiddenNames = hiddenIds
     .map((id) => players.find((m) => m.id === id))
     .filter(Boolean)
     .map((m) => m!.characterName ?? m!.displayName);
 
+  // Ohne öffentlichen Text gäbe es nichts zu sehen – erst den Teil für Spieler schreiben
+  const needsText = () => {
+    if (e.summary.trim()) return false;
+    setSecret(false);
+    setEditing(true);
+    return true;
+  };
+
   const release = () => {
-    if (!e.summary.trim()) {
-      // Ohne öffentlichen Text gäbe es nichts zu sehen – erst den Teil für Spieler schreiben
-      setSecret(false);
-      setEditing(true);
-      return;
-    }
-    run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: [] }));
+    if (!needsText()) run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: [] }));
+  };
+
+  const setHidden = (ids: string[]) => {
+    setChoosing(false);
+    if (ids.length === 0) return release();
+    // Vor allen verborgen = wieder ganz geheim
+    if (ids.length === players.length) return run(() => api.updateEntry(e.id, { visibility: 'gm_only', hiddenFromMemberIds: [] }));
+    if (!needsText()) run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: ids }));
   };
 
   const save = () => run(() => api.updateEntry(e.id, {
@@ -255,7 +434,7 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
             <label htmlFor={`ea-${e.id}`}>{t('Auch genannt')}</label>
             <input id={`ea-${e.id}`} type="text" value={aliases} onChange={(ev) => setAliases(ev.target.value)}
               placeholder={t('z. B. andere Schreibweise, Spitzname')} aria-describedby={`eah-${e.id}`} />
-            <span id={`eah-${e.id}`} className="muted small">{t('Durch Komma getrennt. Hilft Taleward, den Eintrag in der Abschrift wiederzuerkennen. Sichtbar wie der Name.')}</span>
+            <span id={`eah-${e.id}`} className="muted small">{t('Durch Komma getrennt. Hilft Taleward, den Eintrag in der Abschrift wiederzuerkennen.')}</span>
           </div>
         )}
         <div className="field">
@@ -274,86 +453,102 @@ function EntryCard({ entry: e, gm, holder, campaign, players, onChanged }: {
         <div className="row wrap" style={{ gap: 8 }}>
           <button type="button" className="btn small" disabled={busy || !name.trim() || (!secret && !summary.trim())} onClick={save}>{t('Speichern')}</button>
           <button type="button" className="btn small outline" onClick={() => setEditing(false)}>{t('Abbrechen')}</button>
-          <button type="button" className="btn small danger outline" style={{ marginLeft: 'auto' }} disabled={busy} onClick={remove}>{t('Löschen')}</button>
         </div>
       </div>
     );
   }
 
+  const kind = [t(ENTRY_KIND[e.type] ?? ''),
+    e.firstSessionNumber ? t('seit Kapitel {n}', { n: e.firstSessionNumber }) : '',
+    e.type === 'quest' && e.status === 'active' ? t('aktiv') : '',
+    e.type === 'quest' && e.status === 'done' ? t('erledigt') : ''].filter(Boolean).join(' · ');
+  const who = e.visibility === 'gm_only' ? t('Nur die Spielleitung')
+    : hiddenNames.length ? t('Alle außer {names}', { names: hiddenNames.join(', ') })
+    : t('Alle am Tisch');
+
   return (
-    <div className={e.visibility === 'gm_only' ? 'card secret' : 'card'}>
-      <div className="row between" style={{ alignItems: 'flex-start' }}>
-        <div className="card-title">{e.name}</div>
-        <Tag entry={e} />
-      </div>
-      {!!e.aliases?.length && <div className="muted small">{t('Auch genannt: {names}', { names: e.aliases.join(', ') })}</div>}
-      {e.summary && <div>{e.summary}</div>}
-      {e.gmNotes && e.visibility !== 'gm_only' && <SecretBox>{e.gmNotes}</SecretBox>}
-      {e.gmNotes && e.visibility === 'gm_only' && <div className="small">{e.gmNotes}</div>}
+    <>
+      <span className="muted small">{kind}</span>
+      {!!e.aliases?.length && <span className="muted small">{t('Auch genannt: {names}', { names: e.aliases.join(', ') })}</span>}
+      {e.summary
+        ? <p className="entry-text">{e.summary}</p>
+        : gm && <p className="muted" style={{ margin: 0 }}>{t('Noch kein Text für Spieler.')}</p>}
+      {gm && e.gmNotes && <SecretBox><span style={{ whiteSpace: 'pre-wrap' }}>{e.gmNotes}</span></SecretBox>}
       <LinkButtons links={e.links} />
-      {(e.type === 'item' && holder) || e.firstSessionNumber ? (
-        <div className="muted small">
-          {e.type === 'item' && holder ? `${holder}. ` : ''}
-          {e.firstSessionNumber ? t('Seit Kapitel {n}', { n: e.firstSessionNumber }) : ''}
-          {e.lastSessionNumber && e.lastSessionNumber !== e.firstSessionNumber ? ', ' + t('zuletzt in Kapitel {n}', { n: e.lastSessionNumber }) : ''}
-        </div>
-      ) : null}
-      {gm && former && <div className="muted small">{t('Früher gespielt von {name}', { name: former.displayName || t('einem gelöschten Konto') })}</div>}
-      <ErrorBox error={error} />
-      {gm && hiddenNames.length > 0 && (
-        <div className="small" style={{ color: 'var(--siegel-text)' }}>
-          <IconLock size={12} /> {t('Verborgen vor: {names}', { names: hiddenNames.join(', ') })}
+      {e.type === 'item' && holder && <span className="small">{holder}</span>}
+      {gm && former && <span className="muted small">{t('Früher gespielt von {name}', { name: former.displayName || t('einem gelöschten Konto') })}</span>}
+
+      {gm && players.length > 0 && (
+        <div className="list-box">
+          <button type="button" className="list-row nav" onClick={() => setChoosing(true)} disabled={busy}>
+            <span className="lr-text">{t('Wer sieht das?')}<span className="lr-sub">{who}</span></span>
+            <span className="lr-val">{t('Ändern')}</span>
+          </button>
         </div>
       )}
+      <ErrorBox error={error} />
       {gm && (
         <div className="row wrap" style={{ gap: 8 }}>
           {(e.visibility === 'gm_only' || hiddenNames.length > 0) && (
-            <button type="button" className="btn small" disabled={busy} onClick={release}>
-              <IconEye size={16} /> {e.visibility === 'gm_only' ? t('Für Spieler freigeben') : t('Für alle freigeben')}
+            <button type="button" className="btn" disabled={busy} onClick={release}>
+              <IconEye size={16} /> {t('Für alle freigeben')}
             </button>
           )}
-          {e.visibility === 'public' && (
-            <button type="button" className="btn small outline" disabled={busy} onClick={() => setHiding(true)}>
-              <IconLock size={16} /> {t('Verbergen')}
-            </button>
-          )}
-          <button type="button" className="btn small outline" onClick={() => setEditing(true)}>{t('Bearbeiten')}</button>
+          <button type="button" className="btn outline" onClick={() => setEditing(true)}>{t('Bearbeiten')}</button>
           {e.formerHolderMemberId && campaign && (
-            <button type="button" className="btn small ghost" onClick={() => setAssigning(true)}>{t('Einem Spieler geben')}</button>
+            <button type="button" className="btn ghost" onClick={() => setAssigning(true)}>{t('Einem Spieler geben')}</button>
           )}
         </div>
       )}
+
+      {e.mentions?.length > 0 && (
+        <>
+          <h2 className="list-head">{t('In den Kapiteln')}</h2>
+          {e.mentions.map((m, i) => (
+            <span key={i} className="small"><span className="muted">{t('Kapitel {n}', { n: m.sessionNumber })}:</span> {m.note}</span>
+          ))}
+        </>
+      )}
+
+      {gm && (
+        <button type="button" className="quiet-link danger" disabled={busy} onClick={remove}>{t('Eintrag löschen')}</button>
+      )}
+
       {assigning && campaign && (
         <AssignFigureDialog campaign={campaign} entryId={e.id} figureName={e.name} onClose={() => setAssigning(false)}
           onDone={() => { setAssigning(false); onChanged(null); }} />
       )}
-      {hiding && (
-        <HideDialog players={players} onClose={() => setHiding(false)}
-          onHide={(ids) => {
-            setHiding(false);
-            // Vor allen verborgen = wieder ganz geheim
-            run(() => api.updateEntry(e.id, ids.length === players.length
-              ? { visibility: 'gm_only', hiddenFromMemberIds: [] }
-              : { visibility: 'public', hiddenFromMemberIds: ids }));
-          }} />
+      {choosing && (
+        <VisibilityDialog players={players}
+          initial={e.visibility === 'gm_only' ? players.map((m) => m.id) : hiddenIds}
+          onClose={() => setChoosing(false)} onSave={setHidden} />
       )}
-    </div>
+    </>
   );
 }
 
 /**
- * „Verbergen für …“ – Mehrfachauswahl. „Alle“ ist vorausgewählt und setzt bzw. löscht alle Haken;
- * wer einzelne abwählt, wählt damit auch „Alle“ ab.
+ * „Wer sieht das?“ – angehakt heißt: sieht den Eintrag nicht. Niemand angehakt = alle sehen ihn,
+ * alle angehakt = nur die Spielleitung.
  */
-function HideDialog({ players, onHide, onClose }: { players: Member[]; onHide: (memberIds: string[]) => void; onClose: () => void }) {
-  const [selected, setSelected] = useState<string[]>(players.map((m) => m.id));
+function VisibilityDialog({ players, initial, onSave, onClose }: {
+  players: Member[];
+  initial: string[];
+  onSave: (hiddenIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(initial);
+  const seeing = players.length - selected.length;
   return (
-    <Dialog title={t('Verbergen für')} onClose={onClose}>
+    <Dialog title={t('Verbergen vor')} onClose={onClose}>
       <PlayerPicker players={players} selected={selected} onChange={setSelected} />
+      <span className="muted small">
+        {selected.length === 0 ? t('Alle am Tisch sehen den Eintrag.')
+          : seeing === 0 ? t('Nur die Spielleitung sieht den Eintrag.')
+          : tn(seeing, '{n} Person sieht den Eintrag.', '{n} Personen sehen den Eintrag.', { n: seeing })}
+      </span>
       <div className="row" style={{ gap: 8 }}>
-        <button type="button" className="btn" style={{ flex: 1 }} disabled={selected.length === 0} onClick={() => onHide(selected)}>
-          <IconLock size={16} /> {t('Verbergen')}
-        </button>
+        <button type="button" className="btn" style={{ flex: 1 }} onClick={() => onSave(selected)}>{t('Speichern')}</button>
         <button type="button" className="btn outline" onClick={onClose}>{t('Abbrechen')}</button>
       </div>
     </Dialog>
