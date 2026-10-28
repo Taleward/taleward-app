@@ -18,8 +18,7 @@ export const TOUR_STEPS: Record<TourRole, TourStep[]> = {
     { target: null, title: tk('Kurz herumgeführt'), text: tk('Wo du Kapitel liest, Namen nachschlägst und was von dir gebraucht wird. Dauert eine halbe Minute.') },
     { target: 'now', title: tk('Jetzt dran'), text: tk('Steht hier etwas, wartet es auf dich: zustimmen, abstimmen, ein neues Kapitel lesen.') },
     { target: 'nav-chronik', title: tk('Chronik'), text: tk('Hier liest du die Kapitel eurer Runden. Darunter kannst du kommentieren, das sehen alle am Tisch.') },
-    { target: 'nav-bibel', title: tk('Bibel'), text: tk('Personen, Orte und Aufträge der Kampagne. Du siehst nur, was deine Figur wissen darf.') },
-    { target: 'search', title: tk('Wer war das?'), text: tk('Namen suchen, auch halb erinnert oder falsch geschrieben.') },
+    { target: 'nav-bibel', title: tk('Bibel'), text: tk('Personen, Orte und Aufträge, die deine Figur kennt. Die Suche dort findet Namen auch halb erinnert.') },
     { target: 'members', title: tk('Am Tisch'), text: tk('Hier steht deine Figur. Bild und Hintergrund gehören dir, du kannst sie in andere Kampagnen mitnehmen.') }
   ],
   gm: [

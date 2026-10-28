@@ -1951,25 +1951,6 @@ button.table-group-face {
 }
 
 /* Übersicht: „Wer war das?“ als schmales Suchfeld mit Lupe */
-.overview-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.overview-search svg {
-  position: absolute;
-  left: 14px;
-  color: var(--ink-muted);
-  pointer-events: none;
-}
-
-.overview-search input {
-  flex: 1;
-  min-width: 0;
-  padding-left: 40px;
-}
-
 /* Übersicht: Links der Gruppe als schmale Zeile */
 .overview-links {
   display: flex;

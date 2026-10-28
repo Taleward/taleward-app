@@ -28,7 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Campaign, CharacterAnalysis, GameSystem, GmNotice, Member, ServerInfo, SessionSummary, Usage } from '../api/types';
-import { IconCheck, IconInfo, IconLock, IconScreen, IconSearch } from '../components/Icons';
+import { IconCheck, IconInfo, IconLock, IconScreen } from '../components/Icons';
 import { LinkButtons, safeLinks } from '../components/Links';
 import { MusterBanner } from '../components/Muster';
 import { EmailNudge } from '../components/EmailNudge';
@@ -130,8 +130,6 @@ export function Overview() {
             ...(termsNotice ? [{ key: 'terms', label: t('Neue Nutzungsbedingungen bei „{name}“', { name: currentConnection().name }), detail: termsNotice, hideDetailTitle: true }] : []),
             ...nowItems(campaign, me, gm, needMe, serverInfo, analyses, load)
           ]} />
-          {/* Suche nach „Jetzt dran“: erst die Antwort der Seite, dann das Werkzeug */}
-          <BibleSearch campaignId={campaignId} />
 
           {/* Stand der Kampagne: Der Server arbeitet gerade (keine Aufgabe, nur zur Info) */}
           {gm && working.length > 0 && needMe.length === 0 && (
@@ -217,18 +215,6 @@ export function Overview() {
 }
 
 /** „Wer war das?“ – schmales Suchfeld oben, springt in die Bibel (fehlertolerant, siehe search/fuzzy.ts) */
-function BibleSearch({ campaignId }: { campaignId: string }) {
-  const navigate = useNavigate();
-  const [q, setQ] = useState('');
-  return (
-    <form role="search" data-tour="search" className="overview-search" aria-label={t('Wer war das?')}
-      onSubmit={(e) => { e.preventDefault(); if (q.trim()) navigate(p(`/k/${campaignId}/bibel?q=${encodeURIComponent(q.trim())}`)); }}>
-      <IconSearch />
-      <input type="search" enterKeyHint="search" aria-label={t('Name in der Bibel suchen …')} placeholder={t('Wer war das? Name suchen …')} value={q} onChange={(e) => setQ(e.target.value)} />
-    </form>
-  );
-}
-
 /**
  * „So fängst du an“ (SL, solange es kein Kapitel gibt): die Reihenfolge bis zum ersten Kapitel – einladen, Welt
  * (freiwillig), erste Runde aufnehmen. Der nächste offene Schritt ist der Hauptknopf; Titelbild als leiser Link darunter.
