@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { api, isApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Campaign, DateOption, DatePoll, VoteAnswer } from '../api/types';
+import { isDeletedMember } from '../api/types';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { Missing } from '../components/Missing';
 import { formatDateTime } from '../components/format';
@@ -158,7 +159,8 @@ export function DatePollPage() {
           {open.options.map((o) => {
             const mine = o.votes.find((v) => v.memberId === me?.id)?.answer;
             const by = (a: VoteAnswer) => o.votes.filter((v) => v.answer === a).map((v) => name(v.memberId));
-            const pending = campaign!.members.filter((m) => !o.votes.some((v) => v.memberId === m.id)).map((m) => m.displayName);
+            // Gelöschte, ausgetretene und freie Plätze stimmen nicht mehr ab
+            const pending = campaign!.members.filter((m) => !isDeletedMember(m) && !o.votes.some((v) => v.memberId === m.id)).map((m) => m.displayName);
             const canRemove = gm || o.proposedByMemberId === me?.id;
             return (
               <div key={o.id} className={mine ? 'card' : 'card task'}>

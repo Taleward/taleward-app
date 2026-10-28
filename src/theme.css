@@ -2008,11 +2008,13 @@ button.table-group-face {
 }
 .review-steps button {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
-  min-height: 52px; padding: 6px 4px; margin-bottom: -1px;
+  min-height: 60px; padding: 6px 4px; margin-bottom: -1px;
   background: none; border: 0; border-bottom: 3px solid transparent;
-  color: var(--ink-soft); font: 700 calc(15px * var(--ts))/1.25 var(--font-sans); cursor: pointer;
+  color: var(--ink-muted); font: 500 calc(16px * var(--ts))/1.25 var(--font-sans); cursor: pointer;
 }
-.review-steps button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--tinte); }
+/* Gleich wie die Reiter der Bibel: gleich breit, gleich hoch, Auswahl fett und unterstrichen */
+.review-steps button[aria-selected='true'] { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
+@media (hover: hover) { .review-steps button:hover { background: var(--paper-sunken); } }
 .review-steps button .small { font-weight: 400; color: var(--ink-muted); }
 .review-steps button:focus-visible { outline: 2px solid var(--tinte); outline-offset: -2px; }
 .recap-sheet-head { padding-bottom: 4px; }

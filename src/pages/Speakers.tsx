@@ -210,7 +210,7 @@ export function Speakers() {
       )}
       {speakers && review && editable && (
         <button type="button" className="btn" disabled={!complete || !changed || busy} onClick={confirm}>
-          {busy ? t('Wird gesendet …') : t('Ändern und Kapitel neu schreiben')}
+          {busy ? t('Wird gesendet …') : t('Kapitel neu schreiben')}
         </button>
       )}
     </Screen>

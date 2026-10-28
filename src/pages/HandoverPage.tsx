@@ -111,7 +111,7 @@ export function HandoverPage() {
       {campaign && me?.role === 'gm' && !halfDone && coGms.length > 0 && (
         <section className="card">
           <strong>{t('{name} leitet schon mit', { name: coGms.map((m) => m.displayName).join(', ') })}</strong>
-          <span className="muted small">{t('Du kannst die Spielleitung einfach abgeben und als Spieler weitermachen. Ab dann siehst du nur noch, was Spieler sehen.')}</span>
+          <span className="muted small">{t('Du kannst abgeben und als Spieler weitermachen.')}</span>
           <button type="button" className="btn outline" disabled={busy} onClick={onlyStepDown}>{t('Ich spiele ab jetzt als Spieler')}</button>
         </section>
       )}
@@ -122,7 +122,7 @@ export function HandoverPage() {
             <h2>{t('Wer leitet ab jetzt?')}</h2>
             {players.length === 0 ? (
               <>
-                <span className="muted small">{t('Die neue Spielleitung muss erst mitspielen. Lade sie ein und komm danach hierher zurück.')}</span>
+                <span className="muted small">{t('Die neue Spielleitung muss erst in der Kampagne sein. Lade sie zuerst ein.')}</span>
                 <InviteBox campaignId={campaign.id} campaignTitle={campaign.title} />
               </>
             ) : (
@@ -144,12 +144,12 @@ export function HandoverPage() {
             <section className="card">
               <label className="check">
                 <input type="checkbox" checked={stepDown} onChange={(e) => setStepDown(e.target.checked)} />
-                <span>{t('Ich gebe die Spielleitung ab und spiele als Spieler weiter')}</span>
+                <span>{t('Ich spiele danach als Spieler weiter')}</span>
               </label>
               <span className="muted small" style={{ marginLeft: 28 }}>
                 {stepDown
                   ? t('Danach wählst du deinen Charakter.')
-                  : t('Ohne Haken leitet ihr zu zweit. Abgeben kannst du später hier.')}
+                  : t('Sonst leitet ihr zu zweit.')}
               </span>
             </section>
           )}
@@ -158,7 +158,7 @@ export function HandoverPage() {
             <div className="card warn">
               <strong>{t('Ab dann siehst du nur noch, was Spieler sehen')}</strong>
               <span className="small">
-                {t('Weg sind für dich: geheime Einträge und geheime Teile von Einträgen, SL-Notizen, Vorschläge, Abschriften, Unterlagen der Spielleitung, Kosten und Hinweise an die Spielleitung. Was du behalten willst, klär vorher mit der neuen Spielleitung.')}
+                {t('Weg sind dann Geheimes, SL-Notizen, Vorschläge, Abschriften, Unterlagen, Kosten und Hinweise.')}
               </span>
             </div>
           )}

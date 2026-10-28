@@ -119,7 +119,7 @@ export function Overview() {
           {gm && imported && (
             <div className="notice" role="status" style={{ flexDirection: 'column', gap: 4 }}>
               <strong>{t('Die Kampagne ist umgezogen.')}</strong>
-              <span className="small">{t('Hier fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme neu zu. Lade alle über „Mitspielende einladen“ ein; wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst auf ihren Platz. Cloud-Freigaben und Stimmprofile richtet ihr hier neu ein.')}</span>
+              <span className="small">{t('Hier braucht jede Person ein eigenes Konto und stimmt neu zu. Cloud-Freigaben und Stimmprofile richtet ihr neu ein.')}</span>
             </div>
           )}
           {/* Frische Kampagne der SL: „So fängst du an“ trägt den Hauptknopf, die eigene Zustimmung steht ruhiger daneben */}
@@ -450,7 +450,7 @@ export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved: 
         {campaign.hotwords !== undefined && (
           <div className="field">
             <label htmlFor="w-hot" className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Namenshilfe für die Transkription')}</label>
-            <span className="muted small">{t('Namen und Begriffe aus euren Runden – damit erkennt die Transkription sie besser. Nur du siehst diese Liste.')}</span>
+            <span className="muted small">{t('Namen aus euren Runden, damit die Transkription sie erkennt. Nur du siehst sie.')}</span>
             {hotwords.length > 0 && (
               <div className="term-choices">
                 {hotwords.map((w) => (
@@ -605,7 +605,7 @@ export function MoveConsent({ campaign, me, onChanged }: { campaign: Campaign; m
         <span>{t('Meine Charakterdaten dürfen bei einem Umzug mit')}</span>
       </label>
       <span className="muted small" style={{ marginLeft: 28 }}>
-        {t('Zieht die Spielleitung mit der Kampagne auf einen anderen Server, gehen dann Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Ohne Haken nur der Name deiner Figur.')}
+        {t('Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.')}
       </span>
       <ErrorBox error={error} />
     </div>

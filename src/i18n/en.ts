@@ -1604,4 +1604,12 @@ export const en: Record<string, string> = {
   "Was mit den Daten passiert": "What happens to the data",
   "Kampagne": "Campaign",
   "Verlassen geht, sobald jemand anderes leitet.": "You can leave once someone else runs the game.",
+  "Ich spiele danach als Spieler weiter": "I'll keep playing as a player",
+  "Sonst leitet ihr zu zweit.": "Otherwise you run the game together.",
+  "Weg sind dann Geheimes, SL-Notizen, Vorschläge, Abschriften, Unterlagen, Kosten und Hinweise.": "Gone then: secrets, GM notes, suggestions, transcripts, documents, costs and notices.",
+  "Du kannst abgeben und als Spieler weitermachen.": "You can step down and keep playing.",
+  "Die neue Spielleitung muss erst in der Kampagne sein. Lade sie zuerst ein.": "The new GM has to be in the campaign first. Invite them first.",
+  "Hier braucht jede Person ein eigenes Konto und stimmt neu zu. Cloud-Freigaben und Stimmprofile richtet ihr neu ein.": "Here everyone needs their own account and agrees again. You set up cloud permissions and voice profiles anew.",
+  "Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.": "Then description, backstory, picture and your public comments come along. Otherwise only your character's name.",
+  "Namen aus euren Runden, damit die Transkription sie erkennt. Nur du siehst sie.": "Names from your sessions, so the transcription recognises them. Only you see them.",
 };
