@@ -8,7 +8,7 @@ import { confirmDialog } from './confirm';
 import { ErrorBox } from './Screen';
 
 /**
- * Konten und Server → Anmeldung: freiwillige E-Mail (nur fürs Passwort-Zurücksetzen), verbundene Dienste,
+ * Konten und Server → Anmeldung: freiwillige E-Mail (nur zum Zurücksetzen des Passworts), verbundene Dienste,
  * Passwort setzen oder ändern (Schnittstelle 0.4.0). Auf älteren Servern unsichtbar.
  */
 export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean }) {
@@ -69,7 +69,7 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
           {/* Auch zugeklappt sichtbar, solange keine Adresse bestätigt ist */}
           {!user.email && info.passwordReset && (
             <span className="muted small" style={{ fontWeight: 400 }}>
-              {user.emailPending ? t('E-Mail: wartet auf Bestätigung') : t('E-Mail: noch keine – fürs Passwort-Zurücksetzen')}
+              {user.emailPending ? t('E-Mail: wartet auf Bestätigung') : t('E-Mail: noch keine – zum Zurücksetzen des Passworts')}
             </span>
           )}
         </span>

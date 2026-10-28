@@ -42,7 +42,7 @@ const bookings: Record<string, CreditBooking[]> = {
     { id: 'bk-7', kind: 'usage', amountCents: -38, createdAt: daysAgo(2), usage: { jobKind: 'summarize', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: 12, documentTitle: null } },
     { id: 'bk-6', kind: 'usage', amountCents: -72, createdAt: daysAgo(2), usage: { jobKind: 'transcribe', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: 12, documentTitle: null } },
     { id: 'bk-5', kind: 'usage', amountCents: -12, createdAt: daysAgo(6), usage: { jobKind: 'document', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: null, documentTitle: 'Stadtplan Grauwacht' } },
-    { id: 'bk-4', kind: 'credit', amountCents: 200, createdAt: daysAgo(9), reason: 'Danke fürs Testen' },
+    { id: 'bk-4', kind: 'credit', amountCents: 200, createdAt: daysAgo(9), reason: 'Danke für den Test' },
     { id: 'bk-3', kind: 'voucher', amountCents: 500, createdAt: daysAgo(12) },
     { id: 'bk-2', kind: 'usage', amountCents: -38, createdAt: daysAgo(13), usage: { jobKind: 'summarize', campaignId: 'c-grau', campaignTitle: 'Die Schatten von Grauwacht', sessionNumber: 11, documentTitle: null } },
     { id: 'bk-1', kind: 'payment', amountCents: start + 38 + 72 + 12 - 200 - 500 + 38, createdAt: daysAgo(20) }

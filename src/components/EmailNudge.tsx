@@ -7,7 +7,7 @@ import { getLive, onLiveChange } from '../recorder/live';
 import { t } from '../i18n';
 
 /*
- * Einmal nach dem Anlegen eines Kontos: freundlicher Hinweis, eine E-Mail fürs Passwort-Zurücksetzen zu hinterlegen.
+ * Einmal nach dem Anlegen eines Kontos: freundlicher Hinweis, eine E-Mail zum Zurücksetzen des Passworts zu hinterlegen.
  * Freiwillig, je Server und Konto genau einmal („Nein danke“ = nie wieder), nur wenn der Server Mails verschicken kann,
  * nicht während einer Aufnahme und nicht neben den Nutzungsbedingungen.
  */
