@@ -8,6 +8,8 @@ import { t, tk } from '../i18n';
 import { IconEye, IconLock, IconPencil } from './Icons';
 import { addsAlias } from '../bible/aliases';
 import { mergesIntoNotes } from '../review/mergeVisibility';
+import { HolderSelect, KEEP, NOBODY, figureName } from '../bible/HolderSelect';
+import { apiAtLeast } from '../api/connections';
 
 export const ENTRY_KIND: Record<EntryType, string> = {
   npc: tk('NSC'),
@@ -71,9 +73,26 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
     patch({ decision: next }, { ...p, decision: next });
   };
 
+  // Ab 0.4.26: Bei wem ist die Beute? Bei vorhandenen Gegenständen heißt „nichts gewählt“: bleibt, wie es ist
+  const withHolder = p.entryType === 'item' && p.source !== 'character' && !p.documentId && apiAtLeast('0.4.26') && players.length > 0;
+  const changesExisting = p.action !== 'create' || !!p.mergeIntoEntryId;
+  const holderValue = p.holderCleared ? NOBODY : p.holderMemberId ?? (changesExisting ? KEEP : NOBODY);
+  const [holder, setHolder] = useState(holderValue);
+  const holderPerson = p.holderMemberId ? players.find((m) => m.id === p.holderMemberId) : undefined;
+  const holderText = !withHolder ? null
+    : p.holderCleared ? t('Danach bei keiner Figur mehr')
+    : holderPerson ? (changesExisting ? t('Geht an {name}', { name: figureName(holderPerson) }) : t('Bei {name}', { name: figureName(holderPerson) }))
+    : null;
+
   const save = async () => {
-    const change = { title: title.trim(), detail: detail.trim(), gmNotes: gmNotes.trim() };
-    await patch(change, { ...p, ...change });
+    const change: Parameters<typeof api.decide>[1] = { title: title.trim(), detail: detail.trim(), gmNotes: gmNotes.trim() };
+    if (withHolder && holder !== holderValue) {
+      if (holder === NOBODY && changesExisting) change.holderCleared = true;
+      else change.holderMemberId = holder === NOBODY || holder === KEEP ? null : holder;
+    }
+    const holderState = change.holderCleared ? { holderMemberId: null, holderCleared: true }
+      : 'holderMemberId' in change ? { holderMemberId: change.holderMemberId, holderCleared: false } : {};
+    await patch(change, { ...p, title: change.title!, detail: change.detail!, gmNotes: change.gmNotes, ...holderState });
     setEditing(false);
   };
 
@@ -130,6 +149,7 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
             <label htmlFor={`pd-${p.id}`}>{t('Was Spieler wissen')}</label>
             <textarea id={`pd-${p.id}`} value={detail} onChange={(e) => setDetail(e.target.value)} />
           </div>
+          {withHolder && <HolderSelect id={`ph-${p.id}`} players={players} value={holder} onChange={setHolder} keep={changesExisting} />}
           <div className="field">
             <label htmlFor={`pg-${p.id}`} className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Nur SL')}</label>
             <textarea id={`pg-${p.id}`} value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} />
@@ -154,6 +174,7 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
         <>
           <div className="card-title">{p.title}</div>
           {p.detail && <div>{p.detail}</div>}
+          {holderText && <div className="small" style={{ fontWeight: 700 }}>{holderText}</div>}
           {p.gmNotes && (
             <SecretBox>{p.gmNotes}</SecretBox>
           )}
@@ -232,7 +253,7 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
             {t('Verwerfen')}
           </button>
           <button type="button" className="btn small outline square" aria-label={t('Anpassen: Text und Sichtbarkeit')}
-            title={t('Anpassen: Text und Sichtbarkeit')} onClick={() => setEditing(true)}>
+            title={t('Anpassen: Text und Sichtbarkeit')} onClick={() => { setHolder(holderValue); setEditing(true); }}>
             <IconPencil />
           </button>
         </div>

@@ -441,7 +441,7 @@ function makeApi(conn: () => Connection) {
   proposals: (sessionId: string) => request<Proposal[]>('GET', `/sessions/${sessionId}/proposals`),
   decide: (
     proposalId: string,
-    change: { decision?: ProposalDecision; title?: string; detail?: string; gmNotes?: string; visibility?: Visibility; hiddenFromMemberIds?: string[]; mergeIntoEntryId?: string | null }
+    change: { decision?: ProposalDecision; title?: string; detail?: string; gmNotes?: string; visibility?: Visibility; hiddenFromMemberIds?: string[]; mergeIntoEntryId?: string | null; holderMemberId?: string | null; holderCleared?: boolean }
   ) => request<Proposal>('PATCH', `/proposals/${proposalId}`, { body: change }),
 
   // Terminabstimmung

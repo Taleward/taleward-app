@@ -15,6 +15,7 @@ import type { Campaign, Entry, EntryType, Member } from '../api/types';
 import { Dialog } from '../components/Dialog';
 import { AssignFigureDialog } from '../components/Seats';
 import { ENTRY_KIND } from '../components/ProposalCard';
+import { HolderSelect, NOBODY } from '../bible/HolderSelect';
 import { IconEye, IconLock, IconPlus } from '../components/Icons';
 import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSet } from '../components/Screen';
 
@@ -171,7 +172,7 @@ export function Bible() {
       </div>
 
       {gm && adding && (
-        <AddEntry campaignId={campaignId} type={tab === 'all' ? 'npc' : tab}
+        <AddEntry campaignId={campaignId} type={tab === 'all' ? 'npc' : tab} players={players}
           onDone={(saved) => {
             setAdding(false);
             if (saved) setReload((n) => n + 1);
@@ -290,8 +291,9 @@ function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string
   );
 }
 
-function AddEntry({ campaignId, type: initialType, onDone }: { campaignId: string; type: EntryType; onDone: (saved: boolean) => void }) {
+function AddEntry({ campaignId, type: initialType, players, onDone }: { campaignId: string; type: EntryType; players: Member[]; onDone: (saved: boolean) => void }) {
   const [type, setType] = useState<EntryType>(initialType);
+  const [holder, setHolder] = useState(NOBODY);
   const [name, setName] = useState('');
   const [summary, setSummary] = useState('');
   const [secret, setSecret] = useState(false);
@@ -306,7 +308,8 @@ function AddEntry({ campaignId, type: initialType, onDone }: { campaignId: strin
         summary: summary.trim(),
         visibility: secret ? 'gm_only' : 'public',
         gmNotes: gmNotes.trim() || null,
-        status: type === 'quest' ? 'active' : null
+        status: type === 'quest' ? 'active' : null,
+        ...(type === 'item' ? { holderMemberId: holder === NOBODY ? null : holder } : {})
       });
       onDone(true);
     } catch (e) {
@@ -331,6 +334,7 @@ function AddEntry({ campaignId, type: initialType, onDone }: { campaignId: strin
         <label htmlFor="e-sum">{t('Beschreibung')}</label>
         <textarea id="e-sum" value={summary} onChange={(e) => setSummary(e.target.value)} />
       </div>
+      {type === 'item' && players.length > 0 && <HolderSelect id="e-holder" players={players} value={holder} onChange={setHolder} />}
       <div className="field">
         <label htmlFor="e-gm" className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Nur SL (geheimer Teil)')}</label>
         <textarea id="e-gm" value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} />
@@ -369,6 +373,7 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
   const withAliases = apiAtLeast('0.4.21');
   const [aliases, setAliases] = useState(aliasesText(e.aliases));
   const [secret, setSecret] = useState(e.visibility === 'gm_only');
+  const [holderId, setHolderId] = useState(e.holderMemberId ?? NOBODY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -413,7 +418,8 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
 
   const save = () => run(() => api.updateEntry(e.id, {
     name: name.trim(), summary: summary.trim(), gmNotes: gmNotes.trim() || null, visibility: secret ? 'gm_only' : 'public',
-    ...(withAliases ? { aliases: parseAliases(aliases, name) } : {})
+    ...(withAliases ? { aliases: parseAliases(aliases, name) } : {}),
+    ...(e.type === 'item' ? { holderMemberId: holderId === NOBODY ? null : holderId } : {})
   }));
 
   const remove = async () => {
@@ -441,6 +447,9 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
           <label htmlFor={`es-${e.id}`} className="row" style={{ gap: 6 }}><IconEye size={16} /> {t('Was Spieler wissen')}</label>
           <textarea id={`es-${e.id}`} value={summary} onChange={(ev) => setSummary(ev.target.value)} />
         </div>
+        {e.type === 'item' && players.length > 0 && (
+          <HolderSelect id={`eh-${e.id}`} players={players} value={holderId} onChange={setHolderId} />
+        )}
         <div className="field">
           <label htmlFor={`eg-${e.id}`} className="row" style={{ gap: 6 }}><IconLock size={16} /> {t('Nur SL')}</label>
           <textarea id={`eg-${e.id}`} value={gmNotes} onChange={(ev) => setGmNotes(ev.target.value)} />

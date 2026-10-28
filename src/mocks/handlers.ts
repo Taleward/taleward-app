@@ -645,7 +645,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.25',
+      apiVersion: nachbar ? '0.3.9' : '0.4.26',
       serverId: nachbar ? undefined : 'testserver',
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
@@ -1981,6 +1981,18 @@ export const handlers = [
       }
       p.mergeIntoEntryId = body.mergeIntoEntryId;
     }
+    // 0.4.26: Halter der Beute
+    if (body.holderMemberId !== undefined || body.holderCleared !== undefined) {
+      const campaignId = sessions.find((x) => x.id === p.sessionId)?.campaignId;
+      const c = campaigns.find((x) => x.id === campaignId);
+      if (p.entryType !== 'item') return err(400, 'invalid_input', 'Nur Beute hat einen Halter.');
+      if (body.holderMemberId && !c?.members.some((m) => m.id === body.holderMemberId && m.role === 'player' && !m.leftAt && !m.deletedAt)) {
+        return err(400, 'holder_unknown', 'Diese Person ist nicht am Tisch.');
+      }
+      if (body.holderCleared && p.action === 'create' && !p.mergeIntoEntryId) return err(400, 'invalid_input', 'Ein neuer Gegenstand hat noch keinen Halter.');
+      p.holderMemberId = body.holderCleared ? null : body.holderMemberId ?? null;
+      p.holderCleared = !!body.holderCleared && !body.holderMemberId;
+    }
     // Mitgebrachte Welt (0.4.7): Entscheidung wirkt sofort
     if (p.source === 'character' && body.decision && body.decision !== 'open') applyCharacterProposal(p);
     return HttpResponse.json(withMatch(p));
@@ -2133,6 +2145,13 @@ export const handlers = [
       if (p.decision === 'open') p.decision = 'rejected';
       if (p.decision !== 'accepted') continue;
       const merge = p.action === 'create' && p.mergeIntoEntryId ? entries.find((e) => e.id === p.mergeIntoEntryId) : undefined;
+      // 0.4.26: Halter der Beute übernehmen (nur bei Gegenständen)
+      const holderTo = (e: Entry | undefined) => {
+        if (!e || e.type !== 'item') return;
+        if (p.holderCleared) e.holderMemberId = null;
+        else if (p.holderMemberId) e.holderMemberId = p.holderMemberId;
+      };
+      if (!merge) holderTo(p.targetEntryId ? entries.find((e) => e.id === p.targetEntryId) : undefined);
       if (merge) {
         // Wie der Server: Ist der Vorschlag weniger sichtbar als der Eintrag, kommen Titel und Text nur in die SL-Notizen
         const lessVisible = merge.visibility === 'public' && (p.suggestedVisibility !== 'public'
@@ -2143,6 +2162,7 @@ export const handlers = [
           merge.updatedAt = new Date().toISOString();
           continue;
         }
+        holderTo(merge);
         // 0.4.21: wie update anhängen, abweichende Schreibweise zu „Auch genannt“; Sichtbarkeit bleibt
         if (p.detail && !merge.summary.includes(p.detail)) merge.summary = merge.summary ? `${merge.summary}\n\n${p.detail}` : p.detail;
         if (p.gmNotes) merge.gmNotes = merge.gmNotes ? `${merge.gmNotes}\n\n${p.gmNotes}` : p.gmNotes;
@@ -2173,7 +2193,8 @@ export const handlers = [
         entries.push({
           id: 'e-' + crypto.randomUUID().slice(0, 8), campaignId: s.campaignId,
           type: p.entryType === 'other' ? 'other' : p.entryType, name: p.title, summary: p.detail,
-          visibility: p.suggestedVisibility, hiddenFromMemberIds: p.hiddenFromMemberIds ?? [], gmNotes: p.gmNotes ?? null, status: p.entryType === 'quest' ? 'active' : null, holderMemberId: null,
+          visibility: p.suggestedVisibility, hiddenFromMemberIds: p.hiddenFromMemberIds ?? [], gmNotes: p.gmNotes ?? null, status: p.entryType === 'quest' ? 'active' : null,
+          holderMemberId: p.entryType === 'item' ? p.holderMemberId ?? null : null,
           firstSessionNumber: s.number, lastSessionNumber: s.number, mentions: [], updatedAt: new Date().toISOString()
         });
       }

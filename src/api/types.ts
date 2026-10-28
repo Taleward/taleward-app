@@ -454,6 +454,10 @@ export interface Proposal {
   match?: ProposalMatch | null;
   /** Die SL ergänzt lieber diesen Eintrag statt einen neuen anzulegen (ab 0.4.21) */
   mergeIntoEntryId?: string | null;
+  /** Ab 0.4.26, nur Beute: bei wem der Gegenstand nach der Runde ist bzw. an wen er geht */
+  holderMemberId?: string | null;
+  /** Ab 0.4.26, nur Beute bei update/Ergänzen: bei keiner Figur mehr */
+  holderCleared?: boolean;
 }
 
 export interface ProposalMatch {

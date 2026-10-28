@@ -224,8 +224,11 @@ export function proposalsFor(sessionId: string): Proposal[] {
       evidence: [{ start: 1520, quote: 'Ich bin Hauptfrau Dornfeld, und ihr kommt hier nicht rein.' }] }),
     base('p2', { entryType: 'quest', action: 'update', targetEntryId: 'e8', title: 'Das gestohlene Siegel',
       detail: 'Die Spur führt ins Hafenviertel von Kaltenfurt.', evidence: [{ start: 6210, quote: 'Das Zeichen ist dasselbe wie auf dem Siegel!' }] }),
-    base('p3', { entryType: 'item', title: 'Runenschlüssel', detail: 'Trägt das Zeichen des Siegels. Bei Nyra.',
+    // 0.4.26: Bei wem ist die Beute? (Nyra steckt den Schlüssel ein; die Karte wechselt zu Ilsabet)
+    base('p3', { entryType: 'item', title: 'Runenschlüssel', detail: 'Trägt das Zeichen des Siegels.', holderMemberId: 'm-sophie',
       evidence: [{ start: 6190, quote: 'Ich stecke den Schlüssel ein.' }] }),
+    base('p9', { entryType: 'item', action: 'update', targetEntryId: 'e9', title: 'Karte des Moores', detail: 'Unvollständig. Die Ecke mit dem Grauen Strom fehlt.',
+      holderMemberId: 'm-lea', evidence: [{ start: 6400, quote: 'Thorwald, gib mir mal die Karte, ich trag die Kapelle ein.' }] }),
     base('p4', { entryType: 'location', title: 'Die Ertrunkene Kapelle', detail: 'Halb versunkene Kapelle am Grauen Strom, nur bei Ebbe betretbar.',
       confidence: 0.6, flags: ['low_confidence', 'evidence_not_found'], evidence: [{ start: 5400, quote: 'Die Kapelle steht halb im Wasser.' }] }),
     // Geheimer Eintrag ist am Tisch aufgetaucht: nur ein Vorschlag, die SL gibt frei

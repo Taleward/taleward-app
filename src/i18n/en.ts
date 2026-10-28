@@ -1615,4 +1615,10 @@ export const en: Record<string, string> = {
   "So sehen es alle am Tisch. Ändern kannst du es oben unter „Für alle am Tisch“.": "This is what everyone at the table sees. You can change it above under “For everyone at the table”.",
   "Zugestimmt seit {date}": "Agreed since {date}",
   "Deine Daten": "Your data",
+  "Bei wem?": "Who has it?",
+  "Bleibt, wie es ist": "Stays as it is",
+  "Bei keiner Figur mehr": "No character has it any more",
+  "Bei keiner Figur": "No character",
+  "Danach bei keiner Figur mehr": "Afterwards no character has it",
+  "Geht an {name}": "Goes to {name}",
 };
