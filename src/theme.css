@@ -2299,3 +2299,22 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .invite-open { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); margin-top: 4px; padding: 10px 0 6px; }
 .invite-row.flat { border-top: 0; margin-top: 0; padding-top: 0; }
 .invite-plus.small { width: 32px; height: 32px; }
+
+/* Aufnahme vorbereiten: am Handy steht der Knopf über „Am Tisch“, eine liegengebliebene Aufnahme ganz oben */
+@media (max-width: 999px) {
+  .split.rec-prepare > .a,
+  .split.rec-prepare > .b { display: contents; }
+  .split.rec-prepare .rec-pending { order: -2; }
+  .split.rec-prepare .rec-start { order: -1; }
+}
+/* Übergang zur laufenden Aufnahme: Knopf wandert und wächst, „Am Tisch“ klappt weg */
+.rec-morph { view-transition-name: rec-button; }
+.rec-table { view-transition-name: rec-table; }
+::view-transition-group(rec-button) { animation-duration: 450ms; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+::view-transition-old(rec-table) { animation: rec-table-out 260ms ease-in both; transform-origin: top center; }
+::view-transition-new(rec-table) { animation: rec-table-in 300ms ease-out both; transform-origin: top center; }
+@keyframes rec-table-out { to { opacity: 0; transform: scaleY(0.4); } }
+@keyframes rec-table-in { from { opacity: 0; transform: scaleY(0.4); } }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 300ms; }
+/* Ohne Leiste unten (z. B. während der Aufnahme): Abstand zur Gestenleiste des Handys */
+.screen:not(.with-nav) > .screen-main { padding-bottom: calc(var(--space-6) + var(--safe-bottom)); }

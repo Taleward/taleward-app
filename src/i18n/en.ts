@@ -1625,4 +1625,6 @@ export const en: Record<string, string> = {
   "Per Link oder QR-Code": "By link or QR code",
   "Gast dazunehmen": "Add a guest",
   "Ohne Konto, stimmt hier selbst zu": "No account, agrees right here",
+  "Aufnahme verwerfen": "Discard recording",
+  "Aufnahme verwerfen? Sie wird gelöscht, nichts wird hochgeladen.": "Discard the recording? It will be deleted and nothing is uploaded.",
 };

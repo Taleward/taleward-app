@@ -8,6 +8,7 @@ import { currentConnection, p } from '../api/connections';
 import { Avatar } from '../components/Avatar';
 import { getLang, t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Attendee, Member } from '../api/types';
@@ -27,6 +28,17 @@ const native = hasNativeRecorder();
 // Einfarbiges Zeichen aus den Markendateien; fehlt es, bleibt einfach das Mikrofon
 // Inverse Fassung = Original für dunklen Grund: Körper hell (hier Pergament), Lesezeichen im hellen Siegelrot
 const MARK = brandMarkShapes('taleward-mark-inverse.svg');
+
+/** Tipp zur Vorstellungsrunde nur, bis auf diesem Gerät einmal aufgenommen wurde */
+const TIP_KEY = 'taleward.recTipSeen';
+
+/** Wechsel zwischen Vorbereiten und Aufnahme als sanfter Übergang (View Transitions), sonst sofort */
+function withTransition(change: () => void) {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (!doc.startViewTransition || reduce) return change();
+  doc.startViewTransition(() => flushSync(change));
+}
 
 type Phase = 'prepare' | 'recording' | 'uploading';
 
@@ -53,6 +65,7 @@ export function Recording() {
   const [addingGuest, setAddingGuest] = useState(false);
   const [handover, setHandover] = useState<{ memberId?: string; name: string } | null>(null);
   const [phase, setPhase] = useState<Phase>('prepare');
+  const [showTip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
   // Zurück-Taste warnt, solange aufgenommen wird
   useEffect(() => {
     setRecordingActive(phase === 'recording' || !!getLive());
@@ -274,10 +287,37 @@ export function Recording() {
       }
       setElapsed(0);
       setPaused(false);
-      setPhase('recording');
+      try { localStorage.setItem(TIP_KEY, '1'); } catch { /* dann eben noch einmal */ }
+      // Der Knopf wandert in die Mitte und wächst, „Am Tisch“ klappt weg (ohne Unterstützung: einfach umschalten)
+      withTransition(() => setPhase('recording'));
     } catch (e) {
       if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
       else setError(e);
+    }
+  };
+
+  const discard = async () => {
+    if (!(await confirmDialog(t('Aufnahme verwerfen? Sie wird gelöscht, nichts wird hochgeladen.'), { confirmLabel: t('Verwerfen'), cancelLabel: t('Weiter aufnehmen'), danger: true }))) return;
+    const id = sessionId.current;
+    try {
+      if (native) {
+        const st = await BackgroundRecorder.stop();
+        if (st.sessionId) await BackgroundRecorder.discard({ sessionId: st.sessionId }).catch(() => undefined);
+      } else if (recorder.current) {
+        const storedId = recorder.current.storedId;
+        await recorder.current.stop();
+        recorder.current = null;
+        setLive(null);
+        if (storedId) await removeRecording(storedId).catch(() => undefined);
+      }
+      // Die angelegte, leere Runde auf dem Server wieder entfernen (ältere Server: bleibt liegen, schadet nicht)
+      if (id) await api.deleteSession(id).catch(() => undefined);
+      sessionId.current = null;
+      setElapsed(0);
+      setPaused(false);
+      withTransition(() => setPhase('prepare'));
+    } catch (e) {
+      setError(e);
     }
   };
 
@@ -338,10 +378,10 @@ export function Recording() {
 
       {/* Vorbereiten: breit zweispaltig – links wer am Tisch ist, rechts der Knopf; am Handy untereinander */}
       {phase === 'prepare' && (
-      <div className="split">
+      <div className="split rec-prepare">
       <div className="a">
       {pending && (
-        <div className="card warn">
+        <div className="card warn rec-pending">
           <h2>{t('Aufnahme noch nicht hochgeladen')}</h2>
           <div className="muted small">
             {t('{title}: {time} aufgenommen, {mb} MB.', {
@@ -370,7 +410,7 @@ export function Recording() {
         </div>
       )}
 
-          <section className="card" style={{ gap: 0 }}>
+          <section className="card rec-table" style={{ gap: 0 }}>
             <div className="row between" style={{ marginBottom: 4 }}>
               <h2>{t('Am Tisch')}</h2>
               <span className="muted small">{t('{ready} von {total} bereit', { ready: presentMembers.length - missing.length + guests.length, total: presentMembers.length + guests.length })}</span>
@@ -432,14 +472,15 @@ export function Recording() {
 
       </div>
       <div className="b">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
-            <button type="button" className="rec-button" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
+          {/* Am Handy steht der Knopf über „Am Tisch“ (rec-start, siehe theme.css) */}
+          <div className="rec-start" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+            <button type="button" className="rec-button rec-morph" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
               <IconMic size={48} />
             </button>
             <div className="muted small" style={{ textAlign: 'center' }}>
               {allConsented ? t('Aufnahme starten') : t('Wartet auf alle Zustimmungen')}
             </div>
-            <div className="muted small" style={{ textAlign: 'center' }}>{t('Tipp: Zu Beginn sagt jede Person Name und Charakter.')}</div>
+            {showTip && <div className="muted small" style={{ textAlign: 'center' }}>{t('Tipp: Zu Beginn sagt jede Person Name und Charakter.')}</div>}
             {cloud.transcription?.primary && (
               <div className="small" style={{ textAlign: 'center', fontWeight: 500 }}>
                 {t('Diese Aufnahme wird über {provider} transkribiert.', { provider: cloud.transcription.provider })}
@@ -496,7 +537,7 @@ export function Recording() {
         <>
           {/* Großer Knopf in der Mitte – aus der Entfernung am Tisch erkennbar */}
           <div style={{ flex: 1, minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-            <button type="button" className={paused ? 'rec-button big' : 'rec-button big recording'} onClick={togglePause}
+            <button type="button" className={paused ? 'rec-button big rec-morph' : 'rec-button big recording rec-morph'} onClick={togglePause}
               aria-label={paused ? t('Aufnahme fortsetzen') : t('Aufnahme pausieren')}>
               {/* Läuft: Mikrofon und Taleward-Zeichen (einfarbig weiß) wechseln sich im Takt des Pulsierens ab */}
               <span className="rec-swap" aria-hidden>
@@ -531,6 +572,10 @@ export function Recording() {
           <button type="button" className="btn" onClick={stop}>
             {t('Beenden und hochladen')}
           </button>
+          {/* Nur in der Pause: falsch gestartet oder Probe – nichts hochladen */}
+          {paused && (
+            <button type="button" className="quiet-link danger" style={{ alignSelf: 'center' }} onClick={discard}>{t('Aufnahme verwerfen')}</button>
+          )}
           <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
             {native ? t('Läuft auch bei ausgeschaltetem Bildschirm weiter.') : t('Im Browser: App geöffnet lassen.')}
           </p>
