@@ -1,0 +1,274 @@
+From 4ed5d7f51aa097618dbdfd0ac8bf271c06b676bb Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 17:10:41 +0100
+Subject: [PATCH] =?UTF-8?q?Kommentare=20an=20mehrere=20Personen=20(0.4.26)?=
+ =?UTF-8?q?,=20Ziffern=20in=20Zeilenh=C3=B6he,=20Leseeinstellungen=20einge?=
+ =?UTF-8?q?klappt?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ docs/session-chronik-api.yaml | 20 +++++++++++++++++-
+ src/api/client.ts             |  7 +++++--
+ src/api/types.ts              |  2 ++
+ src/components/Comments.tsx   | 38 +++++++++++++++++++++++++++++------
+ src/components/RecapView.tsx  | 11 +++++-----
+ src/i18n/en.ts                |  4 ++++
+ src/mocks/db.ts               |  4 ++--
+ src/mocks/handlers.ts         | 17 +++++++++-------
+ src/theme.css                 |  7 ++++++-
+ 9 files changed, 85 insertions(+), 25 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index c68f4b2..d4591cb 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -263,4 +263,6 @@ info:
+     zu Entry.holderMemberId. Entry.holderMemberId selbst gibt es schon länger (POST/PATCH /entries). Ältere Apps sehen
+     den Vorschlag ohne Halter; übernimmt die SL ihn dort, setzt der Server den vorgeschlagenen Halter trotzdem.
++    Außerdem private Kommentare an mehrere Personen: POST …/comments nimmt recipientMemberIds, Comment liefert
++    recipientMemberIds. recipientMemberId bleibt (erster Empfänger) für ältere Apps.
+ 
+ servers:
+@@ -2950,4 +2952,7 @@ paths:
+       description: |
+         `recipientMemberId` leer = für alle. Gesetzt = privat, sichtbar nur für Absender und Empfänger.
++        Ab 0.4.26 `recipientMemberIds` (geht vor `recipientMemberId`): privat an mehrere Personen, sichtbar für Absender
++        und alle Empfänger; jede von ihnen sieht auch, an wen der Kommentar sonst noch ging. Leer oder fehlend = für alle.
++        Höchstens 20, keine doppelten, nicht der Absender selbst (sonst 400 `recipient_unknown`).
+         Spieler dürfen privat nur an die SL schreiben (sonst 403), die SL an jede Person.
+         Leerer Text 400, mehr als 4000 Zeichen 413 `comment_too_long`.
+@@ -2962,4 +2967,9 @@ paths:
+                 text: { type: string, maxLength: 4000 }
+                 recipientMemberId: { type: [string, "null"] }
++                recipientMemberIds:
++                  type: array
++                  maxItems: 20
++                  items: { type: string }
++                  description: Ab 0.4.26, siehe oben
+       responses:
+         "201":
+@@ -4568,5 +4578,13 @@ components:
+         recipientMemberId:
+           type: [string, "null"]
+-          description: null = für alle; sonst privat (nur Absender und Empfänger sehen ihn)
++          description: |
++            null = für alle; sonst privat (nur Absender und Empfänger sehen ihn). Ab 0.4.26 bei mehreren Empfängern der
++            erste (für ältere Apps); maßgeblich ist recipientMemberIds.
++        recipientMemberIds:
++          type: array
++          items: { type: string }
++          description: |
++            Ab 0.4.26, immer gesetzt: alle Empfänger eines privaten Kommentars, leer = für alle. Sichtbar für alle, die den
++            Kommentar sehen. Ältere Apps zeigen nur den ersten Empfänger.
+         text: { type: string }
+         createdAt: { type: string, format: date-time }
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 267a306..555e64c 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -461,6 +461,9 @@ function makeApi(conn: () => Connection) {
+   // Kommentare pro Kapitel
+   comments: (sessionId: string) => request<Comment[]>('GET', `/sessions/${sessionId}/comments`),
+-  addComment: (sessionId: string, text: string, recipientMemberId: string | null) =>
+-    request<Comment>('POST', `/sessions/${sessionId}/comments`, { body: { text, recipientMemberId } }),
++  /** Mehrere Empfänger erst ab 0.4.26; ältere Server bekommen nur den ersten */
++  addComment: (sessionId: string, text: string, recipients: string[], multi: boolean) =>
++    request<Comment>('POST', `/sessions/${sessionId}/comments`, {
++      body: multi ? { text, recipientMemberIds: recipients } : { text, recipientMemberId: recipients[0] ?? null }
++    }),
+   editComment: (commentId: string, text: string) =>
+     request<Comment>('PATCH', `/comments/${commentId}`, { body: { text } }),
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 9867f1c..8d61bc4 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -639,4 +639,6 @@ export interface Comment {
+   /** null = für alle in der Kampagne; sonst private Nachricht, sichtbar nur für Absender und Empfänger */
+   recipientMemberId: string | null;
++  /** Ab 0.4.26: alle Empfänger (leer = für alle); ältere Server liefern nur recipientMemberId */
++  recipientMemberIds?: string[];
+   text: string;
+   createdAt: string;
+diff --git a/src/components/Comments.tsx b/src/components/Comments.tsx
+index 91afbca..9d0867b 100644
+--- a/src/components/Comments.tsx
++++ b/src/components/Comments.tsx
+@@ -1,2 +1,3 @@
++import { apiAtLeast } from '../api/connections';
+ import { isDeletedMember } from '../api/types';
+ import { confirmDialog } from './confirm';
+@@ -21,5 +22,10 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+   const [list, setList] = useState<Comment[] | null>(null);
+   const [text, setText] = useState('');
++  // Ab 0.4.26 an mehrere Personen; vorher genau eine (Auswahlliste)
++  const multi = apiAtLeast('0.4.26');
++  const [privateTo, setPrivateTo] = useState(false);
++  const [chosen, setChosen] = useState<string[]>([]);
+   const [recipient, setRecipient] = useState('');
++  const to = multi ? (privateTo ? chosen : []) : recipient ? [recipient] : [];
+   const [editingId, setEditingId] = useState<string | null>(null);
+   const [editText, setEditText] = useState('');
+@@ -41,5 +47,5 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+     setError(null);
+     try {
+-      const k = await api.addComment(sessionId, text.trim(), recipient || null);
++      const k = await api.addComment(sessionId, text.trim(), to, multi);
+       setList((l) => [...(l ?? []), k]);
+       setText('');
+@@ -80,5 +86,7 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+       {list?.map((k) => {
+         const own = k.authorMemberId === me?.id;
+-        const isPrivate = k.recipientMemberId !== null;
++        const toIds = k.recipientMemberIds?.length ? k.recipientMemberIds : k.recipientMemberId ? [k.recipientMemberId] : [];
++        const isPrivate = toIds.length > 0;
++        const others = toIds.filter((id) => id !== me?.id).map(name).join(', ');
+         return (
+           <div key={k.id} className={isPrivate ? 'card secret' : 'card'} style={{ gap: 6 }}>
+@@ -92,5 +100,6 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+             {isPrivate && (
+               <div className="row small muted" style={{ gap: 6 }}>
+-                <IconLock size={14} /> {own ? t('Privat an {name}', { name: name(k.recipientMemberId) }) : t('Privat an dich')}
++                <IconLock size={14} /> {own ? t('Privat an {name}', { name: toIds.map(name).join(', ') })
++                  : others ? t('Privat an dich und {names}', { names: others }) : t('Privat an dich')}
+               </div>
+             )}
+@@ -125,5 +134,21 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+         <label htmlFor="new-comment" className="muted small">{t('Dein Kommentar')}</label>
+         <textarea id="new-comment" value={text} onChange={(e) => setText(e.target.value)}
+-          placeholder={recipient ? t('Nur die gewählte Person sieht das.') : t('Sehen alle am Tisch.')} />
++          placeholder={(multi ? privateTo : to.length > 0) ? t('Nur die gewählten Personen sehen das.') : t('Sehen alle am Tisch.')} />
++        {multi ? (
++          <div className="field" role="group" aria-labelledby="recipient-label">
++            <span id="recipient-label" className="small">{t('Sichtbar für')}</span>
++            <div className="segmented" style={{ gridTemplateColumns: '1fr 1fr' }}>
++              <button type="button" aria-pressed={!privateTo} onClick={() => setPrivateTo(false)}>{t('Alle am Tisch')}</button>
++              <button type="button" aria-pressed={privateTo} disabled={recipients.length === 0} onClick={() => setPrivateTo(true)}>{t('Nur ausgewählte')}</button>
++            </div>
++            {privateTo && recipients.map((m) => (
++              <label key={m.id} className="check">
++                <input type="checkbox" checked={chosen.includes(m.id)}
++                  onChange={(e) => setChosen((c) => (e.target.checked ? [...c, m.id] : c.filter((x) => x !== m.id)))} />
++                <span>{m.displayName}{m.role === 'gm' ? ` (${t('Spielleitung')})` : m.characterName ? ` (${m.characterName})` : ''}</span>
++              </label>
++            ))}
++          </div>
++        ) : (
+         <div className="field">
+           <label htmlFor="recipient">{t('Sichtbar für')}</label>
+@@ -137,6 +162,7 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
+           </select>
+         </div>
+-        <button type="button" className="btn small" disabled={!text.trim() || busy} onClick={send}>
+-          {recipient ? t('Privat senden') : t('Kommentieren')}
++        )}
++        <button type="button" className="btn small" disabled={!text.trim() || busy || (multi && privateTo && chosen.length === 0)} onClick={send}>
++          {to.length ? t('Privat senden') : t('Kommentieren')}
+         </button>
+       </div>
+diff --git a/src/components/RecapView.tsx b/src/components/RecapView.tsx
+index d70cf55..cc10cd2 100644
+--- a/src/components/RecapView.tsx
++++ b/src/components/RecapView.tsx
+@@ -68,11 +68,10 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
+           </button>
+         )}
+-        {/* Wie das „Aa“ in Lese-Apps: Schriftgröße und Seite nur für den Kapiteltext */}
+-        <button type="button" className="btn small ghost read-aa" aria-expanded={settings} aria-controls={settingsId}
+-          aria-label={t('Lesen anpassen')} onClick={() => setSettings(!settings)}>
+-          <span aria-hidden="true">Aa</span>
+-        </button>
+       </div>
+-      {settings && <ReadSettings id={settingsId} prefs={prefs} onChange={setPrefs} />}
++      {/* Schriftgröße und Seite nur für den Kapiteltext – eingeklappt, damit die Knöpfe unter dem Text ruhig bleiben */}
++      <details className="read-details" open={settings} onToggle={(e) => setSettings((e.target as HTMLDetailsElement).open)}>
++        <summary className="small">{t('Leseeinstellungen')}</summary>
++        {settings && <ReadSettings id={settingsId} prefs={prefs} onChange={setPrefs} />}
++      </details>
+     </article>
+   );
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 7d0e901..b71918d 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1628,3 +1628,7 @@ export const en: Record<string, string> = {
+   "Aufnahme verwerfen": "Discard recording",
+   "Aufnahme verwerfen? Sie wird gelöscht, nichts wird hochgeladen.": "Discard the recording? It will be deleted and nothing is uploaded.",
++  "Leseeinstellungen": "Reading settings",
++  "Privat an dich und {names}": "Private to you and {names}",
++  "Nur die gewählten Personen sehen das.": "Only the chosen people see this.",
++  "Nur ausgewählte": "Only selected",
+ };
+diff --git a/src/mocks/db.ts b/src/mocks/db.ts
+index ad2ed78..68833ca 100644
+--- a/src/mocks/db.ts
++++ b/src/mocks/db.ts
+@@ -311,6 +311,6 @@ export const comments: Comment[] = [
+   { id: 'k2', sessionId: 's-c-grau-12', authorMemberId: 'm-sophie', recipientMemberId: null,
+     text: 'Die Rabenrufe haben mich die ganze Woche nicht losgelassen.', createdAt: '2026-09-06T18:40:00Z', editedAt: null },
+-  { id: 'k3', sessionId: 's-c-grau-12', authorMemberId: 'm-robin', recipientMemberId: 'm-lea',
+-    text: 'Nur für dich: Ilsabet träumt in der Nacht nach dem Moor von einer Glocke unter Wasser.', createdAt: '2026-09-07T20:05:00Z', editedAt: null },
++  { id: 'k3', sessionId: 's-c-grau-12', authorMemberId: 'm-robin', recipientMemberId: 'm-lea', recipientMemberIds: ['m-lea', 'm-jonas'],
++    text: 'Nur für euch beide: Ilsabet und Thorwald träumen in der Nacht nach dem Moor von einer Glocke unter Wasser.', createdAt: '2026-09-07T20:05:00Z', editedAt: null },
+   { id: 'k4', sessionId: 's-c-drache-7', authorMemberId: 'm-mara', recipientMemberId: 'm-robin2',
+     text: 'Ilvara bemerkt als Einzige, dass einer der Verfolger das Wappen ihrer Familie trägt.', createdAt: '2026-09-15T08:00:00Z', editedAt: null }
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 1bc12aa..04f6007 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -570,5 +570,6 @@ function commentContext(sessionId: string) {
+ 
+ function visibleTo(k: Comment, memberId: string): boolean {
+-  return k.recipientMemberId === null || k.authorMemberId === memberId || k.recipientMemberId === memberId;
++  const to = k.recipientMemberIds?.length ? k.recipientMemberIds : k.recipientMemberId ? [k.recipientMemberId] : [];
++  return to.length === 0 || k.authorMemberId === memberId || to.includes(memberId);
+ }
+ 
+@@ -1610,16 +1611,18 @@ export const handlers = [
+     const ctx = commentContext(params.id as string);
+     if ('error' in ctx) return ctx.error;
+-    const body = (await request.json()) as { text: string; recipientMemberId?: string | null };
++    const body = (await request.json()) as { text: string; recipientMemberId?: string | null; recipientMemberIds?: string[] };
+     const text = body.text?.trim();
+     if (!text) return err(400, 'invalid_input', 'Der Kommentar ist leer.');
+     if (text.length > 4000) return err(413, 'comment_too_long', 'Der Kommentar ist zu lang (höchstens 4000 Zeichen).');
+-    const recipient = body.recipientMemberId ?? null;
+-    if (recipient) {
+-      const r = ctx.campaign.members.find((m) => m.id === recipient);
+-      if (!r || r.id === ctx.me.id) return err(400, 'invalid_recipient', 'Ungültiger Empfänger.');
++    // 0.4.26: mehrere Empfänger; sonst wie bisher einer
++    const to = Array.isArray(body.recipientMemberIds) ? body.recipientMemberIds : body.recipientMemberId ? [body.recipientMemberId] : [];
++    if (to.length > 20 || new Set(to).size !== to.length) return err(400, 'recipient_unknown', 'Ungültige Empfänger.');
++    for (const id of to) {
++      const r = ctx.campaign.members.find((m) => m.id === id);
++      if (!r || r.id === ctx.me.id) return err(400, 'recipient_unknown', 'Ungültiger Empfänger.');
+       // Spieler schreiben privat nur an die SL, die SL an alle
+       if (ctx.me.role !== 'gm' && r.role !== 'gm') return err(403, 'forbidden', 'Private Nachrichten gehen nur an die Spielleitung.');
+     }
+-    const k: Comment = { id: 'k-' + crypto.randomUUID().slice(0, 8), sessionId: ctx.session.id, authorMemberId: ctx.me.id, recipientMemberId: recipient, text, createdAt: new Date().toISOString(), editedAt: null };
++    const k: Comment = { id: 'k-' + crypto.randomUUID().slice(0, 8), sessionId: ctx.session.id, authorMemberId: ctx.me.id, recipientMemberId: to[0] ?? null, recipientMemberIds: to, text, createdAt: new Date().toISOString(), editedAt: null };
+     comments.push(k);
+     return HttpResponse.json(k, { status: 201 });
+diff --git a/src/theme.css b/src/theme.css
+index 38db078..a92b418 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -161,4 +161,8 @@ body {
+ }
+ 
++/* Ziffern in Zeilenhöhe: Mediävalziffern der Alegreya lassen „Kapitel 1“ wie „Kapitelı“ aussehen. Als Schrift-
++   Merkmal, weil die Kurzschreibweise font: … font-variant-numeric zurücksetzt, font-feature-settings aber nicht */
++*, ::before, ::after { font-feature-settings: 'lnum' 1; }
++
+ a {
+   color: var(--ink);
+@@ -2057,5 +2061,6 @@ button.table-group-face {
+ .reading-page[data-read-size='larger'] .recap p { font-size: calc(25px * var(--ts)); line-height: 1.6; }
+ .reading-page[data-read-size='larger'] .recap-part { font-size: calc(22px * var(--ts)); line-height: 1.36; }
+-.read-aa { min-width: 48px; font-family: var(--font-serif); font-weight: 700; }
++.read-details > summary { min-height: 48px; display: flex; align-items: center; color: var(--ink-muted); font-weight: 600; border-top: 1px solid var(--line); }
++.read-details[open] > .read-settings { border-top: 0; padding-top: 0; }
+ .read-settings {
+   display: flex;
