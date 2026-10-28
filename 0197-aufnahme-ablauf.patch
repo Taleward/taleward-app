@@ -1,0 +1,175 @@
+From 3b28985e42756449531f3ee0e22f079c8b24b665 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 17:02:01 +0100
+Subject: [PATCH] =?UTF-8?q?Aufnahme:=20Knopf=20=C3=BCber=20=E2=80=9EAm=20T?=
+ =?UTF-8?q?isch=E2=80=9C,=20sanfter=20=C3=9Cbergang,=20Verwerfen=20in=20de?=
+ =?UTF-8?q?r=20Pause,=20Tipp=20nur=20einmal?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/i18n/en.ts          |  2 ++
+ src/pages/Recording.tsx | 61 +++++++++++++++++++++++++++++++++++------
+ src/theme.css           | 19 +++++++++++++
+ 3 files changed, 74 insertions(+), 8 deletions(-)
+
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 3635be1..7d0e901 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1626,3 +1626,5 @@ export const en: Record<string, string> = {
+   "Gast dazunehmen": "Add a guest",
+   "Ohne Konto, stimmt hier selbst zu": "No account, agrees right here",
++  "Aufnahme verwerfen": "Discard recording",
++  "Aufnahme verwerfen? Sie wird gelöscht, nichts wird hochgeladen.": "Discard the recording? It will be deleted and nothing is uploaded.",
+ };
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index d2bb96f..a43017a 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -9,4 +9,5 @@ import { Avatar } from '../components/Avatar';
+ import { getLang, t } from '../i18n';
+ import { useEffect, useRef, useState } from 'react';
++import { flushSync } from 'react-dom';
+ import { useNavigate, useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+@@ -29,4 +30,15 @@ const native = hasNativeRecorder();
+ const MARK = brandMarkShapes('taleward-mark-inverse.svg');
+ 
++/** Tipp zur Vorstellungsrunde nur, bis auf diesem Gerät einmal aufgenommen wurde */
++const TIP_KEY = 'taleward.recTipSeen';
++
++/** Wechsel zwischen Vorbereiten und Aufnahme als sanfter Übergang (View Transitions), sonst sofort */
++function withTransition(change: () => void) {
++  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
++  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
++  if (!doc.startViewTransition || reduce) return change();
++  doc.startViewTransition(() => flushSync(change));
++}
++
+ type Phase = 'prepare' | 'recording' | 'uploading';
+ 
+@@ -54,4 +66,5 @@ export function Recording() {
+   const [handover, setHandover] = useState<{ memberId?: string; name: string } | null>(null);
+   const [phase, setPhase] = useState<Phase>('prepare');
++  const [showTip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
+   // Zurück-Taste warnt, solange aufgenommen wird
+   useEffect(() => {
+@@ -275,5 +288,7 @@ export function Recording() {
+       setElapsed(0);
+       setPaused(false);
+-      setPhase('recording');
++      try { localStorage.setItem(TIP_KEY, '1'); } catch { /* dann eben noch einmal */ }
++      // Der Knopf wandert in die Mitte und wächst, „Am Tisch“ klappt weg (ohne Unterstützung: einfach umschalten)
++      withTransition(() => setPhase('recording'));
+     } catch (e) {
+       if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
+@@ -282,4 +297,29 @@ export function Recording() {
+   };
+ 
++  const discard = async () => {
++    if (!(await confirmDialog(t('Aufnahme verwerfen? Sie wird gelöscht, nichts wird hochgeladen.'), { confirmLabel: t('Verwerfen'), cancelLabel: t('Weiter aufnehmen'), danger: true }))) return;
++    const id = sessionId.current;
++    try {
++      if (native) {
++        const st = await BackgroundRecorder.stop();
++        if (st.sessionId) await BackgroundRecorder.discard({ sessionId: st.sessionId }).catch(() => undefined);
++      } else if (recorder.current) {
++        const storedId = recorder.current.storedId;
++        await recorder.current.stop();
++        recorder.current = null;
++        setLive(null);
++        if (storedId) await removeRecording(storedId).catch(() => undefined);
++      }
++      // Die angelegte, leere Runde auf dem Server wieder entfernen (ältere Server: bleibt liegen, schadet nicht)
++      if (id) await api.deleteSession(id).catch(() => undefined);
++      sessionId.current = null;
++      setElapsed(0);
++      setPaused(false);
++      withTransition(() => setPhase('prepare'));
++    } catch (e) {
++      setError(e);
++    }
++  };
++
+   const togglePause = async () => {
+     if (native) {
+@@ -339,8 +379,8 @@ export function Recording() {
+       {/* Vorbereiten: breit zweispaltig – links wer am Tisch ist, rechts der Knopf; am Handy untereinander */}
+       {phase === 'prepare' && (
+-      <div className="split">
++      <div className="split rec-prepare">
+       <div className="a">
+       {pending && (
+-        <div className="card warn">
++        <div className="card warn rec-pending">
+           <h2>{t('Aufnahme noch nicht hochgeladen')}</h2>
+           <div className="muted small">
+@@ -371,5 +411,5 @@ export function Recording() {
+       )}
+ 
+-          <section className="card" style={{ gap: 0 }}>
++          <section className="card rec-table" style={{ gap: 0 }}>
+             <div className="row between" style={{ marginBottom: 4 }}>
+               <h2>{t('Am Tisch')}</h2>
+@@ -433,6 +473,7 @@ export function Recording() {
+       </div>
+       <div className="b">
+-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+-            <button type="button" className="rec-button" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
++          {/* Am Handy steht der Knopf über „Am Tisch“ (rec-start, siehe theme.css) */}
++          <div className="rec-start" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
++            <button type="button" className="rec-button rec-morph" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
+               <IconMic size={48} />
+             </button>
+@@ -440,5 +481,5 @@ export function Recording() {
+               {allConsented ? t('Aufnahme starten') : t('Wartet auf alle Zustimmungen')}
+             </div>
+-            <div className="muted small" style={{ textAlign: 'center' }}>{t('Tipp: Zu Beginn sagt jede Person Name und Charakter.')}</div>
++            {showTip && <div className="muted small" style={{ textAlign: 'center' }}>{t('Tipp: Zu Beginn sagt jede Person Name und Charakter.')}</div>}
+             {cloud.transcription?.primary && (
+               <div className="small" style={{ textAlign: 'center', fontWeight: 500 }}>
+@@ -497,5 +538,5 @@ export function Recording() {
+           {/* Großer Knopf in der Mitte – aus der Entfernung am Tisch erkennbar */}
+           <div style={{ flex: 1, minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+-            <button type="button" className={paused ? 'rec-button big' : 'rec-button big recording'} onClick={togglePause}
++            <button type="button" className={paused ? 'rec-button big rec-morph' : 'rec-button big recording rec-morph'} onClick={togglePause}
+               aria-label={paused ? t('Aufnahme fortsetzen') : t('Aufnahme pausieren')}>
+               {/* Läuft: Mikrofon und Taleward-Zeichen (einfarbig weiß) wechseln sich im Takt des Pulsierens ab */}
+@@ -532,4 +573,8 @@ export function Recording() {
+             {t('Beenden und hochladen')}
+           </button>
++          {/* Nur in der Pause: falsch gestartet oder Probe – nichts hochladen */}
++          {paused && (
++            <button type="button" className="quiet-link danger" style={{ alignSelf: 'center' }} onClick={discard}>{t('Aufnahme verwerfen')}</button>
++          )}
+           <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
+             {native ? t('Läuft auch bei ausgeschaltetem Bildschirm weiter.') : t('Im Browser: App geöffnet lassen.')}
+diff --git a/src/theme.css b/src/theme.css
+index db15ebf..38db078 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2300,2 +2300,21 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ .invite-row.flat { border-top: 0; margin-top: 0; padding-top: 0; }
+ .invite-plus.small { width: 32px; height: 32px; }
++
++/* Aufnahme vorbereiten: am Handy steht der Knopf über „Am Tisch“, eine liegengebliebene Aufnahme ganz oben */
++@media (max-width: 999px) {
++  .split.rec-prepare > .a,
++  .split.rec-prepare > .b { display: contents; }
++  .split.rec-prepare .rec-pending { order: -2; }
++  .split.rec-prepare .rec-start { order: -1; }
++}
++/* Übergang zur laufenden Aufnahme: Knopf wandert und wächst, „Am Tisch“ klappt weg */
++.rec-morph { view-transition-name: rec-button; }
++.rec-table { view-transition-name: rec-table; }
++::view-transition-group(rec-button) { animation-duration: 450ms; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
++::view-transition-old(rec-table) { animation: rec-table-out 260ms ease-in both; transform-origin: top center; }
++::view-transition-new(rec-table) { animation: rec-table-in 300ms ease-out both; transform-origin: top center; }
++@keyframes rec-table-out { to { opacity: 0; transform: scaleY(0.4); } }
++@keyframes rec-table-in { from { opacity: 0; transform: scaleY(0.4); } }
++::view-transition-old(root), ::view-transition-new(root) { animation-duration: 300ms; }
++/* Ohne Leiste unten (z. B. während der Aufnahme): Abstand zur Gestenleiste des Handys */
++.screen:not(.with-nav) > .screen-main { padding-bottom: calc(var(--space-6) + var(--safe-bottom)); }
