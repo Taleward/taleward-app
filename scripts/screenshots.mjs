@@ -276,7 +276,7 @@ for (const run of RUNS) {
     }, SERVER, t.cid);
     await go(`${k}/charakter/${leaMember}`); await toHeading(t.analyse); await shot(19);
     await go(k);
-    await page.evaluate(() => { const d = document.getElementById('data-summary'); if (d) { d.open = true; d.scrollIntoView({ block: 'start' }); document.querySelector('.screen-main').scrollBy(0, -12); } });
+    await page.evaluate(() => { const d = document.getElementById('data-summary'); if (d) { const o = d.parentElement?.closest('details'); if (o) o.open = true; d.open = true; d.scrollIntoView({ block: 'start' }); document.querySelector('.screen-main').scrollBy(0, -12); } });
     await shot(22);
     await login('anja');
     await go(k);

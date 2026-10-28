@@ -1,8 +1,8 @@
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
 import { Tour } from '../tour/Tour';
-import { CloudNotice, cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
+import { cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
 import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
-import { DataSummary, openDataSummary } from '../components/DataSummary';
+import { DataSummary } from '../components/DataSummary';
 import { NowList, type NowItem } from '../components/NowList';
 import { PrepCard } from '../components/PrepCard';
 import { useTermsNotice } from '../components/Terms';
@@ -183,7 +183,7 @@ export function Overview() {
             </div>
           )}
 
-          <CloudNotice info={serverInfo} campaign={campaign} onOpen={openDataSummary} />
+          {/* Cloud steht unter „Kampagne verwalten → Deine Daten“ und bei der Aufnahme; findbar reicht (Benjamin 28.10.) */}
           {/* Spielende sehen „Die Welt“ erst, wenn die SL etwas eingetragen hat */}
           {(gm || !!campaign.worldInfo?.trim() || safeLinks(campaign.links).some((l) => l.shared)) && <Divider />}
           {safeLinks(campaign.links).some((l) => l.shared) && (

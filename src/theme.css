@@ -2100,17 +2100,6 @@ button.table-group-face {
 .now-detail > .card { padding: 0; border: 0; background: none; box-shadow: none; }
 .now-detail.no-title > .card > strong:first-child { display: none; }
 
-/* „Cloud aktiv“ als eine Zeile, führt zu „Was mit deinen Daten passiert“ */
-.cloud-line {
-  width: 100%;
-  min-height: 48px;
-  align-items: center;
-  border: 0;
-  text-align: left;
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-}
 
 /* Kurze Liste in Rückfragen: was gelöscht wird, was bleibt */
 .confirm-list { display: flex; flex-direction: column; gap: 6px; margin: 0; }

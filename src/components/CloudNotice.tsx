@@ -1,4 +1,3 @@
-import { IconInfo } from './Icons';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type { Campaign, CloudProviderInfo, ServerInfo } from '../api/types';
@@ -49,18 +48,3 @@ export function cloudUse(info: ServerInfo | null, campaign: Campaign, long = fal
   return { transcription, summary };
 }
 
-/** Kasten auf der Übersicht: klar zeigen, ob Stimmen oder Text den Verein verlassen */
-export function CloudNotice({ info, campaign, onOpen }: { info: ServerInfo | null; campaign: Campaign; onOpen: () => void }) {
-  const { transcription, summary } = cloudUse(info, campaign);
-  if (!transcription && !summary) return null;
-  // Eine Zeile statt eigener Karte: Sichtbar für alle bleibt sie, die Einzelheiten stehen
-  // unter „Was mit deinen Daten passiert“.
-  const providers = [...new Set([transcription?.provider, summary?.provider].filter((x): x is string => !!x))].join(', ');
-  return (
-    <button type="button" className="notice cloud-line" onClick={onOpen}>
-      <span aria-hidden="true" style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
-      <span style={{ flex: 1 }}>{t('Cloud aktiv · {provider}', { provider: providers })}</span>
-      <span aria-hidden="true" style={{ color: 'var(--ink-faint)' }}>›</span>
-    </button>
-  );
-}

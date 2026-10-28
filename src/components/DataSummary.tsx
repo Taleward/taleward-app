@@ -77,14 +77,3 @@ export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: 
   );
 }
 
-/** Aufklappen und hinscrollen, z. B. von der Zeile „Cloud aktiv“ */
-export function openDataSummary() {
-  const d = document.getElementById('data-summary') as HTMLDetailsElement | null;
-  if (!d) return;
-  // Liegt in „Kampagne verwalten“: die Karte mit aufklappen
-  const outer = d.parentElement?.closest('details');
-  if (outer) outer.open = true;
-  d.open = true;
-  d.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-  d.querySelector('summary')?.focus();
-}
