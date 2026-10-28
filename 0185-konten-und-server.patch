@@ -1,0 +1,634 @@
+From e992ac20a9695c4479d140dbd648033299e5e974 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 10:25:43 +0100
+Subject: [PATCH 185/189] =?UTF-8?q?Konten=20und=20Server:=20=C3=9Cbersicht?=
+ =?UTF-8?q?=20als=20Liste,=20eigene=20Seite=20je=20Server?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/App.tsx                      |   3 +-
+ src/components/Icons.tsx         |  41 ++++++
+ src/components/LoginSettings.tsx |  21 ++-
+ src/i18n/en.ts                   |  16 +++
+ src/i18n/index.tsx               |  13 ++
+ src/notify/NotifySettings.tsx    |  17 ++-
+ src/pages/AccountPage.tsx        | 219 ++++++++++++++++++++-----------
+ src/pages/CreditPage.tsx         |   2 +-
+ src/theme.css                    |  47 +++++++
+ src/themeMode.tsx                |  20 ++-
+ 10 files changed, 305 insertions(+), 94 deletions(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 6a195b0..c76597a 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -10,5 +10,5 @@ import { LanguageProvider } from './i18n';
+ import { ConnectionScope } from './components/ConnectionScope';
+ import { ConnectPage } from './pages/ConnectPage';
+-import { AccountPage } from './pages/AccountPage';
++import { AccountPage, ServerAccountPage } from './pages/AccountPage';
+ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+ import { useLocation } from 'react-router-dom';
+@@ -70,4 +70,5 @@ function Routed() {
+       <Route path="/verbinden" element={<ConnectRoute />} />
+       <Route path="/konto" element={<AccountPage />} />
++      <Route path="/konto/:connId" element={<ServerAccountPage />} />
+       {/* Feste Adresse für Taleward Desktop: SL-Schirm der zuletzt geöffneten eigenen Kampagne */}
+       <Route path="/schirm" element={<LastTableRedirect />} />
+diff --git a/src/components/Icons.tsx b/src/components/Icons.tsx
+index 8cc7158..8d2df4b 100644
+--- a/src/components/Icons.tsx
++++ b/src/components/Icons.tsx
+@@ -92,2 +92,43 @@ export const IconSearch = ({ size = 18 }: { size?: number }) => (
+   <svg {...base(size)}><path d="m21 21-4.34-4.34" /><circle cx="11" cy="11" r="8" /></svg>
+ );
++
++/** Zeilen in Listen (Lucide-Formen: mail, wallet, mic, download, info, trash-2, log-out, globe, moon, bell, play, plus, server, image, pencil) */
++export const IconMail = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
++);
++export const IconWallet = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1" /><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" /></svg>
++);
++export const IconDownload = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M12 15V3" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /></svg>
++);
++export const IconTrash = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
++);
++export const IconLogOut = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /></svg>
++);
++export const IconGlobe = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></svg>
++);
++export const IconMoon = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" /></svg>
++);
++export const IconBell = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M10.268 21a2 2 0 0 0 3.464 0" /><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg>
++);
++export const IconPlus = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M5 12h14" /><path d="M12 5v14" /></svg>
++);
++export const IconServer = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><rect width="20" height="8" x="2" y="2" rx="2" /><rect width="20" height="8" x="2" y="14" rx="2" /><path d="M6 6h.01" /><path d="M6 18h.01" /></svg>
++);
++export const IconImage = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21" /></svg>
++);
++export const IconPencil = ({ size = 20 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /></svg>
++);
++export const IconRoute = ({ size = 22 }: { size?: number }) => (
++  <svg {...base(size)}><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
++);
+diff --git a/src/components/LoginSettings.tsx b/src/components/LoginSettings.tsx
+index 9c2ce8d..3e5477a 100644
+--- a/src/components/LoginSettings.tsx
++++ b/src/components/LoginSettings.tsx
+@@ -7,4 +7,5 @@ import { t } from '../i18n';
+ import { confirmDialog } from './confirm';
+ import { ErrorBox } from './Screen';
++import { IconMail } from './Icons';
+ 
+ /**
+@@ -58,21 +59,28 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
+   // Server ohne 0.4.0: Funktion nur für diesen Server ausblenden, mit dezentem Hinweis
+   if (user.hasPassword === undefined) {
+-    return <p className="muted small" style={{ margin: 0 }}>{t('E-Mail und Anmelden mit Google & Co.: Dieser Server kann das noch nicht – der Betreiber muss aktualisieren.')}</p>;
++    return (
++      <div className="list-row" style={{ cursor: 'default' }}>
++        <IconMail />
++        <span className="lr-text">{t('Anmeldung und E-Mail')}<span className="lr-sub">{t('Kann dieser Server noch nicht.')}</span></span>
++      </div>
++    );
+   }
+   const providers = info.authProviders ?? [];
+ 
+   return (
+-    <details className="card" style={{ gap: 12 }} ref={box} open={open || undefined}>
+-      <summary style={{ fontWeight: 700 }}>
+-        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
++    <details className="list-item" ref={box} open={open || undefined}>
++      <summary className="list-row">
++        <IconMail />
++        <span className="lr-text">
+           {t('Anmeldung und E-Mail')}
+           {/* Auch zugeklappt sichtbar, solange keine Adresse bestätigt ist */}
+           {!user.email && info.passwordReset && (
+-            <span className="muted small" style={{ fontWeight: 400 }}>
+-              {user.emailPending ? t('E-Mail: wartet auf Bestätigung') : t('E-Mail: noch keine – zum Zurücksetzen des Passworts')}
++            <span className="lr-sub">
++              {user.emailPending ? t('E-Mail wartet auf Bestätigung') : t('Noch keine E-Mail hinterlegt')}
+             </span>
+           )}
+         </span>
+       </summary>
++      <div className="list-body">
+ 
+       {/* E-Mail */}
+@@ -162,4 +170,5 @@ export function LoginSettings({ conn, open }: { conn: Connection; open?: boolean
+       {msg && <div className="notice">{msg}</div>}
+       <ErrorBox error={error} />
++      </div>
+     </details>
+   );
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 2d22676..7d2e58e 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1538,3 +1538,19 @@ export const en: Record<string, string> = {
+   "Craig ist ein eigener Dienst und bewahrt die Aufnahme bis zum Herunterladen auf seinen Servern auf, nicht sicher in der EU. Sagt das am Tisch dazu.": "Craig is a separate service and keeps the recording on its servers until you download it, not necessarily in the EU. Mention that at the table.",
+   "Mehr dazu": "More about this",
++  "Kann dieser Server noch nicht.": "This server can't do that yet.",
++  "E-Mail wartet auf Bestätigung": "Email waiting for confirmation",
++  "Noch keine E-Mail hinterlegt": "No email added yet",
++  "An": "On",
++  "Aus": "Off",
++  "Deine Server": "Your servers",
++  "Abgemeldet – neu anmelden": "Signed out – sign in again",
++  "App": "App",
++  "Angelegt": "Set up",
++  "Wird gerade erstellt": "Being created",
++  "Freiwillig, nicht angelegt": "Optional, not set up",
++  "Stimmprofil": "Voice profile",
++  "Geht hier erst nach der SL-Freigabe. Anfragen kannst du unter „Deine Kampagnen“.": "Works here only after GM approval. You can ask for it under “Your campaigns”.",
++  "Server und Rechtliches": "Server and legal",
++  "Adresse, Impressum, Nutzungsbedingungen": "Address, legal notice, terms of use",
++  "Daten herunterladen oder Konto löschen": "Download data or delete account",
+ };
+diff --git a/src/i18n/index.tsx b/src/i18n/index.tsx
+index 29880d3..b194d68 100644
+--- a/src/i18n/index.tsx
++++ b/src/i18n/index.tsx
+@@ -98,4 +98,17 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
+ }
+ 
++/** Sprache als Zeile in einer Liste (Konten und Server) */
++export function LanguageRow({ icon }: { icon?: ReactNode }) {
++  return (
++    <label className="list-row">
++      {icon}
++      <span className="lr-text">{t('Sprache')}</span>
++      <select value={current} onChange={(e) => setLang(e.target.value as Lang)}>
++        {LANGUAGES.map((l) => <option key={l.code} value={l.code} lang={l.code}>{l.name}</option>)}
++      </select>
++    </label>
++  );
++}
++
+ /** Auswahl „Sprache“ – alle Sprachen in ihrem eigenen Namen */
+ export function LanguageSwitch() {
+diff --git a/src/notify/NotifySettings.tsx b/src/notify/NotifySettings.tsx
+index b836cc9..257f42f 100644
+--- a/src/notify/NotifySettings.tsx
++++ b/src/notify/NotifySettings.tsx
+@@ -1,3 +1,3 @@
+-import { useEffect, useState } from 'react';
++import { useEffect, useState, type ReactNode } from 'react';
+ import { t, tk } from '../i18n';
+ import { claimLegacyCharacters } from '../characters/sync';
+@@ -34,5 +34,6 @@ const KINDS: { key: keyof NotifyKinds; label: string }[] = [
+ 
+ /** Einstellungen unter „Konten und Server“ (nur Android-App) */
+-export function NotifySettingsSection() {
++/** Benachrichtigungen als aufklappbare Zeile (Konten und Server) */
++export function NotifySettingsSection({ icon }: { icon?: ReactNode }) {
+   const [s, setS] = useState(notifySettings);
+   const [allowed, setAllowed] = useState<boolean | null>(null);
+@@ -51,6 +52,11 @@ export function NotifySettingsSection() {
+ 
+   return (
+-    <section className="card">
+-      <h2>{t('Benachrichtigungen')}</h2>
++    <details className="list-item">
++      <summary className="list-row">
++        {icon}
++        <span className="lr-text">{t('Benachrichtigungen')}</span>
++        <span className="lr-val">{s.enabled ? t('An') : t('Aus')}</span>
++      </summary>
++      <div className="list-body">
+       <label className="check">
+         <input type="checkbox" checked={s.enabled} onChange={(e) => toggle(e.target.checked)} />
+@@ -78,5 +84,6 @@ export function NotifySettingsSection() {
+         </button>
+       )}
+-    </section>
++      </div>
++    </details>
+   );
+ }
+diff --git a/src/pages/AccountPage.tsx b/src/pages/AccountPage.tsx
+index d53cdef..94f122a 100644
+--- a/src/pages/AccountPage.tsx
++++ b/src/pages/AccountPage.tsx
+@@ -5,25 +5,29 @@ import { LoginSettings } from '../components/LoginSettings';
+ import { ImportCampaign } from '../components/ImportCampaign';
+ import { confirmDialog } from '../components/confirm';
+-import { ThemeSwitch } from '../themeMode';
++import { ThemeRow } from '../themeMode';
+ import { NotifySettingsSection } from '../notify/NotifySettings';
+ import { useEffect, useRef, useState } from 'react';
+-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
++import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+ import { apiFor } from '../api/client';
+-import { APP_VERSION, apiAtLeast, hasValidToken, isOutdated, removeConnection, type Connection } from '../api/connections';
++import { APP_VERSION, apiAtLeast, getConnection, hasValidToken, isOutdated, removeConnection, type Connection } from '../api/connections';
+ import { useAuth } from '../auth/AuthContext';
+-import { IconInfo } from '../components/Icons';
++import { IconBell, IconDownload, IconGlobe, IconInfo, IconLogOut, IconMic, IconMoon, IconPlus, IconRoute, IconServer, IconTrash, IconWallet } from '../components/Icons';
+ import { ErrorBox, Screen } from '../components/Screen';
+ import { formatDateFull } from '../components/format';
+-import { LanguageSwitch, t, tn } from '../i18n';
++import { LanguageRow, t, tn } from '../i18n';
+ import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
+ import { ServerLegal } from '../components/Terms';
+ import { gmState, type GmState } from '../auth/serverAccess';
+ import { billingOn } from '../billing/rules';
+-import { CreditLink } from './CreditPage';
++import { eur } from '../billing/CreditWaitNote';
++import type { VoiceProfile } from '../api/types';
+ 
+-/** Konten und Server: pro Server abmelden, Daten herunterladen, Konto löschen, Stimmprofil. */
+ /** Quellcode dieser App – Pflicht nach AGPL §13 für Nutzer über das Netzwerk */
+ const SOURCE_URL = 'https://github.com/Taleward/taleward-app';
+ 
++/**
++ * Konten und Server: oben die Server (je eine Zeile, Einzelheiten auf einer eigenen Seite), darunter die Einstellungen
++ * der App. Alles als Zeilen, damit die Seite ruhig bleibt.
++ */
+ export function AccountPage() {
+   const { connections } = useAuth();
+@@ -32,20 +36,38 @@ export function AccountPage() {
+   const linked = query.get('linked');
+   const oidcError = query.get('oidc') === 'error' ? query.get('code') ?? 'oidc_failed' : null;
++  // Alte Verweise (?email=<id>, ?loeschen=<id>) führen auf die Seite des Servers
++  const emailFor = query.get('email');
++  const deleteFor = query.get('loeschen');
++  const target = emailFor ?? deleteFor;
++  if (target && getConnection(target)) {
++    return <Navigate to={`/konto/${encodeURIComponent(target)}?${emailFor ? 'email=1' : 'loeschen=1'}`} replace />;
++  }
+   return (
+     <Screen narrow backTo={{ to: '/', label: t('Deine Kampagnen') }} title={t('Konten und Server')} nav={false}>
+-      <p className="muted" style={{ margin: 0 }}>
+-        {t('Jeder Server hat ein eigenes Konto.')}
+-      </p>
+       {oidcError && <div className="error" role="alert">{oidcErrorText(oidcError)}</div>}
+       {linked && <div className="notice">{t('{name} ist jetzt mit deinem Konto verbunden.', { name: linked.charAt(0).toUpperCase() + linked.slice(1) })}</div>}
+-      {connections.map((c) => <ConnectionCard key={c.id} conn={c} />)}
+-      <button type="button" className="btn outline" onClick={() => navigate('/verbinden')}>{t('Weiteren Server verbinden')}</button>
+-      <section className="card">
+-        <h2>{t('Einstellungen')}</h2>
+-        <LanguageSwitch />
+-        <ThemeSwitch />
++      <h2 className="list-head">{t('Deine Server')}</h2>
++      <div className="list-box">
++        {connections.map((c) => (
++          <Link key={c.id} className="list-row" to={`/konto/${encodeURIComponent(c.id)}`}>
++            <IconServer />
++            <span className="lr-text">
++              {c.name}
++              <span className="lr-sub">{hasValidToken(c) ? c.user?.displayName ?? '' : t('Abgemeldet – neu anmelden')}</span>
++            </span>
++          </Link>
++        ))}
++        <button type="button" className="list-row" onClick={() => navigate('/verbinden')}>
++          <IconPlus />
++          <span className="lr-text" style={{ fontWeight: 700 }}>{t('Weiteren Server verbinden')}</span>
++        </button>
++      </div>
++      <h2 className="list-head">{t('App')}</h2>
++      <div className="list-box">
++        <LanguageRow icon={<IconGlobe />} />
++        <ThemeRow icon={<IconMoon />} />
++        <NotifySettingsSection icon={<IconBell />} />
+         <TourAgain />
+-      </section>
+-      <NotifySettingsSection />
++      </div>
+       <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
+         {t('Taleward {v}', { v: APP_VERSION })} · <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('Quellcode (AGPL-3.0)')}</a>
+@@ -57,9 +79,20 @@ export function AccountPage() {
+ }
+ 
+-function ConnectionCard({ conn }: { conn: Connection }) {
++/** Ein Server: Konto, Guthaben, Stimmprofil, Umzug – darunter Seltenes (Rechtliches, Löschen, Abmelden) */
++export function ServerAccountPage() {
++  const { connId = '' } = useParams();
++  const conn = getConnection(connId);
++  if (!conn) return <Navigate to="/konto" replace />;
++  return (
++    <Screen narrow backTo={{ to: '/konto', label: t('Konten und Server') }} overline={conn.operator ?? t('Server')} title={conn.name} nav={false}>
++      <ServerDetails key={conn.id} conn={conn} />
++    </Screen>
++  );
++}
++
++function ServerDetails({ conn }: { conn: Connection }) {
+   const navigate = useNavigate();
+-  // Aus der Karte „Neue Nutzungsbedingungen“: direkt zu „Daten und Konto löschen“ dieses Servers
+   const [params] = useSearchParams();
+-  const openDelete = params.get('loeschen') === conn.id;
++  const openDelete = params.get('loeschen') === '1';
+   const deleteRef = useRef<HTMLDetailsElement>(null);
+   useEffect(() => {
+@@ -70,18 +103,21 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+   // Kampagne aus einer Datei übernehmen heißt: neue Kampagne als SL – auf manchen Servern erst nach der SL-Freigabe
+   const [gm, setGm] = useState<GmState>('ok');
+-  // Guthaben (ab 0.4.25): nur, wenn der Server damit abrechnet
+   const [billing, setBilling] = useState(false);
++  const [balance, setBalance] = useState<number | null>(null);
++  const [voice, setVoice] = useState<VoiceProfile['status'] | null>(null);
++  const valid = hasValidToken(conn);
+   useEffect(() => {
+-    if (!hasValidToken(conn)) return;
++    if (!valid) return;
+     const api = apiFor(conn);
+     api.info().then(async (info) => {
+       setBilling(billingOn(info));
++      if (billingOn(info)) api.credits().then((list) => setBalance(list.find((c) => c.kind === 'account')?.balanceCents ?? null)).catch(() => undefined);
+       if (info.gmApproval === 'required') setGm(gmState(info, await api.me()));
+     }).catch(() => undefined);
++    api.voiceProfile().then((v) => setVoice(v.status)).catch(() => undefined);
+   }, [conn.id, conn.token]); // eslint-disable-line react-hooks/exhaustive-deps
+   const [password, setPassword] = useState('');
+   const [busy, setBusy] = useState(false);
+   const [error, setError] = useState<unknown>(null);
+-  const valid = hasValidToken(conn);
+ 
+   const exportData = async () => {
+@@ -122,4 +158,5 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+     if (!(await recordingsCleared(t('Löschen und abmelden')))) return;
+     removeConnection(conn.id);
++    navigate('/konto', { replace: true });
+   };
+ 
+@@ -141,8 +178,9 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+   };
+ 
++  const voiceText = voice === 'ready' ? t('Angelegt') : voice === 'processing' ? t('Wird gerade erstellt') : t('Freiwillig, nicht angelegt');
++
+   return (
+-    <section className="card">
+-      <span className="overline">{conn.operator ?? t('Server')}</span>
+-      <h2>{conn.name}</h2>
++    <>
++      {conn.user && <span className="muted small" style={{ marginTop: -8 }}>{t('Angemeldet als {name}', { name: conn.user.displayName })} ({conn.user.username})</span>}
+       {isUnencrypted(conn.baseUrl) && (
+         <div className="notice">
+@@ -151,12 +189,4 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+         </div>
+       )}
+-      {conn.user && <div className="small">{t('Angemeldet als {name}', { name: conn.user.displayName })} ({conn.user.username})</div>}
+-      {/* Technisches nur auf Wunsch */}
+-      <details className="more">
+-        <summary className="small">{t('Verbindung')}</summary>
+-        <div className="muted small" style={{ wordBreak: 'break-all' }}>{conn.baseUrl}</div>
+-        {valid && conn.expiresAt && <div className="muted small">{t('Anmeldung gültig bis {date}', { date: formatDateFull(conn.expiresAt) })}</div>}
+-      </details>
+-      <ServerLegal conn={conn} />
+       {isOutdated(conn.apiVersion) && (
+         <div className="notice">
+@@ -168,47 +198,77 @@ function ConnectionCard({ conn }: { conn: Connection }) {
+ 
+       {!valid ? (
+-        <button type="button" className="btn small" onClick={() => navigate(`/verbinden?server=${encodeURIComponent(conn.baseUrl)}`)}>{t('Neu anmelden')}</button>
+-      ) : deleting ? (
+-        <div className="card warn" style={{ gap: 10 }}>
+-          <strong>{t('Konto auf „{name}“ löschen', { name: conn.name })}</strong>
+-          <span className="small">
+-            {t('Gelöscht werden: Konto, Charakterbilder, Zustimmungen, Stimmprofil. Deine Kommentare bleiben als „Gelöschtes Konto“ stehen, damit Gespräche verständlich bleiben. Kampagnen, in denen sonst niemand ist, werden mitgelöscht; solche mit anderen Mitgliedern musst du vorher an eine andere SL übergeben.')}
+-          </span>
+-          <div className="field">
+-            <label htmlFor={`del-${conn.id}`}>{conn.user?.hasPassword === false ? t('Zur Bestätigung dein Benutzername') : t('Zur Bestätigung dein Passwort')}</label>
+-            <input id={`del-${conn.id}`} type={conn.user?.hasPassword === false ? 'text' : 'password'} autoCapitalize="none"
+-              autoComplete={conn.user?.hasPassword === false ? 'off' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} />
+-          </div>
+-          <div className="row wrap" style={{ gap: 8 }}>
+-            <button type="button" className="btn small danger" disabled={!password || busy} onClick={deleteAccount}>{t('Endgültig löschen')}</button>
+-            <button type="button" className="btn small ghost" onClick={() => setDeleting(false)}>{t('Abbrechen')}</button>
+-          </div>
+-        </div>
++        <button type="button" className="btn" onClick={() => navigate(`/verbinden?server=${encodeURIComponent(conn.baseUrl)}`)}>{t('Neu anmelden')}</button>
+       ) : (
+-        <>
+-        <div className="row wrap" style={{ gap: 8 }}>
+-          <Link className="btn small outline" to={`/v/${conn.id}/profil/stimme`}>{t('Mein Stimmprofil')}</Link>
+-          {billing && <CreditLink connId={conn.id} />}
+-          <button type="button" className="btn small outline" onClick={signOut}>{t('Abmelden')}</button>
++        <div className="list-box">
++          <LoginSettings conn={conn} open={params.get('email') === '1'} />
++          {billing && (
++            <Link className="list-row" to={`/v/${conn.id}/guthaben`}>
++              <IconWallet />
++              <span className="lr-text">{t('Guthaben')}</span>
++              {balance !== null && <span className="lr-val">{eur(balance)}</span>}
++            </Link>
++          )}
++          <Link className="list-row" to={`/v/${conn.id}/profil/stimme`}>
++            <IconMic size={22} />
++            <span className="lr-text">{t('Stimmprofil')}<span className="lr-sub">{voiceText}</span></span>
++          </Link>
++          {/* Umzug von einem anderen Server (ab 0.4.8) – selten gebraucht, darum hier statt auf der Kampagnenliste */}
++          {apiAtLeast('0.4.8', conn) && (
++            <details className="list-item" open={importing || undefined} onToggle={(e) => setImporting((e.target as HTMLDetailsElement).open)}>
++              <summary className="list-row"><IconDownload /><span className="lr-text">{t('Kampagne aus Datei übernehmen')}</span></summary>
++              <div className="list-body">
++                {gm !== 'ok'
++                  ? <span className="muted small">{t('Geht hier erst nach der SL-Freigabe. Anfragen kannst du unter „Deine Kampagnen“.')}</span>
++                  : importing && <ImportCampaign servers={[conn]} onCancel={() => setImporting(false)} />}
++              </div>
++            </details>
++          )}
+         </div>
+-        <LoginSettings conn={conn} open={params.get('email') === conn.id} />
+-        {/* Umzug von einem anderen Server (ab 0.4.8) – selten gebraucht, darum hier statt auf der Kampagnenliste */}
+-        {apiAtLeast('0.4.8', conn) && gm !== 'ok' && (
+-          <span className="muted small">{t('Kampagne aus Datei übernehmen geht hier erst nach der SL-Freigabe. Anfragen kannst du unter „Deine Kampagnen“.')}</span>
+-        )}
+-        {apiAtLeast('0.4.8', conn) && gm === 'ok' && (importing
+-          ? <ImportCampaign servers={[conn]} onCancel={() => setImporting(false)} />
+-          : <button type="button" className="btn small outline" style={{ alignSelf: 'flex-start' }} onClick={() => setImporting(true)}>{t('Kampagne aus Datei übernehmen')}</button>)}
+-        {/* Selten gebraucht – eingeklappt */}
+-        <details className="card" style={{ gap: 10 }} ref={deleteRef} open={openDelete || undefined}>
+-          <summary style={{ fontWeight: 700 }}>{t('Daten und Konto löschen')}</summary>
+-          <div className="row wrap" style={{ gap: 8 }}>
+-            <button type="button" className="btn small outline" onClick={exportData}>{t('Meine Daten herunterladen')}</button>
+-            <button type="button" className="btn small danger outline" onClick={() => setDeleting(true)}>{t('Konto löschen')}</button>
++      )}
++
++      <div className="list-box">
++        <details className="list-item">
++          <summary className="list-row"><IconInfo /><span className="lr-text">{t('Server und Rechtliches')}<span className="lr-sub">{t('Adresse, Impressum, Nutzungsbedingungen')}</span></span></summary>
++          <div className="list-body">
++            <div className="muted small" style={{ wordBreak: 'break-all' }}>{conn.baseUrl}</div>
++            {valid && conn.expiresAt && <div className="muted small">{t('Anmeldung gültig bis {date}', { date: formatDateFull(conn.expiresAt) })}</div>}
++            <ServerLegal conn={conn} />
+           </div>
+         </details>
+-        </>
+-      )}
+-    </section>
++        {valid && (
++          <details className="list-item" ref={deleteRef} open={openDelete || undefined}>
++            <summary className="list-row"><IconTrash /><span className="lr-text">{t('Daten herunterladen oder Konto löschen')}</span></summary>
++            <div className="list-body">
++              {deleting ? (
++                <div className="card warn" style={{ gap: 10 }}>
++                  <strong>{t('Konto auf „{name}“ löschen', { name: conn.name })}</strong>
++                  <span className="small">
++                    {t('Gelöscht werden: Konto, Charakterbilder, Zustimmungen, Stimmprofil. Deine Kommentare bleiben als „Gelöschtes Konto“ stehen, damit Gespräche verständlich bleiben. Kampagnen, in denen sonst niemand ist, werden mitgelöscht; solche mit anderen Mitgliedern musst du vorher an eine andere SL übergeben.')}
++                  </span>
++                  <div className="field">
++                    <label htmlFor={`del-${conn.id}`}>{conn.user?.hasPassword === false ? t('Zur Bestätigung dein Benutzername') : t('Zur Bestätigung dein Passwort')}</label>
++                    <input id={`del-${conn.id}`} type={conn.user?.hasPassword === false ? 'text' : 'password'} autoCapitalize="none"
++                      autoComplete={conn.user?.hasPassword === false ? 'off' : 'current-password'} value={password} onChange={(e) => setPassword(e.target.value)} />
++                  </div>
++                  <div className="row wrap" style={{ gap: 8 }}>
++                    <button type="button" className="btn small danger" disabled={!password || busy} onClick={deleteAccount}>{t('Endgültig löschen')}</button>
++                    <button type="button" className="btn small ghost" onClick={() => setDeleting(false)}>{t('Abbrechen')}</button>
++                  </div>
++                </div>
++              ) : (
++                <div className="row wrap" style={{ gap: 8 }}>
++                  <button type="button" className="btn small outline" onClick={exportData}>{t('Meine Daten herunterladen')}</button>
++                  <button type="button" className="btn small danger outline" onClick={() => setDeleting(true)}>{t('Konto löschen')}</button>
++                </div>
++              )}
++            </div>
++          </details>
++        )}
++        <button type="button" className="list-row" onClick={signOut}>
++          <IconLogOut />
++          <span className="lr-text">{t('Abmelden')}</span>
++        </button>
++      </div>
++    </>
+   );
+ }
+@@ -218,8 +278,11 @@ function TourAgain() {
+   const [done, setDone] = useState(false);
+   return (
+-    <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+-      <button type="button" className="btn small outline" onClick={() => { resetTour(); setDone(true); }}>{t('Tour noch einmal zeigen')}</button>
+-      {done && <span className="small" role="status">{t('Sie startet beim nächsten Öffnen einer Kampagne.')}</span>}
+-    </div>
++    <button type="button" className="list-row" onClick={() => { resetTour(); setDone(true); }}>
++      <IconRoute />
++      <span className="lr-text">
++        {t('Tour noch einmal zeigen')}
++        {done && <span className="lr-sub" role="status">{t('Sie startet beim nächsten Öffnen einer Kampagne.')}</span>}
++      </span>
++    </button>
+   );
+ }
+diff --git a/src/pages/CreditPage.tsx b/src/pages/CreditPage.tsx
+index 893ce6d..8dfeb03 100644
+--- a/src/pages/CreditPage.tsx
++++ b/src/pages/CreditPage.tsx
+@@ -32,5 +32,5 @@ export function CreditPage() {
+   const off = (info && !billingOn(info)) || isApiError(error) && error.status === 404;
+   return (
+-    <Screen narrow backTo={{ to: '/konto', label: t('Konten und Server') }} overline={conn.name} title={t('Guthaben')} nav={false}>
++    <Screen narrow backTo={{ to: `/konto/${encodeURIComponent(conn.id)}`, label: conn.name }} overline={conn.name} title={t('Guthaben')} nav={false}>
+       {off ? (
+         <p className="muted" style={{ margin: 0 }}>{t('Dieser Server rechnet nicht über Guthaben ab.')}</p>
+diff --git a/src/theme.css b/src/theme.css
+index a1c3721..3c1a5e6 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2215,2 +2215,49 @@ button.table-group-face {
+   .tour-ring { transition: top 200ms ease, left 200ms ease, width 200ms ease, height 200ms ease; }
+ }
++
++/* Listen mit Zeilen (Konten und Server, Kampagne verwalten): ganze Zeile antippbar, Pfeil rechts */
++.list-head { margin: var(--space-2) 0 0; font: 700 calc(18px * var(--ts))/1.3 var(--font-serif); color: var(--ink-muted); }
++.list-box {
++  display: flex;
++  flex-direction: column;
++  background: var(--paper-raised);
++  border: 1px solid var(--line);
++  border-radius: 12px;
++  padding: 0 var(--space-4);
++}
++.list-row {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  min-height: 56px;
++  padding: 8px 0;
++  width: 100%;
++  box-sizing: border-box;
++  border: none;
++  border-top: 1px solid var(--line);
++  background: none;
++  color: var(--ink);
++  font: 500 calc(16px * var(--ts))/1.3 var(--font-sans);
++  text-align: left;
++  text-decoration: none;
++  cursor: pointer;
++}
++.list-box > .list-row:first-child, .list-box > :first-child > .list-row { border-top: none; }
++.list-row > svg { flex-shrink: 0; color: var(--ink-muted); }
++.list-row .lr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
++.list-row .lr-sub { font-weight: 400; font-size: calc(13px * var(--ts)); color: var(--ink-muted); }
++.list-row .lr-val { font-weight: 400; font-size: calc(14px * var(--ts)); color: var(--ink-muted); }
++.list-row.danger, .list-row.danger > svg { color: var(--siegel-text); }
++a.list-row::after, button.list-row.nav::after {
++  content: '›';
++  flex-shrink: 0;
++  width: 1em;
++  text-align: center;
++  font-size: 1.25em;
++  line-height: 1;
++  color: var(--ink-faint);
++}
++.list-row select { width: auto; max-width: 55%; min-height: 44px; }
++@media (hover: hover) { .list-row:hover { background: var(--paper-sunken); } }
++.list-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
++details.list-item > .list-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 0 var(--space-4); }
+diff --git a/src/themeMode.tsx b/src/themeMode.tsx
+index 1140408..93175b9 100644
+--- a/src/themeMode.tsx
++++ b/src/themeMode.tsx
+@@ -1,3 +1,3 @@
+-import { useState } from 'react';
++import { useState, type ReactNode } from 'react';
+ import { t, tk } from './i18n';
+ import { syncSystemBars } from './display/systemBars';
+@@ -32,5 +32,5 @@ export function setThemeMode(mode: ThemeMode): void {
+ }
+ 
+-const OPTIONS: { value: ThemeMode; label: string }[] = [
++export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+   { value: 'system', label: tk('Wie das Handy') },
+   { value: 'light', label: tk('Pergament (hell)') },
+@@ -44,5 +44,5 @@ export function ThemeSwitch() {
+       <label htmlFor="theme">{t('Darstellung')}</label>
+       <select id="theme" value={mode} onChange={(e) => { const m = e.target.value as ThemeMode; setMode(m); setThemeMode(m); }}>
+-        {OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
++        {THEME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
+       </select>
+       <span className="muted small">{t('Spielabend ist für gedimmtes Licht am Tisch gedacht.')}</span>
+@@ -50,2 +50,16 @@ export function ThemeSwitch() {
+   );
+ }
++
++/** Darstellung als Zeile in einer Liste (Konten und Server) */
++export function ThemeRow({ icon }: { icon?: ReactNode }) {
++  const [mode, setMode] = useState<ThemeMode>(getThemeMode());
++  return (
++    <label className="list-row">
++      {icon}
++      <span className="lr-text">{t('Darstellung')}</span>
++      <select value={mode} onChange={(e) => { const m = e.target.value as ThemeMode; setMode(m); setThemeMode(m); }}>
++        {THEME_OPTIONS.map((o) => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
++      </select>
++    </label>
++  );
++}

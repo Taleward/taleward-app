@@ -1,0 +1,147 @@
+From b7dd001f0d374bff128ce38dacc9ed98a36db0c0 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 28 Oct 2026 10:40:06 +0100
+Subject: [PATCH 189/189] =?UTF-8?q?Texte=20k=C3=BCrzen,=20Termin:=20Ausget?=
+ =?UTF-8?q?retene=20nicht=20mehr=20unter=20=E2=80=9ENoch=20offen=E2=80=9C,?=
+ =?UTF-8?q?=20Pr=C3=BCf-Reiter=20wie=20in=20der=20Bibel?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/i18n/en.ts             |  8 ++++++++
+ src/pages/DatePollPage.tsx |  4 +++-
+ src/pages/HandoverPage.tsx | 10 +++++-----
+ src/pages/Overview.tsx     |  6 +++---
+ src/pages/Speakers.tsx     |  2 +-
+ src/theme.css              |  8 +++++---
+ 6 files changed, 25 insertions(+), 13 deletions(-)
+
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 09fd7dd..db08671 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1605,3 +1605,11 @@ export const en: Record<string, string> = {
+   "Kampagne": "Campaign",
+   "Verlassen geht, sobald jemand anderes leitet.": "You can leave once someone else runs the game.",
++  "Ich spiele danach als Spieler weiter": "I'll keep playing as a player",
++  "Sonst leitet ihr zu zweit.": "Otherwise you run the game together.",
++  "Weg sind dann Geheimes, SL-Notizen, Vorschläge, Abschriften, Unterlagen, Kosten und Hinweise.": "Gone then: secrets, GM notes, suggestions, transcripts, documents, costs and notices.",
++  "Du kannst abgeben und als Spieler weitermachen.": "You can step down and keep playing.",
++  "Die neue Spielleitung muss erst in der Kampagne sein. Lade sie zuerst ein.": "The new GM has to be in the campaign first. Invite them first.",
++  "Hier braucht jede Person ein eigenes Konto und stimmt neu zu. Cloud-Freigaben und Stimmprofile richtet ihr neu ein.": "Here everyone needs their own account and agrees again. You set up cloud permissions and voice profiles anew.",
++  "Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.": "Then description, backstory, picture and your public comments come along. Otherwise only your character's name.",
++  "Namen aus euren Runden, damit die Transkription sie erkennt. Nur du siehst sie.": "Names from your sessions, so the transcription recognises them. Only you see them.",
+ };
+diff --git a/src/pages/DatePollPage.tsx b/src/pages/DatePollPage.tsx
+index f0150b4..cbec225 100644
+--- a/src/pages/DatePollPage.tsx
++++ b/src/pages/DatePollPage.tsx
+@@ -6,4 +6,5 @@ import { api, isApiError } from '../api/client';
+ import { useAuth } from '../auth/AuthContext';
+ import type { Campaign, DateOption, DatePoll, VoteAnswer } from '../api/types';
++import { isDeletedMember } from '../api/types';
+ import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+ import { Missing } from '../components/Missing';
+@@ -159,5 +160,6 @@ export function DatePollPage() {
+             const mine = o.votes.find((v) => v.memberId === me?.id)?.answer;
+             const by = (a: VoteAnswer) => o.votes.filter((v) => v.answer === a).map((v) => name(v.memberId));
+-            const pending = campaign!.members.filter((m) => !o.votes.some((v) => v.memberId === m.id)).map((m) => m.displayName);
++            // Gelöschte, ausgetretene und freie Plätze stimmen nicht mehr ab
++            const pending = campaign!.members.filter((m) => !isDeletedMember(m) && !o.votes.some((v) => v.memberId === m.id)).map((m) => m.displayName);
+             const canRemove = gm || o.proposedByMemberId === me?.id;
+             return (
+diff --git a/src/pages/HandoverPage.tsx b/src/pages/HandoverPage.tsx
+index 7e0be4c..f9440fe 100644
+--- a/src/pages/HandoverPage.tsx
++++ b/src/pages/HandoverPage.tsx
+@@ -112,5 +112,5 @@ export function HandoverPage() {
+         <section className="card">
+           <strong>{t('{name} leitet schon mit', { name: coGms.map((m) => m.displayName).join(', ') })}</strong>
+-          <span className="muted small">{t('Du kannst die Spielleitung einfach abgeben und als Spieler weitermachen. Ab dann siehst du nur noch, was Spieler sehen.')}</span>
++          <span className="muted small">{t('Du kannst abgeben und als Spieler weitermachen.')}</span>
+           <button type="button" className="btn outline" disabled={busy} onClick={onlyStepDown}>{t('Ich spiele ab jetzt als Spieler')}</button>
+         </section>
+@@ -123,5 +123,5 @@ export function HandoverPage() {
+             {players.length === 0 ? (
+               <>
+-                <span className="muted small">{t('Die neue Spielleitung muss erst mitspielen. Lade sie ein und komm danach hierher zurück.')}</span>
++                <span className="muted small">{t('Die neue Spielleitung muss erst in der Kampagne sein. Lade sie zuerst ein.')}</span>
+                 <InviteBox campaignId={campaign.id} campaignTitle={campaign.title} />
+               </>
+@@ -145,10 +145,10 @@ export function HandoverPage() {
+               <label className="check">
+                 <input type="checkbox" checked={stepDown} onChange={(e) => setStepDown(e.target.checked)} />
+-                <span>{t('Ich gebe die Spielleitung ab und spiele als Spieler weiter')}</span>
++                <span>{t('Ich spiele danach als Spieler weiter')}</span>
+               </label>
+               <span className="muted small" style={{ marginLeft: 28 }}>
+                 {stepDown
+                   ? t('Danach wählst du deinen Charakter.')
+-                  : t('Ohne Haken leitet ihr zu zweit. Abgeben kannst du später hier.')}
++                  : t('Sonst leitet ihr zu zweit.')}
+               </span>
+             </section>
+@@ -159,5 +159,5 @@ export function HandoverPage() {
+               <strong>{t('Ab dann siehst du nur noch, was Spieler sehen')}</strong>
+               <span className="small">
+-                {t('Weg sind für dich: geheime Einträge und geheime Teile von Einträgen, SL-Notizen, Vorschläge, Abschriften, Unterlagen der Spielleitung, Kosten und Hinweise an die Spielleitung. Was du behalten willst, klär vorher mit der neuen Spielleitung.')}
++                {t('Weg sind dann Geheimes, SL-Notizen, Vorschläge, Abschriften, Unterlagen, Kosten und Hinweise.')}
+               </span>
+             </div>
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index b9e1e8a..a0ebe85 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -120,5 +120,5 @@ export function Overview() {
+             <div className="notice" role="status" style={{ flexDirection: 'column', gap: 4 }}>
+               <strong>{t('Die Kampagne ist umgezogen.')}</strong>
+-              <span className="small">{t('Hier fängt jede Person mit einem eigenen Konto an und stimmt der Aufnahme neu zu. Lade alle über „Mitspielende einladen“ ein; wer mit der Figur aus der eigenen Sammlung beitritt, setzt sich von selbst auf ihren Platz. Cloud-Freigaben und Stimmprofile richtet ihr hier neu ein.')}</span>
++              <span className="small">{t('Hier braucht jede Person ein eigenes Konto und stimmt neu zu. Cloud-Freigaben und Stimmprofile richtet ihr neu ein.')}</span>
+             </div>
+           )}
+@@ -451,5 +451,5 @@ export function WorldInfo({ campaign, onSaved }: { campaign: Campaign; onSaved:
+           <div className="field">
+             <label htmlFor="w-hot" className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Namenshilfe für die Transkription')}</label>
+-            <span className="muted small">{t('Namen und Begriffe aus euren Runden – damit erkennt die Transkription sie besser. Nur du siehst diese Liste.')}</span>
++            <span className="muted small">{t('Namen aus euren Runden, damit die Transkription sie erkennt. Nur du siehst sie.')}</span>
+             {hotwords.length > 0 && (
+               <div className="term-choices">
+@@ -606,5 +606,5 @@ export function MoveConsent({ campaign, me, onChanged }: { campaign: Campaign; m
+       </label>
+       <span className="muted small" style={{ marginLeft: 28 }}>
+-        {t('Zieht die Spielleitung mit der Kampagne auf einen anderen Server, gehen dann Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Ohne Haken nur der Name deiner Figur.')}
++        {t('Dann gehen Beschreibung, Hintergrund, Bild und deine öffentlichen Kommentare mit. Sonst nur der Name deiner Figur.')}
+       </span>
+       <ErrorBox error={error} />
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index a345e97..d6b2872 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -211,5 +211,5 @@ export function Speakers() {
+       {speakers && review && editable && (
+         <button type="button" className="btn" disabled={!complete || !changed || busy} onClick={confirm}>
+-          {busy ? t('Wird gesendet …') : t('Ändern und Kapitel neu schreiben')}
++          {busy ? t('Wird gesendet …') : t('Kapitel neu schreiben')}
+         </button>
+       )}
+diff --git a/src/theme.css b/src/theme.css
+index 30af7be..00e6ab8 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2009,9 +2009,11 @@ button.table-group-face {
+ .review-steps button {
+   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
+-  min-height: 52px; padding: 6px 4px; margin-bottom: -1px;
++  min-height: 60px; padding: 6px 4px; margin-bottom: -1px;
+   background: none; border: 0; border-bottom: 3px solid transparent;
+-  color: var(--ink-soft); font: 700 calc(15px * var(--ts))/1.25 var(--font-sans); cursor: pointer;
++  color: var(--ink-muted); font: 500 calc(16px * var(--ts))/1.25 var(--font-sans); cursor: pointer;
+ }
+-.review-steps button[aria-selected='true'] { color: var(--ink); border-bottom-color: var(--tinte); }
++/* Gleich wie die Reiter der Bibel: gleich breit, gleich hoch, Auswahl fett und unterstrichen */
++.review-steps button[aria-selected='true'] { color: var(--ink); font-weight: 700; border-bottom-color: var(--ink); }
++@media (hover: hover) { .review-steps button:hover { background: var(--paper-sunken); } }
+ .review-steps button .small { font-weight: 400; color: var(--ink-muted); }
+ .review-steps button:focus-visible { outline: 2px solid var(--tinte); outline-offset: -2px; }
