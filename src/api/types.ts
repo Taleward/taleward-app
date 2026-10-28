@@ -638,6 +638,8 @@ export interface Comment {
   authorMemberId: string;
   /** null = für alle in der Kampagne; sonst private Nachricht, sichtbar nur für Absender und Empfänger */
   recipientMemberId: string | null;
+  /** Ab 0.4.26: alle Empfänger (leer = für alle); ältere Server liefern nur recipientMemberId */
+  recipientMemberIds?: string[];
   text: string;
   createdAt: string;
   editedAt: string | null;

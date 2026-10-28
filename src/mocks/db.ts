@@ -310,8 +310,8 @@ export const comments: Comment[] = [
     text: 'Kleine Ergänzung: Thorwald hat im Moor auch noch das Amulett der Hebamme eingesteckt.', createdAt: '2026-09-06T09:12:00Z', editedAt: null },
   { id: 'k2', sessionId: 's-c-grau-12', authorMemberId: 'm-sophie', recipientMemberId: null,
     text: 'Die Rabenrufe haben mich die ganze Woche nicht losgelassen.', createdAt: '2026-09-06T18:40:00Z', editedAt: null },
-  { id: 'k3', sessionId: 's-c-grau-12', authorMemberId: 'm-robin', recipientMemberId: 'm-lea',
-    text: 'Nur für dich: Ilsabet träumt in der Nacht nach dem Moor von einer Glocke unter Wasser.', createdAt: '2026-09-07T20:05:00Z', editedAt: null },
+  { id: 'k3', sessionId: 's-c-grau-12', authorMemberId: 'm-robin', recipientMemberId: 'm-lea', recipientMemberIds: ['m-lea', 'm-jonas'],
+    text: 'Nur für euch beide: Ilsabet und Thorwald träumen in der Nacht nach dem Moor von einer Glocke unter Wasser.', createdAt: '2026-09-07T20:05:00Z', editedAt: null },
   { id: 'k4', sessionId: 's-c-drache-7', authorMemberId: 'm-mara', recipientMemberId: 'm-robin2',
     text: 'Ilvara bemerkt als Einzige, dass einer der Verfolger das Wappen ihrer Familie trägt.', createdAt: '2026-09-15T08:00:00Z', editedAt: null }
 ];

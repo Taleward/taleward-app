@@ -1,3 +1,4 @@
+import { apiAtLeast } from '../api/connections';
 import { isDeletedMember } from '../api/types';
 import { confirmDialog } from './confirm';
 import { Avatar } from './Avatar';
@@ -20,7 +21,12 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
   const gm = campaign.myRole === 'gm';
   const [list, setList] = useState<Comment[] | null>(null);
   const [text, setText] = useState('');
+  // Ab 0.4.26 an mehrere Personen; vorher genau eine (Auswahlliste)
+  const multi = apiAtLeast('0.4.26');
+  const [privateTo, setPrivateTo] = useState(false);
+  const [chosen, setChosen] = useState<string[]>([]);
   const [recipient, setRecipient] = useState('');
+  const to = multi ? (privateTo ? chosen : []) : recipient ? [recipient] : [];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [error, setError] = useState<unknown>(null);
@@ -40,7 +46,7 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
     setBusy(true);
     setError(null);
     try {
-      const k = await api.addComment(sessionId, text.trim(), recipient || null);
+      const k = await api.addComment(sessionId, text.trim(), to, multi);
       setList((l) => [...(l ?? []), k]);
       setText('');
     } catch (e) {
@@ -79,7 +85,9 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
 
       {list?.map((k) => {
         const own = k.authorMemberId === me?.id;
-        const isPrivate = k.recipientMemberId !== null;
+        const toIds = k.recipientMemberIds?.length ? k.recipientMemberIds : k.recipientMemberId ? [k.recipientMemberId] : [];
+        const isPrivate = toIds.length > 0;
+        const others = toIds.filter((id) => id !== me?.id).map(name).join(', ');
         return (
           <div key={k.id} className={isPrivate ? 'card secret' : 'card'} style={{ gap: 6 }}>
             <div className="row between small">
@@ -91,7 +99,8 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
             </div>
             {isPrivate && (
               <div className="row small muted" style={{ gap: 6 }}>
-                <IconLock size={14} /> {own ? t('Privat an {name}', { name: name(k.recipientMemberId) }) : t('Privat an dich')}
+                <IconLock size={14} /> {own ? t('Privat an {name}', { name: toIds.map(name).join(', ') })
+                  : others ? t('Privat an dich und {names}', { names: others }) : t('Privat an dich')}
               </div>
             )}
             {editingId === k.id ? (
@@ -124,7 +133,23 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
       <div className="card">
         <label htmlFor="new-comment" className="muted small">{t('Dein Kommentar')}</label>
         <textarea id="new-comment" value={text} onChange={(e) => setText(e.target.value)}
-          placeholder={recipient ? t('Nur die gewählte Person sieht das.') : t('Sehen alle am Tisch.')} />
+          placeholder={(multi ? privateTo : to.length > 0) ? t('Nur die gewählten Personen sehen das.') : t('Sehen alle am Tisch.')} />
+        {multi ? (
+          <div className="field" role="group" aria-labelledby="recipient-label">
+            <span id="recipient-label" className="small">{t('Sichtbar für')}</span>
+            <div className="segmented" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <button type="button" aria-pressed={!privateTo} onClick={() => setPrivateTo(false)}>{t('Alle am Tisch')}</button>
+              <button type="button" aria-pressed={privateTo} disabled={recipients.length === 0} onClick={() => setPrivateTo(true)}>{t('Nur ausgewählte')}</button>
+            </div>
+            {privateTo && recipients.map((m) => (
+              <label key={m.id} className="check">
+                <input type="checkbox" checked={chosen.includes(m.id)}
+                  onChange={(e) => setChosen((c) => (e.target.checked ? [...c, m.id] : c.filter((x) => x !== m.id)))} />
+                <span>{m.displayName}{m.role === 'gm' ? ` (${t('Spielleitung')})` : m.characterName ? ` (${m.characterName})` : ''}</span>
+              </label>
+            ))}
+          </div>
+        ) : (
         <div className="field">
           <label htmlFor="recipient">{t('Sichtbar für')}</label>
           <select id="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)}>
@@ -136,8 +161,9 @@ export function Comments({ sessionId, campaign }: { sessionId: string; campaign:
             ))}
           </select>
         </div>
-        <button type="button" className="btn small" disabled={!text.trim() || busy} onClick={send}>
-          {recipient ? t('Privat senden') : t('Kommentieren')}
+        )}
+        <button type="button" className="btn small" disabled={!text.trim() || busy || (multi && privateTo && chosen.length === 0)} onClick={send}>
+          {to.length ? t('Privat senden') : t('Kommentieren')}
         </button>
       </div>
     </section>

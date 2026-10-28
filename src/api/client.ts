@@ -460,8 +460,11 @@ function makeApi(conn: () => Connection) {
 
   // Kommentare pro Kapitel
   comments: (sessionId: string) => request<Comment[]>('GET', `/sessions/${sessionId}/comments`),
-  addComment: (sessionId: string, text: string, recipientMemberId: string | null) =>
-    request<Comment>('POST', `/sessions/${sessionId}/comments`, { body: { text, recipientMemberId } }),
+  /** Mehrere Empfänger erst ab 0.4.26; ältere Server bekommen nur den ersten */
+  addComment: (sessionId: string, text: string, recipients: string[], multi: boolean) =>
+    request<Comment>('POST', `/sessions/${sessionId}/comments`, {
+      body: multi ? { text, recipientMemberIds: recipients } : { text, recipientMemberId: recipients[0] ?? null }
+    }),
   editComment: (commentId: string, text: string) =>
     request<Comment>('PATCH', `/comments/${commentId}`, { body: { text } }),
   deleteComment: (commentId: string) => request<void>('DELETE', `/comments/${commentId}`),

@@ -569,7 +569,8 @@ function commentContext(sessionId: string) {
 }
 
 function visibleTo(k: Comment, memberId: string): boolean {
-  return k.recipientMemberId === null || k.authorMemberId === memberId || k.recipientMemberId === memberId;
+  const to = k.recipientMemberIds?.length ? k.recipientMemberIds : k.recipientMemberId ? [k.recipientMemberId] : [];
+  return to.length === 0 || k.authorMemberId === memberId || to.includes(memberId);
 }
 
 /** Links prüfen wie der Server (ab 0.4.13): nur http(s), keine Zugangsdaten in der Adresse */
@@ -1609,18 +1610,20 @@ export const handlers = [
   http.post(`${B}/sessions/:id/comments`, async ({ params, request }) => {
     const ctx = commentContext(params.id as string);
     if ('error' in ctx) return ctx.error;
-    const body = (await request.json()) as { text: string; recipientMemberId?: string | null };
+    const body = (await request.json()) as { text: string; recipientMemberId?: string | null; recipientMemberIds?: string[] };
     const text = body.text?.trim();
     if (!text) return err(400, 'invalid_input', 'Der Kommentar ist leer.');
     if (text.length > 4000) return err(413, 'comment_too_long', 'Der Kommentar ist zu lang (höchstens 4000 Zeichen).');
-    const recipient = body.recipientMemberId ?? null;
-    if (recipient) {
-      const r = ctx.campaign.members.find((m) => m.id === recipient);
-      if (!r || r.id === ctx.me.id) return err(400, 'invalid_recipient', 'Ungültiger Empfänger.');
+    // 0.4.26: mehrere Empfänger; sonst wie bisher einer
+    const to = Array.isArray(body.recipientMemberIds) ? body.recipientMemberIds : body.recipientMemberId ? [body.recipientMemberId] : [];
+    if (to.length > 20 || new Set(to).size !== to.length) return err(400, 'recipient_unknown', 'Ungültige Empfänger.');
+    for (const id of to) {
+      const r = ctx.campaign.members.find((m) => m.id === id);
+      if (!r || r.id === ctx.me.id) return err(400, 'recipient_unknown', 'Ungültiger Empfänger.');
       // Spieler schreiben privat nur an die SL, die SL an alle
       if (ctx.me.role !== 'gm' && r.role !== 'gm') return err(403, 'forbidden', 'Private Nachrichten gehen nur an die Spielleitung.');
     }
-    const k: Comment = { id: 'k-' + crypto.randomUUID().slice(0, 8), sessionId: ctx.session.id, authorMemberId: ctx.me.id, recipientMemberId: recipient, text, createdAt: new Date().toISOString(), editedAt: null };
+    const k: Comment = { id: 'k-' + crypto.randomUUID().slice(0, 8), sessionId: ctx.session.id, authorMemberId: ctx.me.id, recipientMemberId: to[0] ?? null, recipientMemberIds: to, text, createdAt: new Date().toISOString(), editedAt: null };
     comments.push(k);
     return HttpResponse.json(k, { status: 201 });
   }),

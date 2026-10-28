@@ -1627,4 +1627,8 @@ export const en: Record<string, string> = {
   "Ohne Konto, stimmt hier selbst zu": "No account, agrees right here",
   "Aufnahme verwerfen": "Discard recording",
   "Aufnahme verwerfen? Sie wird gelöscht, nichts wird hochgeladen.": "Discard the recording? It will be deleted and nothing is uploaded.",
+  "Leseeinstellungen": "Reading settings",
+  "Privat an dich und {names}": "Private to you and {names}",
+  "Nur die gewählten Personen sehen das.": "Only the chosen people see this.",
+  "Nur ausgewählte": "Only selected",
 };

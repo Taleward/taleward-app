@@ -160,6 +160,10 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Ziffern in Zeilenhöhe: Mediävalziffern der Alegreya lassen „Kapitel 1“ wie „Kapitelı“ aussehen. Als Schrift-
+   Merkmal, weil die Kurzschreibweise font: … font-variant-numeric zurücksetzt, font-feature-settings aber nicht */
+*, ::before, ::after { font-feature-settings: 'lnum' 1; }
+
 a {
   color: var(--ink);
 }
@@ -2056,7 +2060,8 @@ button.table-group-face {
 .reading-page[data-read-size='large'] .recap-part { font-size: calc(19px * var(--ts)); line-height: 1.42; }
 .reading-page[data-read-size='larger'] .recap p { font-size: calc(25px * var(--ts)); line-height: 1.6; }
 .reading-page[data-read-size='larger'] .recap-part { font-size: calc(22px * var(--ts)); line-height: 1.36; }
-.read-aa { min-width: 48px; font-family: var(--font-serif); font-weight: 700; }
+.read-details > summary { min-height: 48px; display: flex; align-items: center; color: var(--ink-muted); font-weight: 600; border-top: 1px solid var(--line); }
+.read-details[open] > .read-settings { border-top: 0; padding-top: 0; }
 .read-settings {
   display: flex;
   flex-direction: column;

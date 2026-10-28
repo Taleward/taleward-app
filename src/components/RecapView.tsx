@@ -67,13 +67,12 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
             <IconSpeaker /> {speaking ? t('Vorlesen stoppen') : t('Vorlesen')}
           </button>
         )}
-        {/* Wie das „Aa“ in Lese-Apps: Schriftgröße und Seite nur für den Kapiteltext */}
-        <button type="button" className="btn small ghost read-aa" aria-expanded={settings} aria-controls={settingsId}
-          aria-label={t('Lesen anpassen')} onClick={() => setSettings(!settings)}>
-          <span aria-hidden="true">Aa</span>
-        </button>
       </div>
-      {settings && <ReadSettings id={settingsId} prefs={prefs} onChange={setPrefs} />}
+      {/* Schriftgröße und Seite nur für den Kapiteltext – eingeklappt, damit die Knöpfe unter dem Text ruhig bleiben */}
+      <details className="read-details" open={settings} onToggle={(e) => setSettings((e.target as HTMLDetailsElement).open)}>
+        <summary className="small">{t('Leseeinstellungen')}</summary>
+        {settings && <ReadSettings id={settingsId} prefs={prefs} onChange={setPrefs} />}
+      </details>
     </article>
   );
 }
