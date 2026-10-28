@@ -13,7 +13,7 @@ import { api } from '../api/client';
 import type { Attendee, Member } from '../api/types';
 import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } from '../api/upload';
 import { ConsentHandover } from '../components/ConsentHandover';
-import { IconCheck, IconMic } from '../components/Icons';
+import { IconCheck, IconMic, IconPlus } from '../components/Icons';
 import { CONSENT_ON_SITE } from '../consent';
 import { MicDenied } from '../components/MicDenied';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
@@ -402,7 +402,7 @@ export function Recording() {
                   onClick={() => setGuests(guests.filter((x) => x !== g))}>×</button>
               </div>
             ))}
-            <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            <div style={{ borderTop: '1px solid var(--line)', paddingTop: addingGuest ? 10 : 0 }}>
               {addingGuest ? (
                 <div className="row" style={{ gap: 8 }}>
                   <input type="text" aria-label={t('Name des Gasts')} placeholder={t('Name des Gasts')} value={guestName} autoFocus onChange={(e) => setGuestName(e.target.value)} />
@@ -412,7 +412,14 @@ export function Recording() {
                   </button>
                 </div>
               ) : (
-                <button type="button" className="btn small quiet" onClick={() => setAddingGuest(true)}>+ {t('Gast')}</button>
+                // Wie „Mitspielende einladen“ auf der Übersicht: eine leise Zeile statt eines Knopfs
+                <button type="button" className="row invite-row flat" onClick={() => setAddingGuest(true)}>
+                  <span className="invite-plus small" aria-hidden><IconPlus size={18} /></span>
+                  <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                    <span>{t('Gast dazunehmen')}</span>
+                    <span className="muted small">{t('Ohne Konto, stimmt hier selbst zu')}</span>
+                  </span>
+                </button>
               )}
             </div>
           </section>
