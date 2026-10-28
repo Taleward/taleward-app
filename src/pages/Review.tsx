@@ -214,19 +214,14 @@ export function Review() {
       <div className="b">
       <div className="review-proposals-head" hidden={!show('proposals')}>
         <div className="row between wrap" style={{ gap: 8 }}>
-          <strong>{proposals ? t('Vorschläge ({n})', { n: proposals.length }) : t('Vorschläge')}</strong>
-          {/* Bei vielen Vorschlägen: alles Offene auf einmal entscheiden */}
-          {proposals && openCount > 1 && (
-            <span className="row wrap" style={{ gap: 4 }}>
-              {easy.length > 1 && <button type="button" className="btn small subtle" onClick={() => bulk('accepted')}>{tn(easy.length, '{n} unauffälligen übernehmen', '{n} unauffällige übernehmen')}</button>}
-              <button type="button" className="btn small subtle" onClick={() => bulk('rejected')}>{t('Alle offenen verwerfen')}</button>
-            </span>
+          <strong>{proposals ? tn(proposals.length, '{n} Vorschlag', '{n} Vorschläge', { n: proposals.length }) : t('Vorschläge')}</strong>
+          {/* Bei vielen Vorschlägen: die unauffälligen auf einmal übernehmen; Markiertes bleibt zum Einzelprüfen */}
+          {proposals && openCount > 1 && easy.length > 1 && (
+            <button type="button" className="btn small outline" onClick={() => bulk('accepted')}>
+              {tn(easy.length, '{n} unauffälligen übernehmen', '{n} unauffällige übernehmen')}
+            </button>
           )}
         </div>
-        {proposals && openCount > 1 && easy.length > 1 && easy.length < openCount && (
-          <p className="muted small" style={{ margin: 0 }}>{t('Markierte, Aufgedecktes und ähnliche Namen prüfst du einzeln.')}</p>
-        )}
-        <p className="muted small" style={{ margin: 0 }}>{t('Nur Übernommenes kommt in die Bibel.')}</p>
       </div>
 
       <div className="review-proposals" hidden={!show('proposals')} {...panel('proposals')}>
@@ -238,6 +233,11 @@ export function Review() {
         </div>
       ))}
 
+      {proposals && openCount > 1 && (
+        <button type="button" className="quiet-link" onClick={async () => {
+          if (await confirmDialog(tn(openCount, '{n} offenen Vorschlag verwerfen?', '{n} offene Vorschläge verwerfen?'), { confirmLabel: t('Verwerfen') })) bulk('rejected');
+        }}>{t('Alle offenen verwerfen')}</button>
+      )}
       {proposals?.length === 0 && (
         <div className="empty">{t('Für dieses Kapitel gibt es keine Vorschläge für die Bibel.')}</div>
       )}

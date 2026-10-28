@@ -1580,4 +1580,10 @@ export const en: Record<string, string> = {
   "{n} Person sieht den Eintrag.": "{n} person sees the entry.",
   "{n} Personen sehen den Eintrag.": "{n} people see the entry.",
   "Alles": "All",
+  "wird öffentlich": "becomes public",
+  "Beleg und Begründung": "Evidence and reasoning",
+  "Begründung": "Reasoning",
+  "Anpassen: Text und Sichtbarkeit": "Adjust: text and visibility",
+  "{n} offenen Vorschlag verwerfen?": "Discard {n} open suggestion?",
+  "{n} offene Vorschläge verwerfen?": "Discard {n} open suggestions?",
 };

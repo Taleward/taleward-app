@@ -2018,7 +2018,7 @@ button.table-group-face {
 .recap-sheet-head { padding-bottom: 4px; }
 .proposal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .proposal-actions > .btn { flex: 1 1 120px; }
-.proposal-links { display: flex; flex-wrap: wrap; gap: 0 8px; flex-basis: 100%; }
+.proposal-actions > .btn.square { flex: 0 0 48px; min-width: 48px; }
 /* Vorschlag im Kapitel wiederfinden: Absatz leise hinterlegt */
 .review-para.hl > .recap { background: var(--paper-sunken); border-radius: var(--radius-sm); box-shadow: 0 0 0 6px var(--paper-sunken); }
 @media (prefers-reduced-motion: no-preference) { .review-para > .recap { transition: background 150ms ease, box-shadow 150ms ease; } }
@@ -2052,7 +2052,6 @@ button.table-group-face {
   .review-foot details.card.secret:not([open]) { padding-block: 0; }
   .review-publish { flex-direction: row; align-items: center; justify-content: space-between; }
   .proposal-actions > .btn { flex: 0 1 auto; min-width: 112px; }
-  .proposal-links { flex-basis: auto; margin-left: auto; }
 }
 
 /* Textlinks mit voller Tippfläche (48 px), ohne wie ein Knopf auszusehen */

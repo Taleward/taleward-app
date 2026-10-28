@@ -5,7 +5,7 @@ import type { Entry, EntryType, Member, Proposal, ProposalDecision, Visibility }
 import { Dialog } from './Dialog';
 import { PlayerPicker } from './PlayerPicker';
 import { t, tk } from '../i18n';
-import { IconEye, IconLock } from './Icons';
+import { IconEye, IconLock, IconPencil } from './Icons';
 import { addsAlias } from '../bible/aliases';
 import { mergesIntoNotes } from '../review/mergeVisibility';
 
@@ -113,9 +113,9 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
           {!p.flags.includes('joke_suspected') && !p.flags.includes('evidence_not_found') && p.flags.includes('low_confidence') && <span className="pill seal">{t('Unsicher')}</span>}
           {p.flags.includes('contradicts_bible') && <span className="pill brass">{t('Widerspricht der Bibel')}</span>}
           {/* Beim Ergänzen bleibt die Sichtbarkeit des vorhandenen Eintrags */}
-          {p.action === 'reveal'
-            ? <span className="row" style={{ gap: 4 }}><VisTag gm /> → <VisTag gm={false} /></span>
-            : !merged && <VisTag gm={secretEntry} />}
+          {!merged && (secretEntry
+            ? <VisTag gm />
+            : <span className="vis public"><IconEye size={16} /> {t('wird öffentlich')}</span>)}
           {hiddenNames.length > 0 && <span className="small" style={{ color: 'var(--siegel-text)' }}>{t('nicht für {names}', { names: hiddenNames.join(', ') })}</span>}
         </span>
       </div>
@@ -134,6 +134,17 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
             <label htmlFor={`pg-${p.id}`} className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Nur SL')}</label>
             <textarea id={`pg-${p.id}`} value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} />
           </div>
+          {players.length > 0 && !merged && (
+            <div className="list-box">
+              <button type="button" className="list-row nav" onClick={() => { setPick(visibleIds); setPicking(true); }}>
+                <span className="lr-text">{t('Wer sieht das?')}
+                  <span className="lr-sub">{secretEntry ? t('Nur die Spielleitung')
+                    : hiddenNames.length ? t('Alle außer {names}', { names: hiddenNames.join(', ') }) : t('Alle am Tisch')}</span>
+                </span>
+                <span className="lr-val">{t('Ändern')}</span>
+              </button>
+            </div>
+          )}
           <div className="row">
             <button type="button" className="btn small" disabled={!title.trim()} onClick={save}>{t('Speichern')}</button>
             <button type="button" className="btn small ghost" onClick={() => setEditing(false)}>{t('Abbrechen')}</button>
@@ -142,11 +153,7 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
       ) : (
         <>
           <div className="card-title">{p.title}</div>
-          {p.detail && (
-            <div className="small">
-              <span className="muted" style={{ fontWeight: 700 }}>{secretEntry ? t('Beschreibung:') : t('Spieler erfahren:')}</span> {p.detail}
-            </div>
-          )}
+          {p.detail && <div>{p.detail}</div>}
           {p.gmNotes && (
             <SecretBox>{p.gmNotes}</SecretBox>
           )}
@@ -158,7 +165,7 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
                   + ' ' + t('Beim Ergänzen kommt er in die SL-Notizen von {name}, nicht in den Text, den alle sehen.', { name: match.name })}
               </span>
               <button type="button" className="btn small moss outline" style={{ alignSelf: 'flex-start' }} onClick={() => mergeInto(match.entryId)}>
-                {t('Bei {name} ergänzen', { name: match.name })}
+                {t('Dort ergänzen')}
               </button>
             </div>
           )}
@@ -185,35 +192,35 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
               </button>
             </div>
           )}
-          {/* Begründung nur auf Wunsch – die Karte bleibt kurz */}
-          {p.visibilityReason && !(p.publicSuggested && secretEntry) && (
+          {/* Beleg und Begründung nur auf Wunsch – die Karte bleibt kurz */}
+          {(ev || (p.visibilityReason && !(p.publicSuggested && secretEntry))) && (
             <details className="more">
-              <summary className="small">{t('Warum so eingestuft?')}</summary>
-              <div className="muted small">{p.visibilityReason}</div>
+              <summary className="small">{ev ? t('Beleg und Begründung') : t('Begründung')}</summary>
+              {ev && (
+                <div className="quote">
+                  {t('„{q}“', { q: ev.quote.replace(/^[„"]|[“"]$/g, '') })}{' '}
+                  <span style={{ fontStyle: 'normal' }}>
+                    ({ev.page != null ? t('S. {n}', { n: ev.page }) : ev.start != null ? formatStart(ev.start) : ''})
+                  </span>
+                </div>
+              )}
+              {p.visibilityReason && !(p.publicSuggested && secretEntry) && <div className="muted small">{p.visibilityReason}</div>}
             </details>
-          )}
-          {ev && (
-            <div className="quote">
-              {t('„{q}“', { q: ev.quote.replace(/^[„"]|[“"]$/g, '') })}{' '}
-              <span style={{ fontStyle: 'normal' }}>
-                ({ev.page != null ? t('S. {n}', { n: ev.page }) : ev.start != null ? formatStart(ev.start) : ''})
-              </span>
-            </div>
-          )}
-          {picking && (
-            <Dialog title={t('Sichtbar für')} onClose={() => setPicking(false)}>
-              <PlayerPicker players={players} selected={pick} onChange={setPick} />
-              <p className="muted small" style={{ margin: 0 }}>{t('Niemand ausgewählt = nur SL.')}</p>
-              <div className="row" style={{ gap: 8 }}>
-                <button type="button" className="btn" style={{ flex: 1 }} onClick={applyPick}>{t('Übernehmen')}</button>
-                <button type="button" className="btn outline" onClick={() => setPicking(false)}>{t('Abbrechen')}</button>
-              </div>
-            </Dialog>
           )}
         </>
       )}
+      {picking && (
+        <Dialog title={t('Sichtbar für')} onClose={() => setPicking(false)}>
+          <PlayerPicker players={players} selected={pick} onChange={setPick} />
+          <p className="muted small" style={{ margin: 0 }}>{t('Niemand ausgewählt = nur SL.')}</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn" style={{ flex: 1 }} onClick={applyPick}>{t('Übernehmen')}</button>
+            <button type="button" className="btn outline" onClick={() => setPicking(false)}>{t('Abbrechen')}</button>
+          </div>
+        </Dialog>
+      )}
 
-      {/* Eine Zeile: die Entscheidung als Knöpfe, Sichtbarkeit und Bearbeiten als leise Links daneben */}
+      {/* Eine Zeile: die Entscheidung als Knöpfe, daneben der Stift für Text und Sichtbarkeit */}
       {!editing && (
         <div className="proposal-actions">
           <button type="button" className={p.decision === 'accepted' ? 'btn small moss' : 'btn small moss outline'}
@@ -224,14 +231,10 @@ export function ProposalCard({ proposal: p, players = [], entries, onChange, onE
             aria-pressed={p.decision === 'rejected'} onClick={() => decide('rejected')}>
             {t('Verwerfen')}
           </button>
-          <span className="proposal-links">
-            {players.length > 0 && !merged && (
-              <button type="button" className="btn small subtle" onClick={() => { setPick(visibleIds); setPicking(true); }}>
-                <IconEye size={16} /> {t('Sichtbar für …')}
-              </button>
-            )}
-            <button type="button" className="btn small subtle" onClick={() => setEditing(true)}>{t('Bearbeiten')}</button>
-          </span>
+          <button type="button" className="btn small outline square" aria-label={t('Anpassen: Text und Sichtbarkeit')}
+            title={t('Anpassen: Text und Sichtbarkeit')} onClick={() => setEditing(true)}>
+            <IconPencil />
+          </button>
         </div>
       )}
     </div>
