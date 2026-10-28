@@ -1104,10 +1104,15 @@ details.card[open] { padding-bottom: var(--space-4); }
   position: relative;
   margin: 0 0 var(--space-2);
   color: #fbf6ea;
+  /* Lange Titel machen den Kopf höher, statt unter den Zurück-Knopf zu rutschen */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .hero .hero-image {
-  height: 100%;
+  position: absolute;
+  inset: 0;
 }
 
 .hero .hero-shade {
@@ -1117,10 +1122,8 @@ details.card[open] { padding-bottom: var(--space-4); }
 }
 
 .hero .hero-text {
-  position: absolute;
-  left: 20px;
-  right: 56px;
-  bottom: 14px;
+  position: relative;
+  padding: 60px 56px 14px 20px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1134,6 +1137,8 @@ details.card[open] { padding-bottom: var(--space-4); }
   color: #fbf6ea;
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
 }
+.hero .hero-text h1.long { font-size: calc(25px * var(--ts)); }
+.hero .hero-text h1.longer { font-size: calc(22px * var(--ts)); }
 
 .hero .hero-back {
   position: absolute;
@@ -1182,12 +1187,12 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 .hero {
   /* Mit größerer Schrift des Handys wächst der Kopf mit, damit Titel und Zurück-Knopf sich nicht überdecken */
-  height: calc(200px + (var(--ts) - 1) * 150px);
+  min-height: calc(200px + (var(--ts) - 1) * 150px);
   margin: 0 calc(-1 * var(--pad)) 8px;
 }
 
 .hero:not(.large) {
-  height: calc(128px + (var(--ts) - 1) * 150px);
+  min-height: calc(128px + (var(--ts) - 1) * 150px);
 }
 
 /* Zweispaltig: a (Hauptsache), b (Seitenspalte), c (Hauptsache, unter a) – auf dem Handy in DOM-Reihenfolge */
@@ -1226,11 +1231,11 @@ details.card[open] { padding-bottom: var(--space-4); }
   }
 
   .hero {
-    height: calc(240px + (var(--ts) - 1) * 150px);
+    min-height: calc(240px + (var(--ts) - 1) * 150px);
   }
 
   .hero:not(.large) {
-    height: calc(150px + (var(--ts) - 1) * 150px);
+    min-height: calc(150px + (var(--ts) - 1) * 150px);
   }
 }
 
@@ -1304,11 +1309,11 @@ details.card[open] { padding-bottom: var(--space-4); }
   }
 
   .hero {
-    height: calc(300px + (var(--ts) - 1) * 150px);
+    min-height: calc(300px + (var(--ts) - 1) * 150px);
   }
 
   .hero:not(.large) {
-    height: calc(180px + (var(--ts) - 1) * 150px);
+    min-height: calc(180px + (var(--ts) - 1) * 150px);
   }
 
   .split {

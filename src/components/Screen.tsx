@@ -28,6 +28,12 @@ interface Props {
   children: ReactNode;
 }
 
+/** Lange Titel im Titelbild etwas kleiner, damit sie in zwei Zeilen passen (wächst der Kopf trotzdem, bleibt alles lesbar) */
+function titleSize(title: ReactNode): string | undefined {
+  const n = typeof title === 'string' ? title.length : 0;
+  return n > 48 ? 'longer' : n > 28 ? 'long' : undefined;
+}
+
 export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, children }: Props) {
   const navigate = useNavigate();
   // In der Musterkampagne steht das im Kopf jeder Seite, damit niemand sie für echt hält
@@ -43,14 +49,14 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
       <div className={cls}>
         <main className="screen-main" style={{ paddingTop: 0 }}>
           <div className={hero!.large ? 'hero large' : 'hero'}>
-            <CampaignCover campaign={hero!.campaign!} height="100%" />
+            <div className="hero-image"><CampaignCover campaign={hero!.campaign!} height="100%" /></div>
             <div className="hero-shade" />
             {(back || backTo) && (backTo
               ? <Link className="hero-back" to={backTo.to}><IconBack size={18} /> {backTo.label}</Link>
               : <button type="button" className="hero-back" onClick={() => navigate(-1)}><IconBack size={18} /> {t('Zurück')}</button>)}
             <div className="hero-text">
               {overline && <div className="overline">{overline}</div>}
-              <h1>{title}</h1>
+              <h1 className={titleSize(title)}>{title}</h1>
             </div>
             <span className="ribbon" aria-hidden />
           </div>
