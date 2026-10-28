@@ -2293,3 +2293,10 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 }
 .quiet-link.danger { color: var(--siegel-text); }
 .quiet-link:disabled { opacity: .5; cursor: default; }
+
+/* Listen ohne eigenen Kasten (in einer Karte) und Häkchen als Zeile */
+.list-box.flat { background: none; border: 0; border-radius: 0; padding: 0; }
+.list-row.check-row { align-items: flex-start; cursor: pointer; }
+.list-row.check-row > input[type='checkbox'] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--tinte); }
+.list-row:disabled { opacity: .55; cursor: default; }
+.card.manage .list-head { margin-top: var(--space-3); font-size: calc(17px * var(--ts)); }

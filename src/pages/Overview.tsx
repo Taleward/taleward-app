@@ -93,14 +93,9 @@ export function Overview() {
 
       {campaign && (
         <>
-          {gm && !pickingCover && (
+          {gm && !pickingCover && !campaign.archivedAt && (
             <div className="overview-tools" style={{ marginTop: hasCover(campaign) ? -6 : 0 }}>
-              {!campaign.archivedAt && (
-                <Link className="btn small accent" to={p(`/k/${campaignId}/tisch`)} data-tour="schirm"><IconScreen /> {t('SL-Schirm')}</Link>
-              )}
-              <button type="button" className="btn small subtle" onClick={() => setPickingCover(true)}>
-                {hasCover(campaign) ? t('Titelbild ändern') : t('Titelbild wählen')}
-              </button>
+              <Link className="btn small accent" to={p(`/k/${campaignId}/tisch`)} data-tour="schirm"><IconScreen /> {t('SL-Schirm')}</Link>
             </div>
           )}
           {gm && pickingCover && <CoverPicker campaign={campaign} onChanged={setCampaign} onClose={() => setPickingCover(false)} />}
@@ -208,9 +203,11 @@ export function Overview() {
           {me?.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} />}
 
           {gm && <div id="invite" data-tour="invite"><InviteBox campaignId={campaignId} campaignTitle={campaign.title} /></div>}
-          {gm && <UsageLine campaignId={campaignId} />}
           {me && <DataSummary campaign={campaign} info={serverInfo} gm={gm} />}
-          {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} />}
+          {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} onPickCover={() => {
+            setPickingCover(true);
+            document.querySelector('.screen-main')?.scrollTo({ top: 0, behavior: 'smooth' });
+          }} />}
           </div>
           </div>
           {/* Einmal je Gerät und Rolle: kurz zeigen, wo was ist (nicht in abgeschlossenen Kampagnen) */}
@@ -615,18 +612,22 @@ export function MoveConsent({ campaign, me, onChanged }: { campaign: Campaign; m
   );
 }
 
-/** Verbrauch dieses Monats – Grundlage für spätere Abrechnung; zahlt der Betreiber der Kampagne (SL) */
-function UsageLine({ campaignId }: { campaignId: string }) {
+/** Verbrauch dieses Monats; zahlt der Betreiber der Kampagne (SL). Älterer Server: Zeile fehlt einfach */
+function UsageRow({ campaignId }: { campaignId: string }) {
   const [usage, setUsage] = useState<Usage | null>(null);
   useEffect(() => {
-    api.usage(campaignId).then(setUsage).catch(() => undefined); // älterer Server: einfach nichts anzeigen
+    api.usage(campaignId).then(setUsage).catch(() => undefined);
   }, [campaignId]);
   if (!usage) return null;
-  const hours = (usage.audioSeconds / 3600).toFixed(1).replace('.', getLang() === 'de' ? ',' : '.');
+  const dec = (v: string) => (getLang() === 'de' ? v.replace('.', ',') : v);
+  const hours = dec((usage.audioSeconds / 3600).toFixed(1));
+  const cost = usage.costEstimateCents != null && !isMusterUrl(currentConnection().baseUrl)
+    ? ' · ' + t('ca. {eur} €', { eur: dec((usage.costEstimateCents / 100).toFixed(2)) }) : '';
   return (
-    <div className="muted small" style={{ textAlign: 'center' }}>
-      {t('Verarbeitet diesen Monat: {sessions} · {hours} h Aufnahme', { sessions: tn(usage.sessions, '{n} Kapitel', '{n} Kapitel'), hours })}
-      {usage.costEstimateCents != null && !isMusterUrl(currentConnection().baseUrl) && ' · ' + t('ca. {eur} € API-Kosten', { eur: (usage.costEstimateCents / 100).toFixed(2).replace('.', getLang() === 'de' ? ',' : '.') })}
+    <div className="list-row">
+      <span className="lr-text">{t('Verbrauch')}
+        <span className="lr-sub">{t('Diesen Monat: {sessions}, {hours} h Aufnahme', { sessions: tn(usage.sessions, '{n} Kapitel', '{n} Kapitel'), hours }) + cost}</span>
+      </span>
     </div>
   );
 }
@@ -639,7 +640,7 @@ export { InviteBox };
  * Kampagne abschließen/wieder aufnehmen oder löschen (SL), Kampagne verlassen (alle, die letzte SL nur, wenn es eine
  * zweite gibt). Schnittstelle 0.4.5.
  */
-function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign; me: Member; info: ServerInfo | null; onChanged: () => void }) {
+function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campaign: Campaign; me: Member; info: ServerInfo | null; onChanged: () => void; onPickCover: () => void }) {
   const navigate = useNavigate();
   const gm = me.role === 'gm';
   const otherGms = campaign.members.filter((m) => m.role === 'gm' && m.id !== me.id && !isDeletedMember(m)).length;
@@ -697,82 +698,94 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
     }
   };
 
+  const showData = () => {
+    const d = document.getElementById('data-summary') as HTMLDetailsElement | null;
+    if (!d) return;
+    d.open = true;
+    d.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+  const cloudRow = (field: 'allowExternalTranscription' | 'allowCloudSummary', provider: string, label: string, sub: string) => (
+    settings.lock(field) !== 'unavailable' && (
+      <label className="list-row check-row">
+        <input type="checkbox" checked={settings.values[field]} disabled={busy || !!settings.lock(field)}
+          onChange={(e) => setCloud(field, e.target.checked, provider)} />
+        <span className="lr-text">{label}<span className="lr-sub">{sub}</span><LockNote lock={settings.lock(field)} /></span>
+      </label>
+    )
+  );
+  const withSettings = gm && (externalProvider || summaryProvider || (!muster && apiAtLeast('0.4.18')));
+
   return (
-    <details className="card" style={{ gap: 10 }}>
+    <details className="card manage" style={{ gap: 10 }}>
       <summary style={{ fontWeight: 700 }}>{gm ? t('Kampagne verwalten') : t('Kampagne verlassen')}</summary>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
       <ErrorBox error={error} />
-      {gm && (externalProvider || summaryProvider || (!muster && apiAtLeast('0.4.18'))) && (
-        <>
-          <h3 style={{ margin: 0 }}>{t('Einstellungen')}</h3>
-          <span className="muted small">{t('Gelten für alle am Tisch. Alle sehen sie unter „Was mit deinen Daten passiert“.')}</span>
-        </>
-      )}
       {gm && settings.conflict && (
         <div className="notice" role="status">{t('Inzwischen hat jemand die Einstellungen geändert. Hier ist der neue Stand, bitte noch einmal wählen.')}</div>
       )}
-      {gm && (externalProvider || summaryProvider) && (
+      {withSettings && (
         <>
-          <span className="overline" style={{ marginTop: 6 }}>{t('Cloud-Dienste')}</span>
-          {externalProvider && settings.lock('allowExternalTranscription') !== 'unavailable' && (
-            <div className="field">
-              <label className="check" style={{ alignItems: 'flex-start' }}>
-                <input type="checkbox" checked={settings.values.allowExternalTranscription} disabled={busy || !!settings.lock('allowExternalTranscription')}
-                  onChange={(e) => setCloud('allowExternalTranscription', e.target.checked, externalProvider)} style={{ marginTop: 3, flexShrink: 0 }} />
-                <span>{t('Transkription über {provider} erlauben', { provider: externalProvider })}</span>
-              </label>
-              <span className="muted small">
-                {primary
-                  ? t('Dieser Server transkribiert Aufnahmen direkt über {provider}.', { provider: externalProvider })
-                  : t('Nur wenn 24 Stunden lang kein Worker erreichbar ist, nutzt der Server als Ausweichlösung {provider}.', { provider: externalProvider })}
-              </span>
-              <LockNote lock={settings.lock('allowExternalTranscription')} />
-            </div>
-          )}
-          {summaryProvider && settings.lock('allowCloudSummary') !== 'unavailable' && (
-            <div className="field">
-              <label className="check" style={{ alignItems: 'flex-start' }}>
-                <input type="checkbox" checked={settings.values.allowCloudSummary} disabled={busy || !!settings.lock('allowCloudSummary')}
-                  onChange={(e) => setCloud('allowCloudSummary', e.target.checked, summaryProvider)} style={{ marginTop: 3, flexShrink: 0 }} />
-                <span>{t('Zusammenfassung und Unterlagen über {provider} erlauben', { provider: summaryProvider })}</span>
-              </label>
-              <span className="muted small">
-                {t('Für Kapitel, Vorschläge und das Auswerten von Unterlagen geht Text an {provider} – Namen und Gespräche der Runde bzw. der Inhalt der Unterlage, keine Stimmen. Ohne Erlaubnis wartet beides auf ein lokales Modell.', { provider: summaryProvider })}
-              </span>
-              <LockNote lock={settings.lock('allowCloudSummary')} />
-            </div>
-          )}
+          <h3 className="list-head">{t('Für alle am Tisch')}</h3>
+          <div className="list-box flat">
+            {summaryProvider && cloudRow('allowCloudSummary', summaryProvider,
+              t('Kapitel über {provider} schreiben', { provider: summaryProvider }), t('Auch Unterlagen. Nur Text, keine Stimmen.'))}
+            {externalProvider && cloudRow('allowExternalTranscription', externalProvider,
+              t('Abschrift über {provider}', { provider: externalProvider }),
+              primary ? t('Die Stimmen der Runde gehen dorthin.') : t('Nur wenn 24 Stunden kein Worker da ist.'))}
+            {/* Musterkampagne: kein Server, der auswerten könnte */}
+            {!muster && apiAtLeast('0.4.18') && (
+              <AnalysisSwitch campaign={{ ...campaign, allowCharacterAnalysis: settings.values.allowCharacterAnalysis }} info={info}
+                busy={busy || !!settings.lock('allowCharacterAnalysis')} note={<LockNote lock={settings.lock('allowCharacterAnalysis')} />}
+                onChange={(value) => run(() => settings.change('allowCharacterAnalysis', value), () => undefined)} />
+            )}
+            <button type="button" className="list-row nav" onClick={showData}><span className="lr-text">{t('Was mit den Daten passiert')}</span></button>
+            {settings.hasLog && <SettingsLog campaign={campaign} />}
+          </div>
         </>
       )}
-      {/* Musterkampagne: kein Server, der auswerten könnte */}
-      {gm && !muster && apiAtLeast('0.4.18') && (
-        <>
-          <span className="overline" style={{ marginTop: 6 }}>{t('Charaktere')}</span>
-          <AnalysisSwitch campaign={{ ...campaign, allowCharacterAnalysis: settings.values.allowCharacterAnalysis }} info={info}
-            busy={busy || !!settings.lock('allowCharacterAnalysis')} onChange={(value) => run(() => settings.change('allowCharacterAnalysis', value), () => undefined)} />
-          <LockNote lock={settings.lock('allowCharacterAnalysis')} />
-        </>
-      )}
-      {gm && settings.hasLog && <SettingsLog campaign={campaign} />}
-      {gm && !muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
-      {gm && !muster && <h3 style={{ margin: (externalProvider || summaryProvider || apiAtLeast('0.4.18')) ? '10px 0 0' : 0 }}>{t('Weitergeben')}</h3>}
-      {gm && !muster && (
-        <Link className="btn outline" to={p(`/k/${campaign.id}/spielleitung`)}>{t('Spielleitung übergeben')}</Link>
-      )}
-      {gm && !muster && apiAtLeast('0.4.8') && (
-        <Link className="btn outline" to={p(`/k/${campaign.id}/umziehen`)}>{t('Kampagne umziehen')}</Link>
-      )}
-      {gm && <h3 style={{ margin: '10px 0 0' }}>{t('Beenden')}</h3>}
       {gm && (
-        <button type="button" className="btn outline" disabled={busy} onClick={() => archive(!campaign.archivedAt)}>
-          {campaign.archivedAt ? t('Wieder aufnehmen') : t('Kampagne abschließen')}
-        </button>
+        <>
+          <h3 className="list-head">{t('Kampagne')}</h3>
+          <div className="list-box flat">
+            <button type="button" className="list-row nav" onClick={onPickCover}>
+              <span className="lr-text">{hasCover(campaign) ? t('Titelbild ändern') : t('Titelbild wählen')}</span>
+            </button>
+            {!muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
+            <UsageRow campaignId={campaign.id} />
+          </div>
+        </>
       )}
-      {(!gm || otherGms > 0) && (
-        <button type="button" className="btn danger outline" disabled={busy} onClick={leave}>{t('Kampagne verlassen')}</button>
+      {gm && !muster && (
+        <>
+          <h3 className="list-head">{t('Weitergeben')}</h3>
+          <div className="list-box flat">
+            <Link className="list-row" to={p(`/k/${campaign.id}/spielleitung`)}><span className="lr-text">{t('Spielleitung übergeben')}</span></Link>
+            {apiAtLeast('0.4.8') && (
+              <Link className="list-row" to={p(`/k/${campaign.id}/umziehen`)}><span className="lr-text">{t('Kampagne umziehen')}</span></Link>
+            )}
+          </div>
+        </>
       )}
-      {gm && otherGms === 0 && <span className="muted small">{t('Verlassen kannst du erst, wenn jemand anderes die Spielleitung hat („Spielleitung übergeben“).')}</span>}
-      {gm && (deleting ? (
+      {gm && <h3 className="list-head">{t('Beenden')}</h3>}
+      <div className="list-box flat">
+        {gm && (
+          <button type="button" className="list-row nav" disabled={busy} onClick={() => archive(!campaign.archivedAt)}>
+            <span className="lr-text">{campaign.archivedAt ? t('Wieder aufnehmen') : t('Kampagne abschließen')}</span>
+          </button>
+        )}
+        {gm && !deleting && (
+          <button type="button" className="list-row nav danger" onClick={() => setDeleting(true)}>
+            <span className="lr-text">{t('Kampagne löschen …')}</span>
+          </button>
+        )}
+        {(!gm || otherGms > 0) && (
+          <button type="button" className="list-row nav danger" disabled={busy} onClick={leave}>
+            <span className="lr-text">{t('Kampagne verlassen')}</span>
+          </button>
+        )}
+      </div>
+      {gm && otherGms === 0 && <span className="muted small">{t('Verlassen geht, sobald jemand anderes leitet.')}</span>}
+      {gm && deleting && (
         <div className="card warn" style={{ gap: 8 }}>
           <strong>{t('Kampagne endgültig löschen')}</strong>
           <span className="small">{t('Gelöscht werden alle Kapitel, Aufnahmen, die Bibel, Kommentare und Bilder – für alle. Das lässt sich nicht rückgängig machen.')}</span>
@@ -788,9 +801,7 @@ function CampaignManage({ campaign, me, info, onChanged }: { campaign: Campaign;
             <button type="button" className="btn outline" onClick={() => setDeleting(false)}>{t('Abbrechen')}</button>
           </div>
         </div>
-      ) : (
-        <button type="button" className="btn danger outline" onClick={() => setDeleting(true)}>{t('Kampagne löschen …')}</button>
-      ))}
+      )}
       </div>
     </details>
   );

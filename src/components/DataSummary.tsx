@@ -11,7 +11,7 @@ import { cloudUse } from './CloudNotice';
  * Ändern kann es nur die SL unter „Kampagne verwalten“.
  */
 export function DataSummary({ campaign, info, gm }: { campaign: Campaign; info: ServerInfo | null; gm: boolean }) {
-  const cloud = cloudUse(info, campaign);
+  const cloud = cloudUse(info, campaign, true);
   const rows: { title: string; text: string }[] = [
     {
       title: t('Aufnahmen'),

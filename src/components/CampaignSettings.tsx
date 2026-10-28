@@ -90,8 +90,9 @@ export function SettingsLog({ campaign }: { campaign: Campaign }) {
   };
   const value = (v: boolean | number | null) => (v === true ? t('an') : v === false ? t('aus') : v === null ? '–' : String(v));
   return (
-    <details className="more" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary className="small">{t('Änderungen der Einstellungen')}</summary>
+    <details className="list-item" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="list-row"><span className="lr-text">{t('Änderungen')}</span></summary>
+      <div className="list-body">
       {open && !log && <span className="muted small">{t('Wird geladen …')}</span>}
       {log && log.length === 0 && <span className="muted small">{t('Noch nichts geändert.')}</span>}
       {log && log.length > 0 && (
@@ -103,6 +104,7 @@ export function SettingsLog({ campaign }: { campaign: Campaign }) {
           ))}
         </ul>
       )}
+      </div>
     </details>
   );
 }

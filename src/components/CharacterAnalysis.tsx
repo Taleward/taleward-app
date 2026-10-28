@@ -1,5 +1,5 @@
 import { eur } from '../billing/CreditWaitNote';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, isApiError } from '../api/client';
 import { currentConnection } from '../api/connections';
 import type { Campaign, CampaignDocument, CharacterAnalysis, GmNotice, Member, ServerInfo } from '../api/types';
@@ -40,8 +40,8 @@ const STATE: Record<CharacterAnalysis['state'], string> = {
 };
 
 /** Schalter unter „Kampagne verwalten“ (nur SL) */
-export function AnalysisSwitch({ campaign, info, busy, onChange }: {
-  campaign: Campaign; info: ServerInfo | null; busy: boolean; onChange: (value: boolean) => void;
+export function AnalysisSwitch({ campaign, info, busy, onChange, note }: {
+  campaign: Campaign; info: ServerInfo | null; busy: boolean; onChange: (value: boolean) => void; note?: ReactNode;
 }) {
   const toggle = async (value: boolean) => {
     if (value) {
@@ -54,16 +54,13 @@ export function AnalysisSwitch({ campaign, info, busy, onChange }: {
     onChange(value);
   };
   return (
-    <div className="field">
-      <label className="check" style={{ alignItems: 'flex-start' }}>
-        <input type="checkbox" checked={!!campaign.allowCharacterAnalysis} disabled={busy}
-          onChange={(e) => toggle(e.target.checked)} style={{ marginTop: 3, flexShrink: 0 }} />
-        <span>{t('Charakterbögen und Hintergründe auswerten lassen')}</span>
-      </label>
-      <span className="muted small">
-        {t('Daraus werden Vorschläge für die Bibel – Familie, Heimat, alte Feinde –, über die du entscheidest. Du stimmst jeder Auswertung einzeln zu.')}
+    <label className="list-row check-row">
+      <input type="checkbox" checked={!!campaign.allowCharacterAnalysis} disabled={busy} onChange={(e) => toggle(e.target.checked)} />
+      <span className="lr-text">{t('Charakterbögen auswerten')}
+        <span className="lr-sub">{t('Du stimmst jeder Auswertung zu.')}</span>
+        {note}
       </span>
-    </div>
+    </label>
   );
 }
 

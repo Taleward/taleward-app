@@ -17,11 +17,12 @@ function countryName(code: string | null | undefined): string | null {
 }
 
 /**
- * Anbieter so, wie ihn alle am Tisch sehen: mit Land und ob die Daten in der EU bleiben (ab Schnittstelle 0.4.11),
- * bei älteren Servern nur der Name, z. B. „Mistral AI (Frankreich, EU)“ bzw. „Mistral“.
+ * Anbieter so, wie ihn alle am Tisch sehen (ab Schnittstelle 0.4.11 vom Server): kurz „Name (EU)“ bzw. „Name (nicht EU)“,
+ * ausführlich mit Land nur unter „Was mit deinen Daten passiert“. Ältere Server liefern nur den Namen.
  */
-export function providerLabel(id: string | null | undefined, info?: CloudProviderInfo | null): string | null {
+export function providerLabel(id: string | null | undefined, info?: CloudProviderInfo | null, long = false): string | null {
   if (info) {
+    if (!long) return `${info.name} (${info.region === 'eu' ? t('EU') : t('nicht EU')})`;
     const where = [countryName(info.country), info.region === 'eu' ? t('EU') : t('außerhalb der EU')].filter(Boolean).join(', ');
     return `${info.name} (${where})`;
   }
@@ -38,12 +39,12 @@ export function useServerInfo(): ServerInfo | null {
 }
 
 /** Welche Cloud-Dienste diese Kampagne gerade nutzt – für alle am Tisch sichtbar */
-export function cloudUse(info: ServerInfo | null, campaign: Campaign) {
+export function cloudUse(info: ServerInfo | null, campaign: Campaign, long = false) {
   const transcription = info?.externalTranscription && campaign.allowExternalTranscription
-    ? { provider: providerLabel(info.externalTranscription, info.externalTranscriptionInfo)!, primary: info.externalTranscriptionMode === 'primary' }
+    ? { provider: providerLabel(info.externalTranscription, info.externalTranscriptionInfo, long)!, primary: info.externalTranscriptionMode === 'primary' }
     : null;
   const summary = info?.cloudSummary && campaign.allowCloudSummary
-    ? { provider: providerLabel(info.cloudSummary, info.cloudSummaryInfo)! }
+    ? { provider: providerLabel(info.cloudSummary, info.cloudSummaryInfo, long)! }
     : null;
   return { transcription, summary };
 }

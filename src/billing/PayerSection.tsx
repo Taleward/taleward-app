@@ -49,9 +49,19 @@ export function PayerSection({ campaign, me, onChanged }: { campaign: Campaign; 
   else if (billing.isMe) line = t('Die Kosten der Verarbeitung gehen von deinem Guthaben ab.');
   else line = t('Die Kosten der Verarbeitung gehen vom Guthaben von {name} ab.', { name: name(billing.payerMemberId) });
 
+  // Kurz in der Zeile, ausführlich und mit den Knöpfen beim Aufklappen
+  const short = billing.paidBy === 'organization' ? t('Die Organisation')
+    : billing.paidBy === 'nobody' ? t('Gerade niemand')
+    : billing.isMe ? t('Du, aus deinem Guthaben')
+    : name(billing.payerMemberId);
+  const waiting = billing.paidBy === 'nobody' || (billing.paidBy === 'gm' && !billing.isMe && billing.offeredToMemberId === me.id);
+
   return (
-    <>
-      <span className="overline" style={{ marginTop: 6 }}>{t('Wer zahlt')}</span>
+    <details className="list-item" open={waiting || undefined}>
+      <summary className="list-row">
+        <span className="lr-text">{t('Wer zahlt')}<span className="lr-sub">{short}</span></span>
+      </summary>
+      <div className="list-body">
       <span className="small">{line}</span>
       <ErrorBox error={error} />
       {(billing.paidBy === 'nobody' || (billing.paidBy === 'gm' && !billing.isMe && billing.offeredToMemberId === me.id)) && (
@@ -77,6 +87,7 @@ export function PayerSection({ campaign, me, onChanged }: { campaign: Campaign; 
           <button type="button" className="btn small outline" disabled={busy || !target} onClick={offer}>{t('Anbieten')}</button>
         </div>
       )}
-    </>
+      </div>
+    </details>
   );
 }
