@@ -1,0 +1,456 @@
+From bda271f30dd239864605a0e55a792b20003f3a12 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 31 Oct 2026 00:54:13 +0100
+Subject: [PATCH] Klasse und Stufe als Auswahl mit Zahl, weitere Klassen
+
+---
+ docs/session-chronik-api.yaml      | 44 +++++++++++++++++++++++-------
+ scripts/tests/level-field.test.mjs | 14 +++++++++-
+ src/api/types.ts                   | 12 +++++++-
+ src/characters/CharacterEditor.tsx | 15 ++++++----
+ src/characters/ClassRows.tsx       | 36 ++++++++++++++++++++++++
+ src/characters/levelField.ts       | 40 +++++++++++++++++++++++++--
+ src/characters/levelLabels.ts      |  2 +-
+ src/characters/sanitize.ts         |  5 ++++
+ src/characters/store.ts            | 16 +++++++----
+ src/i18n/en.ts                     |  5 +++-
+ src/mocks/handlers.ts              |  3 +-
+ src/pages/CharacterPage.tsx        |  3 +-
+ src/table/GroupPanel.tsx           |  5 ++--
+ src/theme.css                      | 14 ++++++++--
+ 14 files changed, 179 insertions(+), 35 deletions(-)
+ create mode 100644 src/characters/ClassRows.tsx
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 5aa4ae3..1677aa9 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -281,8 +281,9 @@ info:
+       PUT /campaigns/{id}/members/me/counters, Member.counters nur für die Person selbst und die SL.
+     Ältere Apps sehen davon nichts; ältere Server ignorieren pronouns und spans.
+-    Änderungen in 0.4.29 (Stufe am Charakter): Character.level → Member.characterLevel, freier Text wie „Magierin 3 /
+-    Schurkin 2“ oder „Erfahren“. Die App benennt das Feld je Spielsystem (Klasse und Stufe, Erfahrungsgrad, Heldengrad,
+-    Stufe) und rechnet nichts damit aus. Sichtbar für alle Mitglieder; geht nie an ein Sprachmodell (Kapitel enthalten
+-    keine Regelangaben). Ältere Server ignorieren das Feld.
++    Änderungen in 0.4.29 (Stufe am Charakter): Character.classes → Member.characterClasses (Klassen mit Stufe, z. B.
++    Magier 3 und Schurke 2; die App nutzt sie bei D&D und Pathfinder) und Character.level → Member.characterLevel (freier
++    Text wie „Erfahren“ für Systeme ohne Klassen). Die App benennt das Feld je Spielsystem und rechnet nichts damit aus.
++    Sichtbar für alle Mitglieder; geht nie an ein Sprachmodell (Kapitel enthalten keine Regelangaben). Ältere Server
++    ignorieren beide Felder.
+ 
+ servers:
+@@ -4393,6 +4394,13 @@ components:
+           type: [string, "null"]
+           description: |
+-            Ab 0.4.29: Stufe, Klasse oder Erfahrungsgrad (aus Character.level), für alle Mitglieder sichtbar. Nie an ein
+-            Sprachmodell, nicht in Kapitel oder Vorschläge. Beim Umzug wie characterSummary (nur mit moveConsentAt).
++            Ab 0.4.29: Stufe oder Erfahrungsgrad als freier Text (aus Character.level), für alle Mitglieder sichtbar. Nie
++            an ein Sprachmodell, nicht in Kapitel oder Vorschläge. Beim Umzug wie characterSummary (nur mit moveConsentAt).
++        characterClasses:
++          type: array
++          maxItems: 4
++          items: { $ref: "#/components/schemas/CharacterClass" }
++          description: |
++            Ab 0.4.29: Klassen mit Stufe (aus Character.classes), sichtbar und geschützt wie characterLevel. Leer, wenn
++            keine gesetzt sind; fehlt bei älteren Servern.
+         counters:
+           type: array
+@@ -5228,11 +5236,27 @@ components:
+           maxLength: 64
+           description: |
+-            Ab 0.4.29, freiwillig: Stufe, Klasse oder Erfahrungsgrad als freier Text („Magierin 3 / Schurkin 2“,
+-            „Erfahren“). Wird zu Member.characterLevel. Leerer Text = null. Der Server prüft nur die Länge und entfernt
+-            Steuerzeichen. Ändert sich das Feld, steigt wie bei den anderen Stammdaten die Fassung. Ältere Server
+-            ignorieren das Feld.
++            Ab 0.4.29, freiwillig: Stufe oder Erfahrungsgrad als freier Text („Erfahren“, „Heldengrad 2“) für Systeme
++            ohne Klassen. Wird zu Member.characterLevel. Leerer Text = null. Der Server prüft nur die Länge und entfernt
++            Steuerzeichen. Ältere Server ignorieren das Feld.
++        classes:
++          type: array
++          maxItems: 4
++          items: { $ref: "#/components/schemas/CharacterClass" }
++          description: |
++            Ab 0.4.29, freiwillig: Klassen mit Stufe (D&D, Pathfinder), in der Reihenfolge der Spielerin. Wird zu
++            Member.characterClasses. Wie die übrigen Felder ersetzt PUT den ganzen Stand: fehlt das Feld oder ist die
++            Liste leer, hat die Figur keine Klassen. Mehr als 4 Einträge, leere Namen oder Stufen außerhalb 1–30 → 400 validation_error. Ältere Server ignorieren das Feld.
+         status: { type: string, enum: [active, retired, deceased] }
+         statusChangedAt: { type: [string, "null"], format: date-time }
+ 
++    CharacterClass:
++      type: object
++      additionalProperties: false
++      required: [name, level]
++      description: Ab 0.4.29. Klasse mit Stufe, z. B. Magier 3. Der Name ist freier Text (die App schlägt die Klassen der Grundregeln vor).
++      properties:
++        name: { type: string, minLength: 1, maxLength: 40, description: "Steuerzeichen entfernt, getrimmt" }
++        level: { type: integer, minimum: 1, maximum: 30 }
++
+     WorldEntryIn:
+       type: object
+diff --git a/scripts/tests/level-field.test.mjs b/scripts/tests/level-field.test.mjs
+index 852c042..13b6b96 100644
+--- a/scripts/tests/level-field.test.mjs
++++ b/scripts/tests/level-field.test.mjs
+@@ -1,5 +1,5 @@
+ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+-import { guessSystem, levelKind } from '../../src/characters/levelField.ts';
++import { classSuggestions, cleanClasses, guessSystem, levelKind, levelText } from '../../src/characters/levelField.ts';
+ 
+ test('Spielsystem aus freiem Text', () => {
+@@ -26,2 +26,14 @@ test('Feld je Spielsystem', () => {
+   assert.equal(levelKind('unbekannt'), 'level');
+ });
++
++test('Klassen säubern und anzeigen', () => {
++  const rows = cleanClasses([{ name: ' Magier ', level: '3' }, { name: 'Schurke', level: 2 }, { name: '', level: 4 }, { name: 'Mönch', level: '' }, { name: 'Kämpfer', level: 0 }]);
++  assert.deepEqual(rows, [{ name: 'Magier', level: 3 }, { name: 'Schurke', level: 2 }]);
++  assert.equal(levelText(rows, 'egal'), 'Magier 3 / Schurke 2');
++  assert.equal(levelText([], ' Erfahren '), 'Erfahren');
++  assert.equal(levelText(undefined, ''), null);
++  assert.equal(cleanClasses(Array.from({ length: 6 }, () => ({ name: 'Barde', level: 1 }))).length, 4);
++  assert.ok(classSuggestions('dnd', 'de').includes('Hexenmeister'));
++  assert.ok(classSuggestions('dnd', 'en').includes('Warlock'));
++  assert.deepEqual(classSuggestions('dsa', 'de'), []);
++});
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 91c2d5a..f3cace5 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -85,4 +85,6 @@ export interface Member {
+   /** Ab 0.4.29: aus Character.level, für alle Mitglieder sichtbar */
+   characterLevel?: string | null;
++  /** Ab 0.4.29: aus Character.classes */
++  characterClasses?: CharacterClass[];
+   /** Zählerstände (ab 0.4.28) – nur für die Person selbst und die SL */
+   counters?: CounterValue[];
+@@ -95,4 +97,10 @@ export interface Member {
+ export type CharacterStatus = 'active' | 'retired' | 'deceased';
+ 
++/** Klasse mit Stufe, z. B. Magier 3 (ab 0.4.29) */
++export interface CharacterClass {
++  name: string;
++  level: number;
++}
++
+ /** Serverkopie der Stammdaten eines Charakters aus der Sammlung (ab 0.4.7) */
+ export interface Character {
+@@ -106,6 +114,8 @@ export interface Character {
+   /** Wie andere über die Figur sprechen („sie“, „er“, eigener Text), ab 0.4.28 */
+   pronouns?: string | null;
+-  /** Stufe, Klasse oder Erfahrungsgrad als freier Text („Magierin 3“), ab 0.4.29 */
++  /** Stufe oder Erfahrungsgrad als freier Text („Erfahren“), ab 0.4.29 – bei Systemen ohne Klassen */
+   level?: string | null;
++  /** Klassen mit Stufe (D&D, Pathfinder), ab 0.4.29 */
++  classes?: CharacterClass[];
+   status: CharacterStatus;
+   statusChangedAt?: string | null;
+diff --git a/src/characters/CharacterEditor.tsx b/src/characters/CharacterEditor.tsx
+index 7b48159..126bd03 100644
+--- a/src/characters/CharacterEditor.tsx
++++ b/src/characters/CharacterEditor.tsx
+@@ -5,5 +5,6 @@ import { IconLock } from '../components/Icons';
+ import { ErrorBox } from '../components/Screen';
+ import { t } from '../i18n';
+-import { guessSystem, levelKind } from './levelField';
++import { cleanClasses, guessSystem, levelKind } from './levelField';
++import { ClassRows, type ClassRow } from './ClassRows';
+ import { LEVEL_LABEL, LEVEL_PLACEHOLDER } from './levelLabels';
+ import { CharacterPortrait } from './Portrait';
+@@ -26,5 +27,7 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
+   const [pronouns, setPronouns] = useState(character?.pronouns ?? '');
+   const [level, setLevel] = useState(character?.level ?? '');
+-  const kind = levelKind(guessSystem(system));
++  const [classes, setClasses] = useState<ClassRow[]>(() => (character?.classes?.length ? character.classes : [{ name: '', level: '' }]).map((c) => ({ name: c.name, level: String(c.level) })));
++  const guessed = guessSystem(system);
++  const kind = levelKind(guessed);
+   const [summary, setSummary] = useState(character?.summary ?? '');
+   const [backstory, setBackstory] = useState(character?.backstory ?? '');
+@@ -41,6 +44,7 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
+       const data = {
+         name: name.trim(), nickname: nickname.trim() || null, system: system.trim() || null, pronouns: pronouns.trim() || null,
+-        // Ohne Feld (z. B. Shadowrun) bleibt ein früher eingetragener Wert stehen
+-        level: kind ? level.trim() || null : character?.level ?? null,
++        // Klassen bei D&D/Pathfinder, sonst freier Text; ohne Feld (z. B. Shadowrun) bleibt Früheres stehen
++        level: kind === 'class' ? null : kind ? level.trim() || null : character?.level ?? null,
++        classes: kind === 'class' ? cleanClasses(classes) : kind ? [] : character?.classes ?? [],
+         summary: summary.trim() || null, backstory: backstory.trim() || null, ...portrait
+       };
+@@ -85,5 +89,6 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
+       </div>
+       <PronounField id="ch-pronouns" value={pronouns} onChange={setPronouns} />
+-      {kind && (
++      {kind === 'class' && <ClassRows system={guessed} rows={classes} onChange={setClasses} />}
++      {kind && kind !== 'class' && (
+         <div className="field">
+           <label htmlFor="ch-level">{t(LEVEL_LABEL[kind])}</label>
+diff --git a/src/characters/ClassRows.tsx b/src/characters/ClassRows.tsx
+new file mode 100644
+index 0000000..5ed61c7
+--- /dev/null
++++ b/src/characters/ClassRows.tsx
+@@ -0,0 +1,36 @@
++import { IconTrash } from '../components/Icons';
++import { getLang, t } from '../i18n';
++import type { GameSystem } from '../api/types';
++import { classSuggestions, MAX_CLASSES } from './levelField';
++
++export interface ClassRow { name: string; level: string }
++
++/** Klasse und Stufe (D&D, Pathfinder): Name mit Vorschlägen, Stufe als Zahl; weitere Klassen über einen leisen Link */
++export function ClassRows({ system, rows, onChange }: { system: GameSystem; rows: ClassRow[]; onChange: (rows: ClassRow[]) => void }) {
++  const listId = `klassen-${system}`;
++  const edit = (i: number, change: Partial<ClassRow>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...change } : r)));
++  return (
++    <div className="field">
++      <span className="label">{t('Klasse und Stufe (optional)')}</span>
++      {rows.map((r, i) => (
++        <div key={i} className="class-row">
++          <input type="text" maxLength={40} list={listId} value={r.name}
++            aria-label={i === 0 ? t('Klasse') : t('Weitere Klasse')} onChange={(e) => edit(i, { name: e.target.value })} />
++          <input type="number" inputMode="numeric" min={1} max={30} value={r.level}
++            aria-label={t('Stufe')} placeholder={t('Stufe')} onChange={(e) => edit(i, { level: e.target.value })} />
++          {i === 0 ? rows.length > 1 && <span className="icon-spacer" aria-hidden /> : (
++            <button type="button" className="icon-btn" aria-label={t('Klasse entfernen')} onClick={() => onChange(rows.filter((_, j) => j !== i))}>
++              <IconTrash size={18} />
++            </button>
++          )}
++        </div>
++      ))}
++      {rows.length < MAX_CLASSES && (
++        <button type="button" className="quiet-link small" onClick={() => onChange([...rows, { name: '', level: '' }])}>{t('Weitere Klasse')}</button>
++      )}
++      <datalist id={listId}>
++        {classSuggestions(system, getLang()).map((c) => <option key={c} value={c} />)}
++      </datalist>
++    </div>
++  );
++}
+diff --git a/src/characters/levelField.ts b/src/characters/levelField.ts
+index 654e885..9fa0030 100644
+--- a/src/characters/levelField.ts
++++ b/src/characters/levelField.ts
+@@ -1,7 +1,8 @@
+-import type { GameSystem } from '../api/types';
++import type { CharacterClass, GameSystem } from '../api/types';
+ 
+ /*
+- * Stufe am Charakter (Schnittstelle 0.4.29): ein freies Feld, dessen Bezeichnung vom Spielsystem abhängt. Die App
+- * rechnet nichts damit aus. Ohne Laufzeit-Importe (Test: scripts/tests/level-field.test.mjs).
++ * Stufe am Charakter (Schnittstelle 0.4.29): bei D&D und Pathfinder Klassen mit Stufe, sonst ein freies Feld, dessen
++ * Bezeichnung vom Spielsystem abhängt. Die App rechnet nichts damit aus. Ohne Laufzeit-Importe
++ * (Test: scripts/tests/level-field.test.mjs).
+  */
+ 
+@@ -35,2 +36,35 @@ export function guessSystem(text: string | null | undefined): GameSystem {
+   return 'other';
+ }
++
++/** Klassen der Grundregeln als Vorschläge; eigene Namen gehen immer */
++const CLASSES: Partial<Record<GameSystem, { de: string[]; en: string[] }>> = {
++  dnd: {
++    de: ['Barbar', 'Barde', 'Druide', 'Hexenmeister', 'Kämpfer', 'Kleriker', 'Magier', 'Mönch', 'Paladin', 'Schurke', 'Waldläufer', 'Zauberer'],
++    en: ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard']
++  },
++  pathfinder: {
++    de: ['Alchemist', 'Barbar', 'Barde', 'Champion', 'Druide', 'Hexe', 'Hexenmeister', 'Kämpfer', 'Kleriker', 'Magier', 'Mönch', 'Orakel', 'Schurke', 'Waldläufer'],
++    en: ['Alchemist', 'Barbarian', 'Bard', 'Champion', 'Cleric', 'Druid', 'Fighter', 'Investigator', 'Monk', 'Oracle', 'Ranger', 'Rogue', 'Sorcerer', 'Swashbuckler', 'Witch', 'Wizard']
++  }
++};
++
++export function classSuggestions(system: GameSystem, language: string): string[] {
++  const c = CLASSES[system];
++  return c ? (language === 'en' ? c.en : c.de) : [];
++}
++
++export const MAX_CLASSES = 4;
++
++/** Nur vollständige Zeilen: Name und Stufe 1–30 */
++export function cleanClasses(rows: { name: string; level: string | number }[]): CharacterClass[] {
++  return rows
++    .map((r) => ({ name: r.name.trim().slice(0, 40), level: Number(r.level) }))
++    .filter((r) => r.name && Number.isInteger(r.level) && r.level >= 1 && r.level <= 30)
++    .slice(0, MAX_CLASSES);
++}
++
++/** Anzeige: „Magier 3 / Schurke 2“ oder der freie Text */
++export function levelText(classes: CharacterClass[] | null | undefined, level: string | null | undefined): string | null {
++  if (classes?.length) return classes.map((c) => `${c.name} ${c.level}`).join(' / ');
++  return level?.trim() || null;
++}
+diff --git a/src/characters/levelLabels.ts b/src/characters/levelLabels.ts
+index 8019160..03e59cb 100644
+--- a/src/characters/levelLabels.ts
++++ b/src/characters/levelLabels.ts
+@@ -10,5 +10,5 @@ export const LEVEL_LABEL: Record<LevelKind, string> = {
+ 
+ export const LEVEL_PLACEHOLDER: Record<LevelKind, string | null> = {
+-  class: tk('z. B. Magierin 3 / Schurkin 2'),
++  class: null,
+   experience: tk('z. B. Erfahren'),
+   herograde: tk('z. B. 2'),
+diff --git a/src/characters/sanitize.ts b/src/characters/sanitize.ts
+index 138fb25..fa13d3e 100644
+--- a/src/characters/sanitize.ts
++++ b/src/characters/sanitize.ts
+@@ -30,4 +30,9 @@ export function sanitizeCharacter(raw: unknown): StoredCharacter | null {
+     pronouns: text(x.pronouns, 32) ? x.pronouns : null,
+     level: text(x.level, 64) ? x.level : null,
++    classes: Array.isArray(x.classes)
++      ? x.classes.filter((k): k is { name: string; level: number } => obj(k) && text(k.name, 40) && !!k.name.trim()
++        && Number.isInteger(k.level) && (k.level as number) >= 1 && (k.level as number) <= 30).slice(0, 4)
++        .map((k) => ({ name: k.name.trim(), level: k.level }))
++      : [],
+     world,
+     links,
+diff --git a/src/characters/store.ts b/src/characters/store.ts
+index b6118dc..bed00b1 100644
+--- a/src/characters/store.ts
++++ b/src/characters/store.ts
+@@ -6,5 +6,5 @@
+  */
+ import { t } from '../i18n';
+-import type { Character, CharacterStatus, Chronicle, WorldEntryIn, WorldEntryStatus } from '../api/types';
++import type { Character, CharacterClass, CharacterStatus, Chronicle, WorldEntryIn, WorldEntryStatus } from '../api/types';
+ import { activeConnections, type Connection } from '../api/connections';
+ 
+@@ -130,9 +130,9 @@ export function newId(): string {
+ }
+ 
+-export function createCharacter(data: { id?: string; version?: number; name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; level?: string | null; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
++export function createCharacter(data: { id?: string; version?: number; name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; level?: string | null; classes?: CharacterClass[]; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
+   const now = new Date().toISOString();
+   const c: StoredCharacter = {
+     id: data.id ?? newId(), version: data.version ?? 1, name: data.name.trim(), nickname: data.nickname ?? null, summary: data.summary ?? null,
+-    backstory: data.backstory ?? null, system: data.system ?? null, pronouns: data.pronouns ?? null, level: data.level ?? null, status: 'active', statusChangedAt: null,
++    backstory: data.backstory ?? null, system: data.system ?? null, pronouns: data.pronouns ?? null, level: data.level ?? null, classes: data.classes ?? [], status: 'active', statusChangedAt: null,
+     owners: myAccountKeys(), notes: '', portrait: data.portrait ?? null, portraitMeta: data.portraitMeta ?? null, portraitChangedAt: data.portrait ? now : null, world: [], links: [], chronicles: {}, createdAt: now, updatedAt: now
+   };
+@@ -142,5 +142,5 @@ export function createCharacter(data: { id?: string; version?: number; name: str
+ 
+ /** Stammdaten, die auf Server gehen – ändern sie sich, steigt die Version */
+-const SHARED: (keyof Character)[] = ['name', 'nickname', 'summary', 'backstory', 'system', 'pronouns', 'level', 'status'];
++const SHARED: (keyof Character)[] = ['name', 'nickname', 'summary', 'backstory', 'system', 'pronouns', 'level', 'classes', 'status'];
+ 
+ export function updateCharacter(id: string, change: Partial<Omit<StoredCharacter, 'id' | 'version' | 'createdAt'>>): StoredCharacter {
+@@ -150,5 +150,8 @@ export function updateCharacter(id: string, change: Partial<Omit<StoredCharacter
+   const old = list[i];
+   const next: StoredCharacter = { ...old, ...change, updatedAt: new Date().toISOString() };
+-  if (SHARED.some((k) => k in change && ((change as Record<string, unknown>)[k] ?? null) !== (old[k] ?? null))) next.version = old.version + 1;
++  // Listen (Klassen) über ihren Text vergleichen, leer = nicht gesetzt
++  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
++    || (Array.isArray(a) && !a.length && b == null) || (Array.isArray(b) && !b.length && a == null);
++  if (SHARED.some((k) => k in change && !same((change as Record<string, unknown>)[k], old[k]))) next.version = old.version + 1;
+   if (change.status && change.status !== old.status) next.statusChangedAt = new Date().toISOString();
+   if ('portrait' in change && change.portrait !== old.portrait) next.portraitChangedAt = new Date().toISOString();
+@@ -222,5 +225,6 @@ export function toServerCharacter(c: StoredCharacter): Character {
+     ...(c.pronouns ? { pronouns: c.pronouns } : {}),
+     // Ab 0.4.29
+-    ...(c.level ? { level: c.level } : {})
++    ...(c.level ? { level: c.level } : {}),
++    ...(c.classes?.length ? { classes: c.classes } : {})
+   };
+ }
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index b379253..d565694 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1742,6 +1742,9 @@ export const en: Record<string, string> = {
+   "Heldengrad (optional)": "Hero level (optional)",
+   "Stufe (optional)": "Level (optional)",
+-  "z. B. Magierin 3 / Schurkin 2": "e.g. Wizard 3 / Rogue 2",
+   "z. B. Erfahren": "e.g. Experienced",
+   "z. B. 2": "e.g. 2",
++  "Klasse": "Class",
++  "Weitere Klasse": "Another class",
++  "Stufe": "Level",
++  "Klasse entfernen": "Remove class",
+ };
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index ded8a5a..8ff889b 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -320,5 +320,6 @@ function applyCharacter(c: MockCampaign, m: Member, ch: Character) {
+     characterId: ch.id, characterVersion: ch.version, characterName: ch.name.trim(), characterNickname: ch.nickname ?? null,
+     characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status,
+-    characterPronouns: ch.pronouns?.trim() || null, characterLevel: ch.level?.trim().slice(0, 64) || null
++    characterPronouns: ch.pronouns?.trim() || null, characterLevel: ch.level?.trim().slice(0, 64) || null,
++    characterClasses: (ch.classes ?? []).filter((k) => k.name.trim() && Number.isInteger(k.level) && k.level >= 1 && k.level <= 30).slice(0, 4)
+   });
+   const pc = entries.find((e) => e.campaignId === c.id && e.type === 'pc' && e.holderMemberId === m.id);
+diff --git a/src/pages/CharacterPage.tsx b/src/pages/CharacterPage.tsx
+index 8174058..3557217 100644
+--- a/src/pages/CharacterPage.tsx
++++ b/src/pages/CharacterPage.tsx
+@@ -7,4 +7,5 @@ import { api } from '../api/client';
+ import type { Campaign, CounterKind, Entry, Member } from '../api/types';
+ import { CountersLine, MyCounters } from '../characters/Counters';
++import { levelText } from '../characters/levelField';
+ import { accountKey, addOwners, allStoredCharacters, blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
+ import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
+@@ -120,5 +121,5 @@ export function CharacterPage() {
+               {member.role === 'gm' ? t('Spielleitung') : t('gespielt von {name}', { name: member.displayName })}
+               {member.role !== 'gm' && member.characterPronouns && <> · {member.characterPronouns}</>}
+-              {member.role !== 'gm' && member.characterLevel && <> · {member.characterLevel}</>}
++              {member.role !== 'gm' && levelText(member.characterClasses, member.characterLevel) && <> · {levelText(member.characterClasses, member.characterLevel)}</>}
+             </div>
+           </div>
+diff --git a/src/table/GroupPanel.tsx b/src/table/GroupPanel.tsx
+index 99ca25c..7773c7d 100644
+--- a/src/table/GroupPanel.tsx
++++ b/src/table/GroupPanel.tsx
+@@ -1,4 +1,5 @@
+ import { useCallback, useEffect, useState } from 'react';
+ import { CountersLine } from '../characters/Counters';
++import { levelText } from '../characters/levelField';
+ import type { CounterKind } from '../api/types';
+ import { Link } from 'react-router-dom';
+@@ -89,5 +90,5 @@ export function GroupPanel({ campaign, onEntry, compact }: {
+                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
+                   <strong>{m.characterName ?? t('Noch ohne Charakter')}</strong>
+-                  <span className="muted small">{m.displayName}{m.characterLevel ? ` · ${m.characterLevel}` : ''}</span>
++                  <span className="muted small">{m.displayName}{levelText(m.characterClasses, m.characterLevel) ? ` · ${levelText(m.characterClasses, m.characterLevel)}` : ''}</span>
+                 </span>
+               </button>
+@@ -145,5 +146,5 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry, counter
+         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+           <h3 style={{ margin: 0 }}>{m.characterName ?? t('Noch ohne Charakter')}{m.characterNickname ? ` „${m.characterNickname}“` : ''}</h3>
+-          <span className="muted small">{t('gespielt von {name}', { name: m.displayName })}{m.characterLevel ? ` · ${m.characterLevel}` : ''}{m.characterStatus && STATUS[m.characterStatus] ? ' · ' + t(STATUS[m.characterStatus]) : ''}</span>
++          <span className="muted small">{t('gespielt von {name}', { name: m.displayName })}{levelText(m.characterClasses, m.characterLevel) ? ` · ${levelText(m.characterClasses, m.characterLevel)}` : ''}{m.characterStatus && STATUS[m.characterStatus] ? ' · ' + t(STATUS[m.characterStatus]) : ''}</span>
+           <span>
+             {m.recordingConsentAt
+diff --git a/src/theme.css b/src/theme.css
+index c5880df..1fe8629 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -584,4 +584,5 @@ input[type='text'],
+ input[type='password'],
+ input[type='search'],
++input[type='number'],
+ input[type='datetime-local'],
+ input[type='time'],
+@@ -2279,4 +2280,11 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ }
+ .quiet-link.danger { color: var(--siegel-text); }
++.quiet-link.small { font-size: calc(13px * var(--ts)); }
++
++/* Klasse und Stufe in der Sammlung */
++.class-row { display: flex; gap: 8px; align-items: center; }
++.class-row input[list] { flex: 1; min-width: 0; }
++.class-row input[type='number'] { width: 76px; flex: none; text-align: center; padding: 0 6px; }
++.class-row .icon-btn, .class-row .icon-spacer { flex: none; width: 48px; }
+ .quiet-link:disabled { opacity: .5; cursor: default; }
+ 
+@@ -2341,8 +2349,8 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ .counter-row .lr-text { flex: 1; min-width: 3em; }
+ .counter-row .lr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+-.counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
+-.counter-value.low { color: var(--siegel-text); }
++.counter-row .counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
++.counter-row .counter-value.low { color: var(--siegel-text); }
+ .counter-max { display: flex; align-items: center; gap: 4px; color: var(--ink-muted); font-size: calc(13px * var(--ts)); }
+-.counter-max input { width: 3.6em; min-height: 48px; text-align: center; padding: 4px; }
++.counter-row .counter-max input { width: 3.6em; min-height: 48px; text-align: center; padding: 4px; }
+ .counters-line { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: calc(14px * var(--ts)); font-variant-numeric: tabular-nums; }
+ .counters-line strong { font-weight: 700; }
