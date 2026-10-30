@@ -1648,4 +1648,5 @@ export const en: Record<string, string> = {
   "Übernehmen legt den Eintrag gleich in der Bibel an. Vorher kannst du alles bearbeiten.": "Accepting adds the entry to the bible right away. You can edit everything first.",
   "Dort braucht jede Person ein eigenes Konto und stimmt neu zu, Cloud-Freigaben und Stimmprofile richtet ihr neu ein.": "There everyone needs their own account and agrees again; you set up cloud permissions and voice profiles anew.",
   "{name} groß öffnen": "Open {name} large",
+  "Dann kannst du dein Passwort selbst zurücksetzen und erfährst, wenn sich jemand anderes mit deinem Konto anmeldet. Sie bleibt freiwillig, niemand am Tisch sieht sie.": "Then you can reset your password yourself and find out when someone else signs in to your account. It stays optional, and nobody at the table sees it.",
 };

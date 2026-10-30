@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Taleward API
-  version: 0.4.26
+  version: 0.4.27
   description: |
     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
 
@@ -264,6 +264,8 @@ info:
     den Vorschlag ohne Halter; übernimmt die SL ihn dort, setzt der Server den vorgeschlagenen Halter trotzdem.
     Außerdem private Kommentare an mehrere Personen: POST …/comments nimmt recipientMemberIds, Comment liefert
     recipientMemberIds. recipientMemberId bleibt (erster Empfänger) für ältere Apps.
+    Änderungen in 0.4.27 (Hinweis-Mail nur bei neuem Gerät): POST /auth/login und POST /auth/oidc/exchange nehmen ein
+    freiwilliges Feld deviceId. Außerdem 409 email_confirmed bei PUT /me/email beschrieben (Server ab 0.4.141).
 
 servers:
   - url: https://taleward.example.org/api/v1
@@ -312,6 +314,15 @@ paths:
               properties:
                 username: { type: string }
                 password: { type: string, format: password }
+                deviceId:
+                  type: string
+                  pattern: "^[A-Za-z0-9_-]{16,64}$"
+                  description: |
+                    Ab 0.4.27, freiwillig: zufällige Kennung dieser Installation (von der App einmal erzeugt und dauerhaft
+                    gespeichert, nie aus Hardware-Kennungen). Der Server speichert nur den SHA-256-Wert am Konto und
+                    schickt die Hinweis-Mail zur Anmeldung nur, wenn die Kennung für das Konto neu ist; er vergisst sie
+                    nach 180 Tagen ohne Anmeldung und nach einem neuen Passwort. Ohne Feld: höchstens eine Mail je
+                    15 Minuten. Ungültige Werte werden ignoriert (kein Fehler). Ältere Server ignorieren das Feld.
       responses:
         "200":
           description: Angemeldet
@@ -494,6 +505,10 @@ paths:
               properties:
                 ticket: { type: string }
                 verifier: { type: string }
+                deviceId:
+                  type: string
+                  pattern: "^[A-Za-z0-9_-]{16,64}$"
+                  description: Ab 0.4.27, freiwillig, wie bei POST /auth/login
       responses:
         "200":
           description: Ergebnis
@@ -584,6 +599,8 @@ paths:
       description: |
         202; der Server schickt einen Bestätigungslink (24 h) auf https://<server>/konto/email/<token>. Bis dahin steht die
         Adresse in User.emailPending. Fehler: 400 invalid_email, 409 email_taken (an anderem Konto bestätigt),
+        409 email_confirmed (Server ab 0.4.141: für dieses Konto schon bestätigt; kein neuer Vorgang, ein offener zur selben
+        Adresse wird verworfen; die App zeigt die Meldung des Servers),
         503 mail_unavailable, 429 (höchstens 5 pro Stunde).
       requestBody:
         required: true

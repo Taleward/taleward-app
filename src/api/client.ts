@@ -1,4 +1,5 @@
 import { withSafeLinks } from './safeUrl';
+import { deviceId } from './deviceId';
 import { isSafePath } from './pathGuard';
 import { isMusterUrl } from './muster';
 import { campaignOfPath, cleanForCopy, copyable } from './readCopyRules';
@@ -235,7 +236,7 @@ function makeApi(conn: () => Connection) {
   const request = <T,>(method: string, path: string, opts?: RequestOptions) => requestOn<T>(conn(), method, path, opts);
   return {
   login: (username: string, password: string) =>
-    request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/login', { body: { username, password } }),
+    request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/login', { body: { username, password, deviceId: deviceId() } }),
   me: () => request<User>('GET', '/me'),
   info: () => request<ServerInfo>('GET', '/info').then(withSafeLinks),
   /** acceptTerms und termsVersion ab 0.4.22, wenn der Server Nutzungsbedingungen meldet */
@@ -252,7 +253,7 @@ function makeApi(conn: () => Connection) {
   deleteMe: (confirm: { password: string } | { confirmUsername: string }) => request<void>('DELETE', '/me', { body: confirm }),
   // Anmeldung (ab 0.4.0)
   passwordReset: (login: string) => request<void>('POST', '/auth/password-reset', { body: { login } }),
-  oidcExchange: (ticket: string, verifier: string) => request<OidcExchange>('POST', '/auth/oidc/exchange', { body: { ticket, verifier } }),
+  oidcExchange: (ticket: string, verifier: string) => request<OidcExchange>('POST', '/auth/oidc/exchange', { body: { ticket, verifier, deviceId: deviceId() } }),
   setEmail: (email: string) => request<void>('PUT', '/me/email', { body: { email } }),
   deleteEmail: () => request<void>('DELETE', '/me/email'),
   setPassword: (newPassword: string, currentPassword?: string) =>

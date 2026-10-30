@@ -646,7 +646,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.26',
+      apiVersion: nachbar ? '0.3.9' : '0.4.27',
       serverId: nachbar ? undefined : 'testserver',
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',

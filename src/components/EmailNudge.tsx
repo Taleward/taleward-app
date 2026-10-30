@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFor } from '../api/client';
-import type { Connection } from '../api/connections';
+import { apiAtLeast, type Connection } from '../api/connections';
 import { termsOutdated } from '../auth/serverAccess';
 import { getLive, onLiveChange } from '../recorder/live';
 import { t } from '../i18n';
@@ -46,7 +46,10 @@ export function EmailNudge({ conn }: { conn: Connection }) {
   return (
     <section className="card" aria-label={t('E-Mail hinterlegen')}>
       <strong>{t('Willst du eine E-Mail hinterlegen?')}</strong>
-      <span className="small">{t('Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.')}</span>
+      {/* Hinweis-Mails bei Anmeldungen schickt der Server erst in neueren Fassungen (ab Schnittstelle 0.4.26) */}
+      <span className="small">{apiAtLeast('0.4.26', conn)
+        ? t('Dann kannst du dein Passwort selbst zurücksetzen und erfährst, wenn sich jemand anderes mit deinem Konto anmeldet. Sie bleibt freiwillig, niemand am Tisch sieht sie.')
+        : t('Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.')}</span>
       <div className="row wrap" style={{ gap: 8 }}>
         <button type="button" className="btn small outline" onClick={() => { done(conn.id); navigate(`/konto?email=${encodeURIComponent(conn.id)}`); }}>{t('Eintragen')}</button>
         <button type="button" className="btn small ghost" onClick={() => { done(conn.id); setShow(false); }}>{t('Nein danke')}</button>
