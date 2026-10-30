@@ -1148,9 +1148,11 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 .hero .hero-back {
   position: absolute;
+  /* über dem Titelblock, der seit dem mitwachsenden Kopf darüber liegt */
+  z-index: 1;
   top: 10px;
   left: 12px;
-  min-height: 40px;
+  min-height: 48px;
   padding: 6px 12px;
   border-radius: var(--radius-pill);
   background: rgba(12, 20, 24, 0.55);

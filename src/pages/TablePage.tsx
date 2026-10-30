@@ -88,7 +88,6 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
       <span className={paused ? 'table-rec-dot paused' : 'table-rec-dot'} aria-hidden />
       <span style={{ flex: 1 }}>
         {paused ? t('Aufnahme pausiert') : t('Aufnahme läuft')} · {clock(elapsedMs)}
-        {web && <> · {t('am Mikrofon dieses Geräts')} · {t('{n} von {n} haben zugestimmt', { n: web.consented })}</>}
       </span>
       <button type="button" className="btn small outline" onClick={toggle}>{paused ? t('Weiter') : t('Pause')}</button>
       <Link className="btn small ghost" to={p(`/k/${target}/aufnahme`)}>{t('Zur Aufnahme')}</Link>

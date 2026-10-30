@@ -1649,4 +1649,11 @@ export const en: Record<string, string> = {
   "Dort braucht jede Person ein eigenes Konto und stimmt neu zu, Cloud-Freigaben und Stimmprofile richtet ihr neu ein.": "There everyone needs their own account and agrees again; you set up cloud permissions and voice profiles anew.",
   "{name} groß öffnen": "Open {name} large",
   "Dann kannst du dein Passwort selbst zurücksetzen und erfährst, wenn sich jemand anderes mit deinem Konto anmeldet. Sie bleibt freiwillig, niemand am Tisch sieht sie.": "Then you can reset your password yourself and find out when someone else signs in to your account. It stays optional, and nobody at the table sees it.",
+  "Etwas hinzufügen": "Add something",
+  "Eintrag anlegen": "Create entry",
+  "NSC, Ort, Quest, Beute …": "NPC, place, quest, loot …",
+  "Aus Unterlagen auswerten lassen": "Have documents analysed",
+  "Taleward schlägt Einträge aus deinen Notizen und Abenteuern vor": "Taleward suggests entries from your notes and adventures",
+  "Sobald jemand mitspielt, kannst du den Gegenstand einer Figur geben.": "Once someone joins, you can give the item to a character.",
+  "Dabei": "Carrying",
 };

@@ -15,7 +15,7 @@ import type { Campaign, Entry, EntryType, Member } from '../api/types';
 import { Dialog } from '../components/Dialog';
 import { AssignFigureDialog } from '../components/Seats';
 import { ENTRY_KIND } from '../components/ProposalCard';
-import { HolderSelect, NOBODY } from '../bible/HolderSelect';
+import { HolderSelect, NOBODY, figureName } from '../bible/HolderSelect';
 import { IconEye, IconLock, IconPlus } from '../components/Icons';
 import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSet } from '../components/Screen';
 
@@ -39,6 +39,8 @@ const GROUPS: { type: EntryType; label: string }[] = [
   { type: 'pc', label: tk('Spielercharaktere') },
   { type: 'other', label: tk('Sonstiges') }
 ];
+
+const UNDO_SECONDS = 10;
 
 const ADD_TYPES: EntryType[] = ['npc', 'location', 'quest', 'item', 'faction', 'other'];
 
@@ -80,6 +82,7 @@ export function Bible() {
   const [all, setAll] = useState<Entry[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [adding, setAdding] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -99,9 +102,15 @@ export function Bible() {
 
   const gm = campaign?.myRole === 'gm';
   const players = campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? [];
+  const holderMember = (id: string | null | undefined) => (id ? campaign?.members.find((x) => x.id === id) : undefined);
   const holder = (id: string | null | undefined) => {
-    const m = campaign?.members.find((x) => x.id === id);
+    const m = holderMember(id);
     return m ? t('Bei {name}', { name: m.characterName ?? m.displayName }) : null;
+  };
+  // Beute findet man auch über die Figur bzw. Person, die sie hat („Nyra“ findet den Runenschlüssel)
+  const holderNames = (e: Entry) => {
+    const m = e.type === 'item' ? holderMember(e.holderMemberId) : undefined;
+    return m ? [m.characterName ?? '', m.displayName] : [];
   };
 
   const withParam = (key: string, value: string | null) => {
@@ -152,7 +161,7 @@ export function Bible() {
   const href = (id: string) => `?${withParam('e', id).toString()}`;
   const sorted = all && [...all].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
   const hits = sorted && query.trim()
-    ? fuzzyFilter(sorted, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? ''])
+    ? fuzzyFilter(sorted, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? '', ...holderNames(e)])
     : null;
   const shown = sorted && (tab === 'all' ? sorted : sorted.filter((e) => e.type === tab));
   const count = (type: Tab) => (type === 'all' ? all?.length : all?.filter((e) => e.type === type).length) ?? 0;
@@ -164,12 +173,23 @@ export function Bible() {
         <input type="search" aria-label={t('In der ganzen Bibel suchen')} placeholder={t('Wer war das? Alles durchsuchen …')}
           value={query} onChange={(e) => setQuery(e.target.value)} />
         {gm && (
-          <button type="button" className="btn outline square" aria-label={t('Eintrag hinzufügen')} aria-expanded={adding}
-            onClick={() => setAdding((v) => !v)}>
+          <button type="button" className="btn outline square" aria-label={t('Etwas hinzufügen')} aria-expanded={menu || adding}
+            onClick={() => { if (adding) setAdding(false); else setMenu((v) => !v); }}>
             <IconPlus />
           </button>
         )}
       </div>
+
+      {gm && menu && (
+        <div className="list-box">
+          <button type="button" className="list-row nav" onClick={() => { setMenu(false); setAdding(true); }}>
+            <span className="lr-text">{t('Eintrag anlegen')}<span className="lr-sub">{t('NSC, Ort, Quest, Beute …')}</span></span>
+          </button>
+          <Link className="list-row nav" to={p(`/k/${campaignId}/unterlagen`)}>
+            <span className="lr-text">{t('Aus Unterlagen auswerten lassen')}<span className="lr-sub">{t('Taleward schlägt Einträge aus deinen Notizen und Abenteuern vor')}</span></span>
+          </Link>
+        </div>
+      )}
 
       {gm && adding && (
         <AddEntry campaignId={campaignId} type={tab === 'all' ? 'npc' : tab} players={players}
@@ -180,7 +200,7 @@ export function Bible() {
       )}
 
       {hits ? (
-        <SearchResults hits={hits} query={query} gm={gm} href={href} />
+        <SearchResults hits={hits} query={query} gm={gm} href={href} holder={(e) => holder(e.holderMemberId)} holderNames={holderNames} />
       ) : (
         <>
           <div className="tabs" role="group" aria-label={t('Arten')}>
@@ -213,8 +233,9 @@ export function Bible() {
         </>
       )}
 
-      {gm && (
-        <Link to={p(`/k/${campaignId}/unterlagen`)} className="quiet-link">{t('Unterlagen auswerten lassen')}</Link>
+      {/* In der leeren Bibel hilft der Weg über die Unterlagen am meisten; sonst steht er unter „+“ */}
+      {gm && all?.length === 0 && !adding && (
+        <Link to={p(`/k/${campaignId}/unterlagen`)} className="quiet-link">{t('Aus Unterlagen auswerten lassen')}</Link>
       )}
     </Screen>
   );
@@ -250,7 +271,14 @@ function EntryRow({ entry: e, gm, href, holder }: { entry: Entry; gm: boolean; h
   );
 }
 
-function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string; gm: boolean; href: (id: string) => string }) {
+function SearchResults({ hits, query, gm, href, holder, holderNames }: {
+  hits: Entry[];
+  query: string;
+  gm: boolean;
+  href: (id: string) => string;
+  holder: (e: Entry) => string | null;
+  holderNames: (e: Entry) => string[];
+}) {
   if (hits.length === 0) {
     return <div className="empty">{t('Nichts gefunden für „{q}“.', { q: query })}</div>;
   }
@@ -270,6 +298,7 @@ function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string
                 const alias = !inName ? e.aliases?.find((a) => matchScore(query, a) > 0) : undefined;
                 const inSummary = !!e.summary && matchScore(query, e.summary) > 0;
                 const inNotes = gm && !inName && !alias && !inSummary && !!e.gmNotes && matchScore(query, e.gmNotes) > 0;
+                const byHolder = !inName && !alias && !inSummary && !inNotes && holderNames(e).some((n) => !!n && matchScore(query, n) > 0);
                 return (
                   <Link key={e.id} className="list-row entry" to={href(e.id)}>
                     <span className="lr-text">
@@ -279,6 +308,7 @@ function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string
                         ? <span className="entry-sum">{highlight(snippet(e.gmNotes!, query), query)}</span>
                         : e.summary && <span className="entry-sum">{highlight(inSummary ? snippet(e.summary, query) : e.summary, query)}</span>}
                       {inNotes && <span className="entry-tag"><IconLock size={14} /> {t('Treffer in der SL-Notiz')}</span>}
+                      {byHolder && <span className="lr-sub">{highlight(holder(e) ?? '', query)}</span>}
                     </span>
                   </Link>
                 );
@@ -362,6 +392,7 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
   onChanged: (updated: Entry | null) => void;
 }) {
   const [choosing, setChoosing] = useState(false);
+  const [pickingHolder, setPickingHolder] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [editing, setEditing] = useState(false);
   // NSC, der aus der Figur eines ausgetretenen Spielers entstanden ist (0.4.9, nur SL)
@@ -390,6 +421,8 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
     }
   };
 
+  const holderPerson = e.holderMemberId ? players.find((m) => m.id === e.holderMemberId) : undefined;
+  const holderLabel = holderPerson ? figureName(holderPerson) : holder;
   const hiddenIds = e.hiddenFromMemberIds ?? [];
   const hiddenNames = hiddenIds
     .map((id) => players.find((m) => m.id === id))
@@ -404,8 +437,32 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
     return true;
   };
 
+  // Aufdecken mit Rückweg: ein paar Sekunden lang lässt es sich zurücknehmen (wie am SL-Schirm)
+  const [undo, setUndo] = useState<{ before: { visibility: Entry['visibility']; hiddenFromMemberIds: string[] }; left: number } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    if (undo.left <= 0) { setUndo(null); return; }
+    const id = window.setTimeout(() => setUndo((u) => (u ? { ...u, left: u.left - 1 } : u)), 1000);
+    return () => window.clearTimeout(id);
+  }, [undo]);
+  const open = (hiddenFromMemberIds: string[]) => {
+    const before = { visibility: e.visibility, hiddenFromMemberIds: e.hiddenFromMemberIds ?? [] };
+    const moreVisible = before.visibility === 'gm_only' || hiddenFromMemberIds.length < before.hiddenFromMemberIds.length;
+    run(async () => {
+      const u = await api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds });
+      if (moreVisible) setUndo({ before, left: UNDO_SECONDS });
+      return u;
+    });
+  };
+  const takeBack = () => {
+    if (!undo) return;
+    const { before } = undo;
+    setUndo(null);
+    run(() => api.updateEntry(e.id, before));
+  };
+
   const release = () => {
-    if (!needsText()) run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: [] }));
+    if (!needsText()) open([]);
   };
 
   const setHidden = (ids: string[]) => {
@@ -413,7 +470,7 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
     if (ids.length === 0) return release();
     // Vor allen verborgen = wieder ganz geheim
     if (ids.length === players.length) return run(() => api.updateEntry(e.id, { visibility: 'gm_only', hiddenFromMemberIds: [] }));
-    if (!needsText()) run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: ids }));
+    if (!needsText()) open(ids);
   };
 
   const save = () => run(() => api.updateEntry(e.id, {
@@ -484,18 +541,36 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
         : gm && <p className="muted" style={{ margin: 0 }}>{t('Noch kein Text für Spieler.')}</p>}
       {gm && e.gmNotes && <SecretBox><span style={{ whiteSpace: 'pre-wrap' }}>{e.gmNotes}</span></SecretBox>}
       <LinkButtons links={e.links} />
-      {e.type === 'item' && holder && <span className="small">{holder}</span>}
+      {!gm && e.type === 'item' && holder && <span className="small">{holder}</span>}
       {gm && former && <span className="muted small">{t('Früher gespielt von {name}', { name: former.displayName || t('einem gelöschten Konto') })}</span>}
 
-      {gm && players.length > 0 && (
+      {gm && (players.length > 0 || e.type === 'item') && (
         <div className="list-box">
-          <button type="button" className="list-row nav" onClick={() => setChoosing(true)} disabled={busy}>
-            <span className="lr-text">{t('Wer sieht das?')}<span className="lr-sub">{who}</span></span>
-            <span className="lr-val">{t('Ändern')}</span>
-          </button>
+          {players.length > 0 && (
+            <button type="button" className="list-row nav" onClick={() => setChoosing(true)} disabled={busy}>
+              <span className="lr-text">{t('Wer sieht das?')}<span className="lr-sub">{who}</span></span>
+              <span className="lr-val">{t('Ändern')}</span>
+            </button>
+          )}
+          {e.type === 'item' && (players.length > 0 ? (
+            <button type="button" className="list-row nav" onClick={() => setPickingHolder(true)} disabled={busy}>
+              <span className="lr-text">{t('Bei wem?')}<span className="lr-sub">{holderLabel ?? t('Bei keiner Figur')}</span></span>
+              <span className="lr-val">{t('Ändern')}</span>
+            </button>
+          ) : (
+            <div className="list-row">
+              <span className="lr-text">{t('Bei wem?')}<span className="lr-sub">{t('Sobald jemand mitspielt, kannst du den Gegenstand einer Figur geben.')}</span></span>
+            </div>
+          ))}
         </div>
       )}
       <ErrorBox error={error} />
+      {undo && (
+        <div className="notice" role="status" style={{ alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>{t('„{name}“ ist aufgedeckt.', { name: e.name })}</span>
+          <button type="button" className="btn small outline" onClick={takeBack}>{t('Zurücknehmen ({n})', { n: undo.left })}</button>
+        </div>
+      )}
       {gm && (
         <div className="row wrap" style={{ gap: 8 }}>
           {(e.visibility === 'gm_only' || hiddenNames.length > 0) && (
@@ -526,6 +601,13 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
       {assigning && campaign && (
         <AssignFigureDialog campaign={campaign} entryId={e.id} figureName={e.name} onClose={() => setAssigning(false)}
           onDone={() => { setAssigning(false); onChanged(null); }} />
+      )}
+      {pickingHolder && (
+        <HolderDialog players={players} initial={e.holderMemberId ?? NOBODY} onClose={() => setPickingHolder(false)}
+          onSave={(id) => {
+            setPickingHolder(false);
+            run(() => api.updateEntry(e.id, { holderMemberId: id === NOBODY ? null : id }));
+          }} />
       )}
       {choosing && (
         <VisibilityDialog players={players}
@@ -558,6 +640,32 @@ function VisibilityDialog({ players, initial, onSave, onClose }: {
       </span>
       <div className="row" style={{ gap: 8 }}>
         <button type="button" className="btn" style={{ flex: 1 }} onClick={() => onSave(selected)}>{t('Speichern')}</button>
+        <button type="button" className="btn outline" onClick={onClose}>{t('Abbrechen')}</button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** „Bei wem?“ für einen Gegenstand, direkt aus der Ansicht des Eintrags */
+function HolderDialog({ players, initial, onSave, onClose }: {
+  players: Member[];
+  initial: string;
+  onSave: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <Dialog title={t('Bei wem?')} onClose={onClose}>
+      <div className="list-box" role="radiogroup" aria-label={t('Bei wem?')}>
+        {[{ id: NOBODY, name: t('Bei keiner Figur') }, ...players.map((m) => ({ id: m.id, name: figureName(m) }))].map((o) => (
+          <label key={o.id} className="list-row check-row">
+            <input type="radio" name="holder" checked={value === o.id} onChange={() => setValue(o.id)} />
+            <span className="lr-text">{o.name}</span>
+          </label>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 8 }}>
+        <button type="button" className="btn" style={{ flex: 1 }} onClick={() => onSave(value)}>{t('Speichern')}</button>
         <button type="button" className="btn outline" onClick={onClose}>{t('Abbrechen')}</button>
       </div>
     </Dialog>

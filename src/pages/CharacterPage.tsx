@@ -4,7 +4,7 @@ import { currentConnection, currentConnectionId, p } from '../api/connections';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Campaign, Member } from '../api/types';
+import type { Campaign, Entry, Member } from '../api/types';
 import { blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
 import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
 import { useAuth } from '../auth/AuthContext';
@@ -118,6 +118,7 @@ export function CharacterPage() {
               ? <div className="card recap"><p>{member.characterSummary}</p></div>
               : <div className="muted small" style={{ textAlign: 'center' }}>{own ? t('Noch keine Kurzbeschreibung.') : t('Noch keine Beschreibung.')}</div>
           )}
+          {member.role === 'player' && <CarriedItems campaignId={campaign.id} memberId={member.id} />}
           {member.characterBackstory && (
             <section className="card secret">
               <h2 className="row" style={{ gap: 8 }}><IconLock /> {t('Hintergrund')}</h2>
@@ -265,4 +266,31 @@ async function squareOf(blob: Blob): Promise<{ x: number; y: number; size: numbe
   const r = { x: Math.round((bmp.width - size) / 2), y: Math.round((bmp.height - size) / 2), size };
   bmp.close();
   return r;
+}
+
+/**
+ * „Dabei“: Beute, die gerade bei dieser Figur liegt. Der Server liefert nur Einträge, die die betrachtende Person
+ * sehen darf – Verborgenes taucht hier also nicht auf, auch nicht als Anzahl.
+ */
+function CarriedItems({ campaignId, memberId }: { campaignId: string; memberId: string }) {
+  const [items, setItems] = useState<Entry[] | null>(null);
+  useEffect(() => {
+    api.entries(campaignId).then((list) => setItems(list.filter((e) => e.type === 'item' && e.holderMemberId === memberId))).catch(() => setItems([]));
+  }, [campaignId, memberId]);
+  if (!items?.length) return null;
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h2 className="list-head">{t('Dabei')}</h2>
+      <div className="list-box">
+        {items.map((e) => (
+          <Link key={e.id} className="list-row nav entry" to={p(`/k/${campaignId}/bibel?art=item&e=${encodeURIComponent(e.id)}`)}>
+            <span className="lr-text">
+              <span className="entry-name">{e.name}</span>
+              {e.summary && <span className="entry-sum">{e.summary}</span>}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
 }
