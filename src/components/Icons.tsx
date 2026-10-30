@@ -123,6 +123,9 @@ export const IconPlus = ({ size = 22 }: { size?: number }) => (
 export const IconMinus = ({ size = 22 }: { size?: number }) => (
   <svg {...base(size)}><path d="M5 12h14" /></svg>
 );
+export const IconExternal = ({ size = 22 }: { size?: number }) => (
+  <svg {...base(size)}><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
+);
 export const IconServer = ({ size = 22 }: { size?: number }) => (
   <svg {...base(size)}><rect width="20" height="8" x="2" y="2" rx="2" /><rect width="20" height="8" x="2" y="14" rx="2" /><path d="M6 6h.01" /><path d="M6 18h.01" /></svg>
 );

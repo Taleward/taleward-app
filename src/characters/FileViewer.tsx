@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ErrorBox, Screen } from '../components/Screen';
 import { t } from '../i18n';
-import { IconMinus, IconPlus } from '../components/Icons';
+import { IconExternal, IconMinus, IconPlus } from '../components/Icons';
 import { fileKind, getFile, setLastPage, type StoredCharacterFile } from './files';
 import { openWithDevice } from './openFile';
 import { getCharacter } from './store';
@@ -21,6 +21,11 @@ export function FileViewer() {
     getFile(fileId).then((f) => setFile(f && f.characterId === characterId ? f : null)).catch((e) => { setError(e); setFile(null); });
   }, [fileId, characterId]);
 
+  // „Mit einer anderen App öffnen“ als Zeichen oben rechts, neben der Seitenangabe
+  const openOther = file ? (
+    <button type="button" className="btn outline square" aria-label={t('Mit einer anderen App öffnen')} title={t('Mit einer anderen App öffnen')}
+      onClick={() => openWithDevice(file, file.name).catch(setError)}><IconExternal size={18} /></button>
+  ) : null;
   const back = { to: `/charaktere/${characterId}`, label: c?.name ?? t('Meine Charaktere') };
   const kind = file ? fileKind(file) : null;
 
@@ -33,12 +38,10 @@ export function FileViewer() {
           <Link className="btn outline" to={back.to}>{t('Zurück')}</Link>
         </>
       )}
-      {file && kind === 'pdf' && <PdfPages file={file} onError={setError} />}
+      {file && kind === 'pdf' && <PdfPages file={file} onError={setError} openOther={openOther} />}
+      {file && kind !== 'pdf' && <div className="row" style={{ justifyContent: 'flex-end' }}>{openOther}</div>}
       {file && kind === 'image' && <ImageView file={file} />}
       {file && kind === 'text' && <TextView file={file} />}
-      {file && (
-        <button type="button" className="quiet-link" onClick={() => openWithDevice(file, file.name).catch(setError)}>{t('Mit einer anderen App öffnen')}</button>
-      )}
     </Screen>
   );
 }
@@ -82,7 +85,7 @@ async function loadPdf(blob: Blob): Promise<{ promise: Promise<PdfDoc>; destroy:
 }
 
 /** Seiten untereinander; gezeichnet wird erst, wenn eine Seite in die Nähe kommt */
-function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: unknown) => void }) {
+function PdfPages({ file, onError, openOther }: { file: StoredCharacterFile; onError: (e: unknown) => void; openOther: ReactNode }) {
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [current, setCurrent] = useState(file.lastPage ?? 1);
@@ -141,6 +144,7 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
       <div className="row between" style={{ gap: 8, alignItems: 'center' }}>
         <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
         <span className="row" style={{ gap: 6 }}>
+          {openOther}
           <button type="button" className="btn outline square" aria-label={t('Kleiner')} disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z - 0.5))}><IconMinus size={18} /></button>
           <button type="button" className="btn outline square" aria-label={t('Größer')} disabled={zoom >= 3} onClick={() => setZoom((z) => Math.min(3, z + 0.5))}><IconPlus size={18} /></button>
         </span>
