@@ -158,7 +158,6 @@ export function Bible() {
     return (
       <Screen overline={campaign.title} title={t('Vorschläge von Spielenden')} hero={{ campaign }}
         backTo={{ to: `?${withParam('vorschlaege', null).toString()}`, label: t('Kampagnenbibel') }}>
-        <span className="muted small">{t('Was Spielende für die Bibel vorschlagen. Übernommen wird nur, was du bestätigst.')}</span>
         <GmPlayerProposals campaign={campaign} list={pps} entries={all ?? []} players={players}
           onChanged={() => { loadPps(); setReload((n) => n + 1); }} />
       </Screen>

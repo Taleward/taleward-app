@@ -72,7 +72,7 @@ export function ProposeForm({ campaignId, target, initialType, onDone }: {
         <label htmlFor="pp-detail">{target ? t('Was weißt du noch über „{name}“?', { name: target.name }) : t('Was weißt du darüber?')}</label>
         <textarea id="pp-detail" maxLength={2000} value={detail} onChange={(e) => setDetail(e.target.value)} />
       </div>
-      <span className="muted small">{t('Die Spielleitung entscheidet, was in die Bibel kommt. Nur du und sie sehen deinen Vorschlag.')}</span>
+      <span className="muted small">{t('Sehen nur du und die Spielleitung.')}</span>
       <ErrorBox error={error} />
       <div className="row" style={{ gap: 8 }}>
         <button type="button" className="btn small" disabled={busy || !title.trim() || (!!target && !detail.trim())} onClick={send}>{t('Vorschlagen')}</button>

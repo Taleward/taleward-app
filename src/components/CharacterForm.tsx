@@ -94,8 +94,7 @@ export function CharacterForm({ campaign, member, onSaved, submitLabel, secondar
               <IconLock size={14} /> {t('Hintergrund (nur für die Spielleitung)')}
             </label>
             <textarea id="c-backstory" rows={5} value={backstory} onChange={(e) => setBackstory(e.target.value)}
-              placeholder={t('Geheimnisse, Schulden, alte Feinde … Das sehen nur du und die Spielleitung.')} />
-            <span className="muted small">{t('Nie im Kapitel, für andere unsichtbar.')}</span>
+              placeholder={t('Geheimnisse, Schulden, alte Feinde …')} />
           </div>
         </>
       )}

@@ -88,8 +88,7 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
           <IconLock size={14} /> {t('Hintergrund (nur für die Spielleitung)')}
         </label>
         <textarea id="ch-backstory" rows={5} maxLength={20000} value={backstory} onChange={(e) => setBackstory(e.target.value)}
-          placeholder={t('Geheimnisse, Schulden, alte Feinde … Das sehen nur du und die Spielleitung.')} />
-        <span className="muted small">{t('Nie im Kapitel, für andere unsichtbar.')}</span>
+          placeholder={t('Geheimnisse, Schulden, alte Feinde …')} />
       </div>
 
       {cropping && (

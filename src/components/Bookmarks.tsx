@@ -93,8 +93,7 @@ export function LiveBookmark({ sessionId }: { sessionId: string }) {
         </>
       )}
       <span className="muted small" role="status">
-        {last ? t('Gemerkt um {time}. Du findest die Stelle später im Kapitel. Nur du siehst sie.', { time: clock(last) })
-          : t('Ein Tippen, wenn etwas Wichtiges passiert. Nur du siehst deine Merkstellen.')}
+        {last ? t('Gemerkt um {time}.', { time: clock(last) }) : t('Nur du siehst deine Merkstellen.')}
       </span>
       <ErrorBox error={error} />
     </section>
@@ -121,7 +120,6 @@ export function MyBookmarks({ list, onJump, onDelete }: { list: Bookmark[]; onJu
           );
         })}
       </div>
-      <span className="muted small">{t('Nur du siehst deine Merkstellen.')}</span>
     </section>
   );
 }

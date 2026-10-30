@@ -94,7 +94,7 @@ export function CounterKindsRow({ campaign, kinds, onSave, busy }: {
     <>
       <button type="button" className="list-row nav" disabled={busy} onClick={() => setOpen(true)}>
         <span className="lr-text">{t('Zähler am Charakter')}
-          <span className="lr-sub">{kinds.length ? kinds.map((k) => k.label).join(', ') : t('Aus. Zum Beispiel LeP und AsP, die Spielende selbst mitzählen.')}</span>
+          <span className="lr-sub">{kinds.length ? kinds.map((k) => k.label).join(', ') : t('Aus')}</span>
         </span>
         <span className="lr-val">{t('Ändern')}</span>
       </button>
@@ -136,7 +136,7 @@ function CounterKindsDialog({ campaign, kinds, onSave, onClose }: {
       </label>
       {on && (
         <>
-          <span className="muted small">{t('Jede Spielerin ändert ihre Werte selbst, du siehst sie auf dem SL-Schirm. Nichts davon kommt ins Kapitel.')}</span>
+          <span className="muted small">{t('Spielende ändern ihre Werte selbst, du siehst sie im SL-Schirm.')}</span>
           {list.map((k, i) => (
             <div key={k.id} className="row" style={{ gap: 6, alignItems: 'flex-end' }}>
               <div className="field" style={{ flex: '0 0 30%', margin: 0 }}>

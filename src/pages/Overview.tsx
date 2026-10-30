@@ -743,7 +743,7 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
               <label className="list-row check-row">
                 <input type="checkbox" checked={settings.raw.playerProposals} disabled={busy}
                   onChange={(e) => run(() => settings.patch({ playerProposals: e.target.checked }), () => undefined)} />
-                <span className="lr-text">{t('Spielende dürfen Einträge vorschlagen')}<span className="lr-sub">{t('Du entscheidest, was in die Bibel kommt.')}</span></span>
+                <span className="lr-text">{t('Spielende dürfen Einträge vorschlagen')}</span>
               </label>
             )}
             {!muster && apiAtLeast('0.4.28') && settings.raw && settings.raw.counterKinds !== undefined && (

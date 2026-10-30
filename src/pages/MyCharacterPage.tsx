@@ -139,7 +139,6 @@ export function MyCharacterPage() {
         <textarea rows={4} value={notes} aria-label={t('Private Notizen')} onChange={(e) => setNotes(e.target.value)}
           onBlur={() => notes !== c.notes && updateCharacter(c.id, { notes })}
           placeholder={t('Pläne, Verdachte, offene Rechnungen …')} />
-        <span className="muted small">{t('Nur für dich – verlässt nie dieses Gerät.')}</span>
       </section>
 
       <Attachments characterId={c.id} name={c.name} />
@@ -148,9 +147,7 @@ export function MyCharacterPage() {
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <Divider />
         <h2>{t('Mitgebrachte Welt')}</h2>
-        <p className="muted small" style={{ margin: 0 }}>
-          {t('Familie, Heimat, alte Feinde, ein Erbstück: Was dein Charakter mitbringt, geht als Vorschlag an die Spielleitung.')}
-        </p>
+        <p className="muted small" style={{ margin: 0 }}>{t('Geht als Vorschlag an die Spielleitung.')}</p>
         {c.world.map((w) => (
           <button key={w.id} type="button" className="card" style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
             onClick={() => setWorldItem(w)}>
@@ -181,7 +178,7 @@ export function MyCharacterPage() {
         <Divider />
         <h2>{t('Kampagnen')}</h2>
         {c.links.length === 0 && (
-          <p className="muted small" style={{ margin: 0 }}>{t('Noch in keiner Kampagne. Du kannst ihn beim Beitritt wählen oder hier einsetzen.')}</p>
+          <p className="muted small" style={{ margin: 0 }}>{t('Noch in keiner Kampagne.')}</p>
         )}
         {c.links.map((l) => {
           const outdated = linkOutdated(c, l);
@@ -223,7 +220,6 @@ export function MyCharacterPage() {
         <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <Divider />
           <h2>{t('Chroniken')}</h2>
-          <p className="muted small" style={{ margin: 0 }}>{t('Was dein Charakter erlebt hat – bleibt in der Sammlung, auch wenn die Kampagne endet.')}</p>
           {chronicles.map((ch) => {
             const read = ch.sessions.filter((s) => s.recap);
             return (
@@ -256,7 +252,7 @@ export function MyCharacterPage() {
       <Divider />
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2>{t('Als Datei weitergeben')}</h2>
-        <span className="small">{t('Zum Beispiel auf dein Tablet oder ein neues Handy: Dort unter „Meine Charaktere“ → „Sammlung sichern“ → „Aus Datei zurückholen“. Die Datei enthält auch deine privaten Notizen und Chroniken.')}</span>
+        <span className="small">{t('Für ein anderes Gerät, mit Notizen und Chroniken.')}</span>
         {!!files?.length && (
           <label className="check">
             <input type="checkbox" checked={withFiles} onChange={(e) => setWithFiles(e.target.checked)} />

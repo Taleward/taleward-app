@@ -87,7 +87,6 @@ export function Attachments({ characterId, name }: { characterId: string; name: 
         {busy ? t('Wird gespeichert …') : t('Datei anhängen')}
       </button>
       <input ref={picker} type="file" hidden multiple onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
-      <span className="muted small">{t('Charakterbogen, Notizen, Karten – jede Datei. Bleibt auf diesem Gerät, bis du sie selbst in einer Kampagne abgibst.')}</span>
     </section>
   );
 }
