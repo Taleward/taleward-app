@@ -1,0 +1,135 @@
+From 8c5c1639c1d5150ca6b1a605978a100c6bd130c3 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 23:54:50 +0100
+Subject: [PATCH] =?UTF-8?q?PDF-Leser:=20gescannte=20Seiten=20und=20Standar?=
+ =?UTF-8?q?dschriften,=20Gr=C3=B6=C3=9Fer=20und=20Kleiner?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/characters/FileViewer.tsx | 25 ++++++++++++++++++++-----
+ src/i18n/en.ts                |  2 ++
+ src/theme.css                 |  1 +
+ vite.config.ts                | 30 ++++++++++++++++++++++++++++--
+ 4 files changed, 51 insertions(+), 7 deletions(-)
+
+diff --git a/src/characters/FileViewer.tsx b/src/characters/FileViewer.tsx
+index 878e06a..4faf23c 100644
+--- a/src/characters/FileViewer.tsx
++++ b/src/characters/FileViewer.tsx
+@@ -3,4 +3,5 @@ import { Link, useParams } from 'react-router-dom';
+ import { ErrorBox, Screen } from '../components/Screen';
+ import { t } from '../i18n';
++import { IconMinus, IconPlus } from '../components/Icons';
+ import { fileKind, getFile, setLastPage, type StoredCharacterFile } from './files';
+ import { openWithDevice } from './openFile';
+@@ -74,5 +75,9 @@ async function loadPdf(blob: Blob): Promise<{ promise: Promise<PdfDoc>; destroy:
+   pdfjs.GlobalWorkerOptions.workerSrc = worker;
+   const data = new Uint8Array(await blob.arrayBuffer());
+-  return pdfjs.getDocument({ data, enableXfa: false }) as unknown as { promise: Promise<PdfDoc>; destroy: () => Promise<void> };
++  // Decoder und Schriften liegen bei der App (siehe vite.config.ts), nichts kommt aus dem Netz
++  const base = new URL(`${import.meta.env.BASE_URL}pdfjs/`, location.href).href;
++  return pdfjs.getDocument({
++    data, enableXfa: false, wasmUrl: `${base}wasm/`, standardFontDataUrl: `${base}standard_fonts/`, useWasm: true
++  }) as unknown as { promise: Promise<PdfDoc>; destroy: () => Promise<void> };
+ }
+ 
+@@ -82,4 +87,6 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
+   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
+   const [current, setCurrent] = useState(file.lastPage ?? 1);
++  // Größer: die Seiten werden breiter als der Bildschirm und lassen sich seitlich schieben
++  const [zoom, setZoom] = useState(1);
+   const box = useRef<HTMLDivElement>(null);
+   const jumped = useRef(false);
+@@ -122,5 +129,5 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
+     box.current.querySelectorAll('[data-page]').forEach((el) => io.observe(el));
+     return () => io.disconnect();
+-  }, [doc]);
++  }, [doc, zoom]);
+   useEffect(() => {
+     if (!doc) return;
+@@ -132,7 +139,15 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
+   return (
+     <>
+-      <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
+-      <div ref={box} className="pdf-pages">
+-        {sizes.map((s, i) => <PdfPageView key={i} doc={doc} n={i + 1} ratio={s.h / s.w} />)}
++      <div className="row between" style={{ gap: 8, alignItems: 'center' }}>
++        <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
++        <span className="row" style={{ gap: 6 }}>
++          <button type="button" className="btn outline square" aria-label={t('Kleiner')} disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z - 0.5))}><IconMinus size={18} /></button>
++          <button type="button" className="btn outline square" aria-label={t('Größer')} disabled={zoom >= 3} onClick={() => setZoom((z) => Math.min(3, z + 0.5))}><IconPlus size={18} /></button>
++        </span>
++      </div>
++      <div className="pdf-scroll">
++        <div ref={box} className="pdf-pages" style={{ width: `${zoom * 100}%` }}>
++          {sizes.map((s, i) => <PdfPageView key={`${zoom}-${i}`} doc={doc} n={i + 1} ratio={s.h / s.w} />)}
++        </div>
+       </div>
+     </>
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 5c0aeb7..22a6cf0 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1735,3 +1735,5 @@ export const en: Record<string, string> = {
+   "Noch in keiner Kampagne.": "Not in a campaign yet.",
+   "Für ein anderes Gerät, mit Notizen und Chroniken.": "For another device, including notes and chronicles.",
++  "Kleiner": "Smaller",
++  "Größer": "Larger",
+ };
+diff --git a/src/theme.css b/src/theme.css
+index 8e2af70..840794a 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2326,4 +2326,5 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ 
+ /* Unterlagen aus der Sammlung lesen (PDF) */
++.pdf-scroll { overflow-x: auto; overflow-y: hidden; flex-shrink: 0; -webkit-overflow-scrolling: touch; }
+ .pdf-pages { display: flex; flex-direction: column; gap: var(--space-2); }
+ .pdf-page { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+diff --git a/vite.config.ts b/vite.config.ts
+index 60f28f4..8defaa8 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,5 +1,31 @@
+ import { defineConfig, loadEnv } from 'vite';
+ import react from '@vitejs/plugin-react';
+-import { readFileSync } from 'node:fs';
++import { readFileSync, readdirSync } from 'node:fs';
++import type { Plugin } from 'vite';
++
++/**
++ * Hilfsdateien für den PDF-Leser (pdf.js) mit ausliefern: Wasm-Decoder für gescannte Seiten (JBIG2, JPEG 2000,
++ * Farbprofile) und die Standardschriften. Liegen unter <base>/pdfjs/, damit PDFs auch ohne Netz lesbar sind.
++ * Bewusst nicht dabei: quickjs-eval (Skripte in PDFs) – PDF-Skripte führt die App nie aus.
++ */
++function pdfjsAssets(): Plugin {
++  const root = new URL('./node_modules/pdfjs-dist/', import.meta.url);
++  const pick: Record<string, (name: string) => boolean> = {
++    wasm: (n) => !n.startsWith('quickjs'),
++    standard_fonts: () => true
++  };
++  return {
++    name: 'taleward-pdfjs-assets',
++    apply: 'build',
++    generateBundle() {
++      for (const [dir, ok] of Object.entries(pick)) {
++        for (const name of readdirSync(new URL(`${dir}/`, root))) {
++          if (!ok(name)) continue;
++          this.emitFile({ type: 'asset', fileName: `pdfjs/${dir}/${name}`, source: readFileSync(new URL(`${dir}/${name}`, root)) });
++        }
++      }
++    }
++  };
++}
+ 
+ // App-Version aus package.json – eine Quelle für App, Server-Abgleich und Android (versionName/versionCode)
+@@ -11,5 +37,5 @@ export default defineConfig(({ mode }) => {
+     // Web-Fassung liegt unter /app/ (zentrale Website oder eigener Server), Android/Testmodus an der Wurzel
+     base: env.VITE_BASE || '/',
+-    plugins: [react()],
++    plugins: [react(), pdfjsAssets()],
+     define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+     server: { host: true, port: 5173 }
