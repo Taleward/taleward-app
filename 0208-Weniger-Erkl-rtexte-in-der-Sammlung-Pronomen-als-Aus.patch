@@ -1,0 +1,271 @@
+From 9e155faf389c3edafdb7c62053bad41a9aae6a48 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 23:47:54 +0100
+Subject: [PATCH] =?UTF-8?q?Weniger=20Erkl=C3=A4rtexte=20in=20der=20Sammlun?=
+ =?UTF-8?q?g,=20Pronomen=20als=20Auswahlliste?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/bible/PlayerProposals.tsx      |  2 +-
+ src/characters/Attachments.tsx     |  1 -
+ src/characters/CharacterEditor.tsx |  3 +--
+ src/characters/Counters.tsx        |  4 ++--
+ src/components/Bookmarks.tsx       |  4 +---
+ src/components/CharacterForm.tsx   |  3 +--
+ src/components/PronounField.tsx    | 23 +++++++++++------------
+ src/i18n/en.ts                     | 19 ++++++++-----------
+ src/pages/Bible.tsx                |  1 -
+ src/pages/MyCharacterPage.tsx      | 10 +++-------
+ src/pages/Overview.tsx             |  2 +-
+ 11 files changed, 29 insertions(+), 43 deletions(-)
+
+diff --git a/src/bible/PlayerProposals.tsx b/src/bible/PlayerProposals.tsx
+index f68e446..d56c52a 100644
+--- a/src/bible/PlayerProposals.tsx
++++ b/src/bible/PlayerProposals.tsx
+@@ -73,5 +73,5 @@ export function ProposeForm({ campaignId, target, initialType, onDone }: {
+         <textarea id="pp-detail" maxLength={2000} value={detail} onChange={(e) => setDetail(e.target.value)} />
+       </div>
+-      <span className="muted small">{t('Die Spielleitung entscheidet, was in die Bibel kommt. Nur du und sie sehen deinen Vorschlag.')}</span>
++      <span className="muted small">{t('Sehen nur du und die Spielleitung.')}</span>
+       <ErrorBox error={error} />
+       <div className="row" style={{ gap: 8 }}>
+diff --git a/src/characters/Attachments.tsx b/src/characters/Attachments.tsx
+index 1a216a2..6dd2ee0 100644
+--- a/src/characters/Attachments.tsx
++++ b/src/characters/Attachments.tsx
+@@ -88,5 +88,4 @@ export function Attachments({ characterId, name }: { characterId: string; name:
+       </button>
+       <input ref={picker} type="file" hidden multiple onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
+-      <span className="muted small">{t('Charakterbogen, Notizen, Karten – jede Datei. Bleibt auf diesem Gerät, bis du sie selbst in einer Kampagne abgibst.')}</span>
+     </section>
+   );
+diff --git a/src/characters/CharacterEditor.tsx b/src/characters/CharacterEditor.tsx
+index 735ce3c..d5f6bee 100644
+--- a/src/characters/CharacterEditor.tsx
++++ b/src/characters/CharacterEditor.tsx
+@@ -89,6 +89,5 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
+         </label>
+         <textarea id="ch-backstory" rows={5} maxLength={20000} value={backstory} onChange={(e) => setBackstory(e.target.value)}
+-          placeholder={t('Geheimnisse, Schulden, alte Feinde … Das sehen nur du und die Spielleitung.')} />
+-        <span className="muted small">{t('Nie im Kapitel, für andere unsichtbar.')}</span>
++          placeholder={t('Geheimnisse, Schulden, alte Feinde …')} />
+       </div>
+ 
+diff --git a/src/characters/Counters.tsx b/src/characters/Counters.tsx
+index bd4cca9..f737f92 100644
+--- a/src/characters/Counters.tsx
++++ b/src/characters/Counters.tsx
+@@ -95,5 +95,5 @@ export function CounterKindsRow({ campaign, kinds, onSave, busy }: {
+       <button type="button" className="list-row nav" disabled={busy} onClick={() => setOpen(true)}>
+         <span className="lr-text">{t('Zähler am Charakter')}
+-          <span className="lr-sub">{kinds.length ? kinds.map((k) => k.label).join(', ') : t('Aus. Zum Beispiel LeP und AsP, die Spielende selbst mitzählen.')}</span>
++          <span className="lr-sub">{kinds.length ? kinds.map((k) => k.label).join(', ') : t('Aus')}</span>
+         </span>
+         <span className="lr-val">{t('Ändern')}</span>
+@@ -137,5 +137,5 @@ function CounterKindsDialog({ campaign, kinds, onSave, onClose }: {
+       {on && (
+         <>
+-          <span className="muted small">{t('Jede Spielerin ändert ihre Werte selbst, du siehst sie auf dem SL-Schirm. Nichts davon kommt ins Kapitel.')}</span>
++          <span className="muted small">{t('Spielende ändern ihre Werte selbst, du siehst sie im SL-Schirm.')}</span>
+           {list.map((k, i) => (
+             <div key={k.id} className="row" style={{ gap: 6, alignItems: 'flex-end' }}>
+diff --git a/src/components/Bookmarks.tsx b/src/components/Bookmarks.tsx
+index 16bcf43..fa03d2a 100644
+--- a/src/components/Bookmarks.tsx
++++ b/src/components/Bookmarks.tsx
+@@ -94,6 +94,5 @@ export function LiveBookmark({ sessionId }: { sessionId: string }) {
+       )}
+       <span className="muted small" role="status">
+-        {last ? t('Gemerkt um {time}. Du findest die Stelle später im Kapitel. Nur du siehst sie.', { time: clock(last) })
+-          : t('Ein Tippen, wenn etwas Wichtiges passiert. Nur du siehst deine Merkstellen.')}
++        {last ? t('Gemerkt um {time}.', { time: clock(last) }) : t('Nur du siehst deine Merkstellen.')}
+       </span>
+       <ErrorBox error={error} />
+@@ -122,5 +121,4 @@ export function MyBookmarks({ list, onJump, onDelete }: { list: Bookmark[]; onJu
+         })}
+       </div>
+-      <span className="muted small">{t('Nur du siehst deine Merkstellen.')}</span>
+     </section>
+   );
+diff --git a/src/components/CharacterForm.tsx b/src/components/CharacterForm.tsx
+index 9287470..6c0220b 100644
+--- a/src/components/CharacterForm.tsx
++++ b/src/components/CharacterForm.tsx
+@@ -95,6 +95,5 @@ export function CharacterForm({ campaign, member, onSaved, submitLabel, secondar
+             </label>
+             <textarea id="c-backstory" rows={5} value={backstory} onChange={(e) => setBackstory(e.target.value)}
+-              placeholder={t('Geheimnisse, Schulden, alte Feinde … Das sehen nur du und die Spielleitung.')} />
+-            <span className="muted small">{t('Nie im Kapitel, für andere unsichtbar.')}</span>
++              placeholder={t('Geheimnisse, Schulden, alte Feinde …')} />
+           </div>
+         </>
+diff --git a/src/components/PronounField.tsx b/src/components/PronounField.tsx
+index 79c183d..94d1075 100644
+--- a/src/components/PronounField.tsx
++++ b/src/components/PronounField.tsx
+@@ -3,6 +3,6 @@ import { t } from '../i18n';
+ 
+ /**
+- * „So sprechen andere über die Figur“ (ab Schnittstelle 0.4.28): freiwillig, eine Wahl ohne Pflicht. Gespeichert
+- * wird der Text selbst („sie“, „er“ oder eigener), damit das Kapitel ihn so übernehmen kann.
++ * „So sprechen andere über die Figur“ (ab Schnittstelle 0.4.28): freiwillig. Gespeichert wird der Text selbst („sie“,
++ * „er“ oder eigener), damit das Kapitel ihn so übernehmen kann.
+  */
+ export function PronounField({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) {
+@@ -12,22 +12,21 @@ export function PronounField({ id, value, onChange }: { id: string; value: strin
+   const [own, setOwn] = useState(preset === 'own');
+   const mode = own ? 'own' : preset;
+-  const pick = (m: 'none' | 'she' | 'he' | 'own') => {
++  const pick = (m: string) => {
+     setOwn(m === 'own');
+-    onChange(m === 'she' ? she : m === 'he' ? he : m === 'none' ? '' : preset === 'own' ? value : '');
++    onChange(m === 'she' ? she : m === 'he' ? he : m === 'own' && preset === 'own' ? value : '');
+   };
+   return (
+     <div className="field">
+-      <span className="label" id={`${id}-l`}>{t('So sprechen andere über die Figur (optional)')}</span>
+-      <div className="segmented" role="group" aria-labelledby={`${id}-l`} style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+-        <button type="button" aria-pressed={mode === 'none'} onClick={() => pick('none')}>{t('Keine Angabe')}</button>
+-        <button type="button" aria-pressed={mode === 'she'} onClick={() => pick('she')}>{she}</button>
+-        <button type="button" aria-pressed={mode === 'he'} onClick={() => pick('he')}>{he}</button>
+-        <button type="button" aria-pressed={mode === 'own'} onClick={() => pick('own')}>{t('Eigenes')}</button>
+-      </div>
++      <label htmlFor={`${id}-sel`}>{t('Pronomen (optional)')}</label>
++      <select id={`${id}-sel`} value={mode} onChange={(e) => pick(e.target.value)}>
++        <option value="none">{t('Keine Angabe')}</option>
++        <option value="she">{she}</option>
++        <option value="he">{he}</option>
++        <option value="own">{t('Eigenes …')}</option>
++      </select>
+       {mode === 'own' && (
+         <input id={id} type="text" maxLength={32} value={value} aria-label={t('Eigene Angabe')} placeholder={t('z. B. dey, they')}
+           onChange={(e) => onChange(e.target.value)} />
+       )}
+-      <span className="muted small">{t('Damit das Kapitel nicht rät. Sehen alle am Tisch.')}</span>
+     </div>
+   );
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 569b394..5c0aeb7 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1661,5 +1661,4 @@ export const en: Record<string, string> = {
+   "„{file}“ löschen": "Delete “{file}”",
+   "Datei anhängen": "Attach file",
+-  "Charakterbogen, Notizen, Karten – jede Datei. Bleibt auf diesem Gerät, bis du sie selbst in einer Kampagne abgibst.": "Character sheet, notes, maps – any file. Stays on this device until you hand it in to a campaign yourself.",
+   "Diese Datei gibt es nicht mehr.": "This file no longer exists.",
+   "Mit einer anderen App öffnen": "Open in another app",
+@@ -1674,5 +1673,4 @@ export const en: Record<string, string> = {
+   "Was weißt du noch über „{name}“?": "What else do you know about “{name}”?",
+   "Was weißt du darüber?": "What do you know about it?",
+-  "Die Spielleitung entscheidet, was in die Bibel kommt. Nur du und sie sehen deinen Vorschlag.": "The game master decides what goes into the bible. Only you and they see your suggestion.",
+   "Vorschlag „{title}“ zurückziehen?": "Withdraw the suggestion “{title}”?",
+   "Zurückziehen": "Withdraw",
+@@ -1694,7 +1692,5 @@ export const en: Record<string, string> = {
+   "Siehst du und die Spielleitung.": "Seen by you and the game master.",
+   "Zähler am Charakter": "Character counters",
+-  "Aus. Zum Beispiel LeP und AsP, die Spielende selbst mitzählen.": "Off. For example hit points that players keep track of themselves.",
+   "Spielende zählen mit": "Players keep count",
+-  "Jede Spielerin ändert ihre Werte selbst, du siehst sie auf dem SL-Schirm. Nichts davon kommt ins Kapitel.": "Each player changes their own values, you see them on the GM screen. None of it goes into the chapter.",
+   "Kurz": "Short",
+   "Bedeutung": "Meaning",
+@@ -1711,6 +1707,4 @@ export const en: Record<string, string> = {
+   "Stelle merken": "Mark this moment",
+   "Mit Notiz merken": "Mark with a note",
+-  "Gemerkt um {time}. Du findest die Stelle später im Kapitel. Nur du siehst sie.": "Marked at {time}. You'll find it in the chapter later. Only you see it.",
+-  "Ein Tippen, wenn etwas Wichtiges passiert. Nur du siehst deine Merkstellen.": "One tap when something important happens. Only you see your marks.",
+   "Deine Merkstellen": "Your marks",
+   "Zur Stelle im Kapitel": "Go to the passage in the chapter",
+@@ -1720,12 +1714,8 @@ export const en: Record<string, string> = {
+   "sie": "she",
+   "er": "he",
+-  "So sprechen andere über die Figur (optional)": "How others refer to the character (optional)",
+   "Keine Angabe": "Not set",
+-  "Eigenes": "Other",
+   "Eigene Angabe": "Your own",
+   "z. B. dey, they": "e.g. they, xe",
+-  "Damit das Kapitel nicht rät. Sehen alle am Tisch.": "So the chapter doesn't have to guess. Everyone at the table sees this.",
+   "Vorschläge von Spielenden": "Suggestions from players",
+-  "Was Spielende für die Bibel vorschlagen. Übernommen wird nur, was du bestätigst.": "What players suggest for the bible. Only what you confirm is taken over.",
+   "{n} Vorschlag von Spielenden": "{n} suggestion from players",
+   "{n} Vorschläge von Spielenden": "{n} suggestions from players",
+@@ -1733,8 +1723,15 @@ export const en: Record<string, string> = {
+   "Vorschlag ist bei der Spielleitung.": "Your suggestion is with the game master.",
+   "Spielende dürfen Einträge vorschlagen": "Players may suggest entries",
+-  "Du entscheidest, was in die Bibel kommt.": "You decide what goes into the bible.",
+   "Die Spielleitung hat ihn gesehen": "The game master has seen it",
+   "Vorschlag „{title}“ ablehnen? {name} sieht nur „Die Spielleitung hat ihn gesehen“.": "Decline the suggestion “{title}”? {name} only sees “The game master has seen it”.",
+   "Der Eintrag ist nicht für alle sichtbar. Der Text landet in deiner SL-Notiz; {name} sieht nur „Die Spielleitung hat ihn gesehen“.": "This entry isn't visible to everyone. The text goes into your GM note; {name} only sees “The game master has seen it”.",
+   "{name} sieht dann nur „Die Spielleitung hat ihn gesehen“.": "{name} then only sees “The game master has seen it”.",
++  "Geheimnisse, Schulden, alte Feinde …": "Secrets, debts, old enemies …",
++  "Spielende ändern ihre Werte selbst, du siehst sie im SL-Schirm.": "Players change their own values, you see them on the GM screen.",
++  "Gemerkt um {time}.": "Marked at {time}.",
++  "Pronomen (optional)": "Pronouns (optional)",
++  "Eigenes …": "Other …",
++  "Geht als Vorschlag an die Spielleitung.": "Goes to the game master as a suggestion.",
++  "Noch in keiner Kampagne.": "Not in a campaign yet.",
++  "Für ein anderes Gerät, mit Notizen und Chroniken.": "For another device, including notes and chronicles.",
+ };
+diff --git a/src/pages/Bible.tsx b/src/pages/Bible.tsx
+index ececd4e..fe76e3a 100644
+--- a/src/pages/Bible.tsx
++++ b/src/pages/Bible.tsx
+@@ -159,5 +159,4 @@ export function Bible() {
+       <Screen overline={campaign.title} title={t('Vorschläge von Spielenden')} hero={{ campaign }}
+         backTo={{ to: `?${withParam('vorschlaege', null).toString()}`, label: t('Kampagnenbibel') }}>
+-        <span className="muted small">{t('Was Spielende für die Bibel vorschlagen. Übernommen wird nur, was du bestätigst.')}</span>
+         <GmPlayerProposals campaign={campaign} list={pps} entries={all ?? []} players={players}
+           onChanged={() => { loadPps(); setReload((n) => n + 1); }} />
+diff --git a/src/pages/MyCharacterPage.tsx b/src/pages/MyCharacterPage.tsx
+index db912a3..fe2791e 100644
+--- a/src/pages/MyCharacterPage.tsx
++++ b/src/pages/MyCharacterPage.tsx
+@@ -140,5 +140,4 @@ export function MyCharacterPage() {
+           onBlur={() => notes !== c.notes && updateCharacter(c.id, { notes })}
+           placeholder={t('Pläne, Verdachte, offene Rechnungen …')} />
+-        <span className="muted small">{t('Nur für dich – verlässt nie dieses Gerät.')}</span>
+       </section>
+ 
+@@ -149,7 +148,5 @@ export function MyCharacterPage() {
+         <Divider />
+         <h2>{t('Mitgebrachte Welt')}</h2>
+-        <p className="muted small" style={{ margin: 0 }}>
+-          {t('Familie, Heimat, alte Feinde, ein Erbstück: Was dein Charakter mitbringt, geht als Vorschlag an die Spielleitung.')}
+-        </p>
++        <p className="muted small" style={{ margin: 0 }}>{t('Geht als Vorschlag an die Spielleitung.')}</p>
+         {c.world.map((w) => (
+           <button key={w.id} type="button" className="card" style={{ textAlign: 'left', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+@@ -182,5 +179,5 @@ export function MyCharacterPage() {
+         <h2>{t('Kampagnen')}</h2>
+         {c.links.length === 0 && (
+-          <p className="muted small" style={{ margin: 0 }}>{t('Noch in keiner Kampagne. Du kannst ihn beim Beitritt wählen oder hier einsetzen.')}</p>
++          <p className="muted small" style={{ margin: 0 }}>{t('Noch in keiner Kampagne.')}</p>
+         )}
+         {c.links.map((l) => {
+@@ -224,5 +221,4 @@ export function MyCharacterPage() {
+           <Divider />
+           <h2>{t('Chroniken')}</h2>
+-          <p className="muted small" style={{ margin: 0 }}>{t('Was dein Charakter erlebt hat – bleibt in der Sammlung, auch wenn die Kampagne endet.')}</p>
+           {chronicles.map((ch) => {
+             const read = ch.sessions.filter((s) => s.recap);
+@@ -257,5 +253,5 @@ export function MyCharacterPage() {
+       <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+         <h2>{t('Als Datei weitergeben')}</h2>
+-        <span className="small">{t('Zum Beispiel auf dein Tablet oder ein neues Handy: Dort unter „Meine Charaktere“ → „Sammlung sichern“ → „Aus Datei zurückholen“. Die Datei enthält auch deine privaten Notizen und Chroniken.')}</span>
++        <span className="small">{t('Für ein anderes Gerät, mit Notizen und Chroniken.')}</span>
+         {!!files?.length && (
+           <label className="check">
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index bbcdb51..d72f8a2 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -744,5 +744,5 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
+                 <input type="checkbox" checked={settings.raw.playerProposals} disabled={busy}
+                   onChange={(e) => run(() => settings.patch({ playerProposals: e.target.checked }), () => undefined)} />
+-                <span className="lr-text">{t('Spielende dürfen Einträge vorschlagen')}<span className="lr-sub">{t('Du entscheidest, was in die Bibel kommt.')}</span></span>
++                <span className="lr-text">{t('Spielende dürfen Einträge vorschlagen')}</span>
+               </label>
+             )}
