@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client';
 import type { Campaign, CounterKind, Entry, Member } from '../api/types';
 import { CountersLine, MyCounters } from '../characters/Counters';
-import { blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
+import { accountKey, addOwners, allStoredCharacters, blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
 import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
@@ -216,7 +216,22 @@ function CollectionActions({ campaign, member, onChanged, onEdit, children }: { 
   };
 
   const adopt = () => run(async () => {
-    const c = createCharacter({ name: member.characterName ?? member.displayName, summary: member.characterSummary, backstory: member.characterBackstory });
+    // Steht schon eine Kennung am Platz, wird der Charakter mit derselben Kennung geholt (sonst lehnt der Server ab).
+    // Liegt er im Gerät nur unter einem anderen Konto, genügt es, dieses Konto als Besitzer einzutragen.
+    const known = member.characterId ? allStoredCharacters().find((x) => x.id === member.characterId) : undefined;
+    if (known) {
+      const key = accountKey(currentConnection());
+      if (key) addOwners(known.id, [key]);
+      await pushToCampaign(known.id, { connId, campaignId: campaign.id, campaignTitle: campaign.title, memberId: member.id });
+      onChanged();
+      navigate(`/charaktere/${known.id}`);
+      return;
+    }
+    const c = createCharacter({
+      ...(member.characterId ? { id: member.characterId, version: member.characterVersion ?? 1 } : {}),
+      name: member.characterName ?? member.displayName, nickname: member.characterNickname, summary: member.characterSummary,
+      backstory: member.characterBackstory, pronouns: member.characterPronouns
+    });
     if (member.portraitUpdatedAt) {
       try {
         const blob = await api.portrait(campaign.id, member.id, 'full');
@@ -249,8 +264,16 @@ function CollectionActions({ campaign, member, onChanged, onEdit, children }: { 
   if (member.characterId) {
     return (
       <>
-        <span className="muted small" style={{ textAlign: 'center' }}>{t('Dieser Charakter liegt in der Sammlung auf einem anderen Gerät.')}</span>
-        {children && <div className="list-box">{children}</div>}
+        <ErrorBox error={error} />
+        <div className="list-box">
+          <button type="button" className="list-row nav" disabled={busy} onClick={adopt}>
+            <IconUser />
+            <span className="lr-text">{busy ? t('Übernehme …') : t('Auf dieses Gerät holen')}
+              <span className="lr-sub">{t('Der Charakter fehlt in der Sammlung auf diesem Gerät.')}</span>
+            </span>
+          </button>
+          {children}
+        </div>
       </>
     );
   }

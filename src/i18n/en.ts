@@ -803,7 +803,6 @@ export const en: Record<string, string> = {
   "Schicke …": "Sending …",
   "Neuen Stand aus der Sammlung schicken": "Send the latest version from your collection",
   "In meiner Sammlung öffnen": "Open in my collection",
-  "Dieser Charakter liegt in der Sammlung auf einem anderen Gerät.": "This character lives in the collection on another device.",
   "Übernehme …": "Adding …",
   "In meine Sammlung übernehmen": "Add to my collection",
   "Dann kannst du ihn in andere Kampagnen mitnehmen, Notizen führen und Welt mitbringen.": "Then you can take them to other campaigns, keep notes and bring along parts of the world.",
@@ -1736,4 +1735,6 @@ export const en: Record<string, string> = {
   "Für ein anderes Gerät, mit Notizen und Chroniken.": "For another device, including notes and chronicles.",
   "Kleiner": "Smaller",
   "Größer": "Larger",
+  "Auf dieses Gerät holen": "Bring to this device",
+  "Der Charakter fehlt in der Sammlung auf diesem Gerät.": "This character is missing from the collection on this device.",
 };

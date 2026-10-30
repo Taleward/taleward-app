@@ -129,10 +129,10 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
-export function createCharacter(data: { name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
+export function createCharacter(data: { id?: string; version?: number; name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
   const now = new Date().toISOString();
   const c: StoredCharacter = {
-    id: newId(), version: 1, name: data.name.trim(), nickname: data.nickname ?? null, summary: data.summary ?? null,
+    id: data.id ?? newId(), version: data.version ?? 1, name: data.name.trim(), nickname: data.nickname ?? null, summary: data.summary ?? null,
     backstory: data.backstory ?? null, system: data.system ?? null, pronouns: data.pronouns ?? null, status: 'active', statusChangedAt: null,
     owners: myAccountKeys(), notes: '', portrait: data.portrait ?? null, portraitMeta: data.portraitMeta ?? null, portraitChangedAt: data.portrait ? now : null, world: [], links: [], chronicles: {}, createdAt: now, updatedAt: now
   };
