@@ -34,6 +34,10 @@ export interface MockCampaign {
   allowCloudSummary?: boolean;
   /** Auswertung von Charakterbögen und Hintergründen (ab 0.4.18) */
   allowCharacterAnalysis?: boolean;
+  /** Vorschläge von Spielenden (ab 0.4.28); fehlt = an */
+  playerProposals?: boolean;
+  /** Zähler am Charakter (ab 0.4.28); leer = aus */
+  counterKinds?: { id: string; label: string; hint?: string | null }[];
   archivedAt?: string | null;
   /** Namenshilfe (ab 0.4.6, nur SL) */
   hotwords?: string[];
@@ -50,6 +54,7 @@ export interface MockCampaign {
 export const campaigns: MockCampaign[] = [
   {
     id: 'c-grau',
+    counterKinds: [{ id: 'lep', label: 'LeP', hint: 'Lebenspunkte' }, { id: 'asp', label: 'AsP', hint: 'Astralpunkte' }, { id: 'schip', label: 'SchiP', hint: 'Schicksalspunkte' }],
     title: 'Die Schatten von Grauwacht',
     description: 'Düstere Stadtkampagne am Grauen Strom.',
     system: 'dsa',
@@ -72,6 +77,7 @@ export const campaigns: MockCampaign[] = [
   },
   {
     id: 'c-drache',
+    counterKinds: [{ id: 'lep', label: 'LeP', hint: 'Lebenspunkte' }, { id: 'asp', label: 'AsP', hint: 'Astralpunkte' }, { id: 'schip', label: 'SchiP', hint: 'Schicksalspunkte' }],
     title: 'Die Erben des Drachenpasses',
     description: 'Reisekampagne durch das Hochgebirge.',
     system: 'other', systemName: 'Household',

@@ -9,7 +9,7 @@
  * Gutschein zum Ausprobieren: TAVERNE-GUTSCHEIN (5 €, einmal).
  */
 import { HttpResponse, http } from 'msw';
-import type { Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
+import type { CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
 import { campaigns } from './db';
 import type { MockCampaign } from './db';
 
@@ -101,6 +101,8 @@ export function settingsOf(c: MockCampaign, gm: boolean): CampaignSettings {
     allowCloudSummary: !!c.allowCloudSummary,
     allowExternalTranscription: !!c.allowExternalTranscription,
     allowCharacterAnalysis: !!c.allowCharacterAnalysis,
+    playerProposals: c.playerProposals !== false,
+    counterKinds: c.counterKinds ?? [],
     characterSheetLimits: { maxSheets: own.sheetsPerPlayer, maxPages: own.sheetMaxPages },
     locks: locked && FIELDS.includes(locked) ? [{ field: locked, value: !!c[locked], reason: 'operator' }] : [],
     updatedAt: r.updatedAt,
@@ -230,7 +232,7 @@ export function billingHandlers(B: string, deps: {
     http.patch(`${B}/campaigns/:id/settings`, async ({ params, request }) => {
       const g = gmCampaign(String(params.id));
       if (!g) return notFound();
-      const body = (await request.json()) as Partial<Record<SettingField, boolean>> & { version?: number };
+      const body = (await request.json()) as Partial<Record<SettingField, boolean>> & { version?: number; playerProposals?: boolean; counterKinds?: CounterKind[] };
       if (body.version !== record(g.c).version) return err(409, 'settings_conflict', 'Inzwischen hat jemand die Einstellungen geändert.', { current: settingsOf(g.c, true) });
       const locked = lockField();
       if (locked && typeof body[locked] === 'boolean' && body[locked] !== !!g.c[locked]) return err(400, 'setting_locked', 'Das hat der Betreiber des Servers festgelegt.', { field: locked });
@@ -238,6 +240,24 @@ export function billingHandlers(B: string, deps: {
       const before = snapshot(g.c);
       for (const f of FIELDS) if (typeof body[f] === 'boolean') g.c[f] = body[f];
       recordChange(g.c, before, g.m.id);
+      // 0.4.28: Vorschläge von Spielenden und Zählerarten
+      const r = record(g.c);
+      const log = (field: string, oldValue: boolean | number, newValue: boolean | number) => {
+        r.version += 1; r.updatedAt = new Date().toISOString(); r.updatedByMemberId = g.m.id;
+        r.log.unshift({ at: r.updatedAt, field, oldValue, newValue, version: r.version, byMemberId: g.m.id, byOperator: false });
+      };
+      if (typeof body.playerProposals === 'boolean' && body.playerProposals !== (g.c.playerProposals !== false)) {
+        log('playerProposals', g.c.playerProposals !== false, body.playerProposals);
+        g.c.playerProposals = body.playerProposals;
+      }
+      if (Array.isArray(body.counterKinds)) {
+        const next = body.counterKinds.slice(0, 8).map((k) => ({ id: String(k.id).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24), label: String(k.label).trim().slice(0, 24), hint: k.hint ?? null }))
+          .filter((k) => k.id && k.label);
+        if (JSON.stringify(next) !== JSON.stringify(g.c.counterKinds ?? [])) {
+          log('counterKinds', (g.c.counterKinds ?? []).length, next.length);
+          g.c.counterKinds = next;
+        }
+      }
       return HttpResponse.json(settingsOf(g.c, true));
     }),
     http.get(`${B}/campaigns/:id/settings/log`, ({ params }) => {

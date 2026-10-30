@@ -80,6 +80,10 @@ export interface Member {
   characterVersion?: number | null;
   characterStatus?: CharacterStatus | null;
   characterNickname?: string | null;
+  /** Wie über die Figur gesprochen wird (ab 0.4.28), für alle sichtbar */
+  characterPronouns?: string | null;
+  /** Zählerstände (ab 0.4.28) – nur für die Person selbst und die SL */
+  counters?: CounterValue[];
   /** „Meine Charakterdaten dürfen bei einem Umzug mit“ (ab 0.4.8); für alle sichtbar, null = nein */
   moveConsentAt?: string | null;
   /** Platz aus einem Umzug, noch nicht besetzt (ab 0.4.8); userId ist dann "" */
@@ -97,8 +101,62 @@ export interface Character {
   summary?: string | null;
   backstory?: string | null;
   system?: string | null;
+  /** Wie andere über die Figur sprechen („sie“, „er“, eigener Text), ab 0.4.28 */
+  pronouns?: string | null;
   status: CharacterStatus;
   statusChangedAt?: string | null;
+}
+
+/** Ab 0.4.28: Zählerart am Charakter (LeP, AsP …), festgelegt von der SL */
+export interface CounterKind {
+  id: string;
+  label: string;
+  hint?: string | null;
+}
+export interface CounterValue {
+  kindId: string;
+  value: number;
+  max?: number | null;
+}
+
+/** Ab 0.4.28: Vorschlag einer Spielerin für die Bibel */
+export type PlayerProposalType = 'npc' | 'location' | 'quest' | 'item' | 'faction' | 'other';
+export interface PlayerProposalIn {
+  entryType: PlayerProposalType;
+  title: string;
+  detail?: string;
+  targetEntryId?: string | null;
+}
+export interface PlayerProposal extends PlayerProposalIn {
+  id: string;
+  campaignId: string;
+  authorMemberId: string;
+  state: 'open' | 'accepted' | 'rejected' | 'withdrawn';
+  createdAt: string;
+  decidedAt?: string | null;
+  resultEntryId?: string | null;
+}
+export interface PlayerProposalDecision {
+  decision: 'accept' | 'reject';
+  entryType?: PlayerProposalType;
+  title?: string;
+  detail?: string;
+  gmNotes?: string | null;
+  visibility?: Visibility;
+  hiddenFromMemberIds?: string[];
+  mergeIntoEntryId?: string | null;
+  holderMemberId?: string | null;
+}
+
+/** Ab 0.4.28: gemerkte Stelle einer Runde, nur für die Person selbst */
+export interface Bookmark {
+  id: string;
+  sessionId: string;
+  at: string;
+  note?: string | null;
+  offsetMs?: number | null;
+  recapParagraph?: number | null;
+  createdAt: string;
 }
 
 /** Mitgebrachter Welt-Eintrag (ab 0.4.7) */
@@ -229,6 +287,10 @@ export interface Campaign extends CampaignSummary {
   settingsVersion?: number | null;
   /** Wer zahlt – nur für SL und nur mit Guthaben (ab 0.4.25) */
   billing?: CampaignBilling | null;
+  /** Offene Vorschläge von Spielenden – nur SL (ab 0.4.28) */
+  openPlayerProposals?: number;
+  /** Runde, die gerade aufgenommen wird – nur SL und Anwesende (ab 0.4.28) */
+  liveSessionId?: string | null;
   members: Member[];
 }
 
@@ -293,12 +355,16 @@ export interface CreditWaitingJob {
 
 /** Ab 0.4.25: Einstellungen einer Kampagne an einem Ort */
 export type SettingField = 'allowCloudSummary' | 'allowExternalTranscription' | 'allowCharacterAnalysis';
-export type CampaignSettingsIn = Partial<Record<SettingField, boolean>>;
+export type CampaignSettingsIn = Partial<Record<SettingField, boolean>> & { playerProposals?: boolean; counterKinds?: CounterKind[] };
 export interface CampaignSettings {
   version: number;
   allowCloudSummary: boolean;
   allowExternalTranscription: boolean;
   allowCharacterAnalysis: boolean;
+  /** Ab 0.4.28; fehlt bei älteren Servern */
+  playerProposals?: boolean;
+  /** Ab 0.4.28; leer = aus */
+  counterKinds?: CounterKind[];
   characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
   locks: { field: SettingField | (string & {}); value: boolean; reason: 'unavailable' | 'operator' | (string & {}) }[];
   updatedAt: string;
@@ -573,6 +639,8 @@ export interface EntryInput {
   holderMemberId?: string | null;
   /** Andere Namen oder Schreibweisen („Auch genannt“, ab 0.4.21), sichtbar wie der Name */
   aliases?: string[];
+  /** Wie über die Figur gesprochen wird (ab 0.4.28, v. a. NSC), sichtbar wie der Name */
+  pronouns?: string | null;
   visibility: Visibility;
   /** Geheimer Teil, nur für die SL; der Server lässt ihn für Spieler weg (ab 0.3.2) */
   gmNotes?: string | null;

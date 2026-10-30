@@ -58,7 +58,8 @@ export async function uploadSessionAudio(
   sessionId: string,
   source: 'table' | 'discord',
   files: UploadFile[],
-  onProgress: (fraction: number) => void
+  onProgress: (fraction: number) => void,
+  spans?: { startedAt: string; endedAt: string }[]
 ): Promise<void> {
   const created = await api.startUpload(
     sessionId,
@@ -69,7 +70,8 @@ export async function uploadSessionAudio(
       mimeType: f.mimeType,
       // Bei source=table bleibt trackMemberId leer
       trackMemberId: source === 'discord' ? f.trackMemberId : undefined
-    }))
+    })),
+    source === 'table' ? spans : undefined
   );
 
   const size = created.chunkSizeBytes;

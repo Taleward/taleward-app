@@ -13,6 +13,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Attendee, Member } from '../api/types';
 import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } from '../api/upload';
+import { clearSpans, spanClose, spanOpen, spansFor } from '../recorder/spans';
 import { ConsentHandover } from '../components/ConsentHandover';
 import { IconCheck, IconMic, IconPlus } from '../components/Icons';
 import { CONSENT_ON_SITE } from '../consent';
@@ -207,13 +208,16 @@ export function Recording() {
   };
 
   /** storedId: Aufnahme im Zwischenspeicher des Browsers – nach erfolgreichem Hochladen löschen, sonst wieder anbieten */
-  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null) => {
+  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null, elapsedMs?: number) => {
     setPhase('uploading');
     setProgress(0);
     setError(null);
     try {
       const id = existingSessionId ?? (await ensureSession());
-      await uploadSessionAudio(id, source, files, setProgress);
+      // Aufnahmezeiten nur zu einer Aufnahme dieses Geräts; bei hochgeladenen Dateien gibt es keine
+      const spans = source === 'table' && (existingSessionId || storedId || elapsedMs != null) ? spansFor(id, elapsedMs) : undefined;
+      await uploadSessionAudio(id, source, files, setProgress, spans);
+      clearSpans(id);
       if (native && existingSessionId) await BackgroundRecorder.discard({ sessionId: id }).catch(() => undefined);
       if (storedId) await removeRecording(storedId).catch(() => undefined);
       navigate(p(`/s/${id}`), { replace: true });
@@ -237,7 +241,7 @@ export function Recording() {
 
   const uploadLeftover = (st: NativeStatus) => {
     setLeftover(null);
-    upload('table', nativeUploadFiles(st.files), st.sessionId);
+    upload('table', nativeUploadFiles(st.files), st.sessionId, null, st.elapsedMs);
   };
 
   const discardLeftover = async (st: NativeStatus) => {
@@ -249,7 +253,7 @@ export function Recording() {
   const uploadWebLeftover = async (r: StoredRecording) => {
     setWebLeftover(null);
     const blob = await loadRecording(r);
-    upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], r.sessionId, r.id);
+    upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], r.sessionId, r.id, r.elapsedMs);
   };
 
   const discardWebLeftover = async (r: StoredRecording) => {
@@ -285,6 +289,7 @@ export function Recording() {
         await recorder.current.start();
         setLive({ recorder: recorder.current, connId: currentConnection().id, campaignId, sessionId: id, consented: attendees.filter((a) => a.consent).length });
       }
+      spanOpen(id);
       setElapsed(0);
       setPaused(false);
       try { localStorage.setItem(TIP_KEY, '1'); } catch { /* dann eben noch einmal */ }
@@ -312,6 +317,7 @@ export function Recording() {
       }
       // Die angelegte, leere Runde auf dem Server wieder entfernen (ältere Server: bleibt liegen, schadet nicht)
       if (id) await api.deleteSession(id).catch(() => undefined);
+      if (id) clearSpans(id);
       sessionId.current = null;
       setElapsed(0);
       setPaused(false);
@@ -325,6 +331,7 @@ export function Recording() {
     if (native) {
       const st = paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause();
       setPaused(st.state === 'paused');
+      if (st.sessionId) (st.state === 'paused' ? spanClose : spanOpen)(st.sessionId);
       return;
     }
     if (!recorder.current) return;
@@ -332,6 +339,7 @@ export function Recording() {
     if (recorder.current.state === 'paused') recorder.current.resume();
     else recorder.current.pause();
     setPaused(recorder.current.state === 'paused');
+    if (sessionId.current) (recorder.current.state === 'paused' ? spanClose : spanOpen)(sessionId.current);
   };
 
   const stop = async () => {
@@ -343,15 +351,18 @@ export function Recording() {
         setPhase('prepare');
         return;
       }
-      await upload('table', nativeUploadFiles(st.files), st.sessionId);
+      spanClose(st.sessionId);
+      await upload('table', nativeUploadFiles(st.files), st.sessionId, null, st.elapsedMs);
       return;
     }
     if (!recorder.current) return;
     const storedId = recorder.current.storedId;
+    const elapsedMs = recorder.current.elapsedMs();
     const blob = await recorder.current.stop();
     recorder.current = null;
     setLive(null);
-    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId);
+    if (sessionId.current) spanClose(sessionId.current);
+    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId, elapsedMs);
   };
 
   const pickFile = (file: File | undefined) => {

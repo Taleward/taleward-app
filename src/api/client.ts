@@ -56,7 +56,7 @@ import type { InvitePreview, CharacterAnalysis,
   User,
   Attendee,
   Visibility,
-  VoiceProfile
+  VoiceProfile, Bookmark, CounterValue, PlayerProposal, PlayerProposalDecision, PlayerProposalIn
 } from './types';
 
 export class ApiRequestError extends Error {
@@ -420,8 +420,25 @@ function makeApi(conn: () => Connection) {
   startUpload: (
     sessionId: string,
     source: 'table' | 'discord',
-    files: { fileName: string; sizeBytes: number; mimeType: string; trackMemberId?: string }[]
-  ) => request<UploadCreated>('POST', `/sessions/${sessionId}/uploads`, { body: { source, files } }),
+    files: { fileName: string; sizeBytes: number; mimeType: string; trackMemberId?: string }[],
+    spans?: { startedAt: string; endedAt: string }[]
+  ) => request<UploadCreated>('POST', `/sessions/${sessionId}/uploads`, { body: { source, files, ...(spans?.length ? { spans } : {}) } }),
+  /** Ab 0.4.28: Vorschläge von Spielenden für die Bibel */
+  playerProposals: (campaignId: string, state: 'open' | 'all' = 'all') =>
+    request<PlayerProposal[]>('GET', `/campaigns/${campaignId}/player-proposals?state=${state}`),
+  addPlayerProposal: (campaignId: string, input: PlayerProposalIn) =>
+    request<PlayerProposal>('POST', `/campaigns/${campaignId}/player-proposals`, { body: input }),
+  withdrawPlayerProposal: (id: string) => request<void>('DELETE', `/player-proposals/${id}`),
+  decidePlayerProposal: (id: string, decision: PlayerProposalDecision) =>
+    request<PlayerProposal>('POST', `/player-proposals/${id}/decision`, { body: decision }),
+  /** Ab 0.4.28: gemerkte Stellen, nur die eigenen */
+  bookmarks: (sessionId: string) => request<Bookmark[]>('GET', `/sessions/${sessionId}/bookmarks`),
+  addBookmark: (sessionId: string, note?: string | null, at?: string) =>
+    request<Bookmark>('POST', `/sessions/${sessionId}/bookmarks`, { body: { ...(at ? { at } : {}), ...(note ? { note } : {}) } }),
+  deleteBookmark: (id: string) => request<void>('DELETE', `/bookmarks/${id}`),
+  /** Ab 0.4.28: eigene Zählerstände */
+  setCounters: (campaignId: string, values: CounterValue[]) =>
+    request<CounterValue[]>('PUT', `/campaigns/${campaignId}/members/me/counters`, { body: { values } }),
   putChunk: (uploadId: string, fileId: string, index: number, data: Blob, sha256?: string) =>
     request<void>('PUT', `/uploads/${uploadId}/files/${fileId}/chunks/${index}`, {
       raw: data,

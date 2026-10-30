@@ -3,6 +3,7 @@ import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
 import { textToPdf } from './minipdf';
 import { cleanAliases, findMatch, secretWarnings } from './checks';
 import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
+import { memberCounters, playerExtras, playerHandlers } from './players';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
 const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
@@ -317,7 +318,8 @@ function worldStatus(w: WorldRecord): WorldEntryStatus {
 function applyCharacter(c: MockCampaign, m: Member, ch: Character) {
   Object.assign(m, {
     characterId: ch.id, characterVersion: ch.version, characterName: ch.name.trim(), characterNickname: ch.nickname ?? null,
-    characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status
+    characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status,
+    characterPronouns: ch.pronouns?.trim() || null
   });
   const pc = entries.find((e) => e.campaignId === c.id && e.type === 'pc' && e.holderMemberId === m.id);
   if (pc) Object.assign(pc, { name: m.characterName, summary: ch.summary ?? '', updatedAt: new Date().toISOString() });
@@ -516,7 +518,13 @@ function importView(i: (typeof importsMock)[string]): ImportStatus {
 
 function membersFor(c: MockCampaign) {
   const gm = isGm(c.id);
-  return c.members.map((m) => (gm || m.userId === ME.id ? m : { ...m, characterBackstory: undefined }));
+  const viewer = myMember(c);
+  return c.members.map((m) => memberCounters(c, gm || m.userId === ME.id ? m : { ...m, characterBackstory: undefined }, viewer));
+}
+
+/** Sieht dieses Mitglied den Eintrag? (gm_only und „verborgen vor“ = nein) */
+function canSee(e: Entry, m: Member): boolean {
+  return m.role === 'gm' || (e.visibility === 'public' && !(e.hiddenFromMemberIds ?? []).includes(m.id));
 }
 
 function commentMarker(s: MockSession): string {
@@ -646,7 +654,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.27',
+      apiVersion: nachbar ? '0.3.9' : '0.4.28',
       serverId: nachbar ? undefined : 'testserver',
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
@@ -970,13 +978,13 @@ export const handlers = [
       (gmNotices[c.id] ??= []).push({ id: 'gn-' + crypto.randomUUID().slice(0, 8), code: 'member_joined', memberId: m.id, entryIds: [], createdAt: new Date().toISOString() });
       seen.chronicle[c.id] = seen.bible[c.id] = new Date().toISOString();
     }
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), members: membersFor(c) });
   }),
 
   http.get(`${B}/campaigns/:id`, ({ params }) => {
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
   }),
 
   // ---------------- Charaktere (0.4.7)
@@ -2251,7 +2259,7 @@ export const handlers = [
       if (typeof ok === 'string') return err(400, 'invalid_input', ok);
       body.links = ok;
     }
-    Object.assign(e, Object.fromEntries(Object.entries(body).filter(([k]) => ['name', 'summary', 'gmNotes', 'visibility', 'status', 'holderMemberId', 'type', 'hiddenFromMemberIds', 'links'].includes(k))));
+    Object.assign(e, Object.fromEntries(Object.entries(body).filter(([k]) => ['name', 'summary', 'gmNotes', 'visibility', 'status', 'holderMemberId', 'type', 'hiddenFromMemberIds', 'links', 'pronouns'].includes(k))));
     // 0.4.21: „Auch genannt“ bereinigt speichern (ohne Namen, ohne Doppelte)
     if (body.aliases !== undefined || body.name !== undefined) e.aliases = cleanAliases(body.aliases ?? e.aliases ?? [], e.name);
     e.updatedAt = new Date().toISOString();
@@ -2312,5 +2320,16 @@ export const handlers = [
     return HttpResponse.json(e, { status: 201 });
   }),
   // 0.4.25: Guthaben und Kampagnen-Einstellungen
-  ...billingHandlers(B, { myMember, terms: () => !termsOutdated() })
+  ...billingHandlers(B, { myMember, terms: () => !termsOutdated() }),
+  // 0.4.28: Vorschläge von Spielenden, Merken, Zähler
+  ...playerHandlers(B, {
+    myMember, canSee,
+    createEntry: (c, input) => {
+      const e: Entry = { type: 'other', name: '', summary: '', visibility: 'public', status: null, holderMemberId: null, ...input,
+        aliases: [], id: 'e-' + crypto.randomUUID().slice(0, 8), campaignId: c.id,
+        firstSessionNumber: null, lastSessionNumber: null, mentions: [], updatedAt: new Date().toISOString() } as Entry;
+      entries.push(e);
+      return e;
+    }
+  })
 ];

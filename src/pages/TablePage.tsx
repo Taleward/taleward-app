@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { spanClose, spanOpen } from '../recorder/spans';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { apiAtLeast, currentConnectionId, p } from '../api/connections';
@@ -76,11 +77,13 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
   const elapsedMs = web ? web.recorder.elapsedMs() : st!.elapsedMs;
   const toggle = async () => {
     if (web) {
-      if (paused) web.recorder.resume();
-      else web.recorder.pause();
+      if (paused) { web.recorder.resume(); spanOpen(web.sessionId); }
+      else { web.recorder.pause(); spanClose(web.sessionId); }
       return;
     }
-    setSt(paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause());
+    const next = paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause();
+    if (next.sessionId) (next.state === 'paused' ? spanClose : spanOpen)(next.sessionId);
+    setSt(next);
   };
   const target = web ? web.campaignId : campaignId;
   return (
