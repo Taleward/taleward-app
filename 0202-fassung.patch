@@ -1,0 +1,40 @@
+From 77e3e35b53d8d542fb075af4b8a5260699fafaa4 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 08:33:58 +0100
+Subject: [PATCH 202/202] Fassung 0.33.0
+
+---
+ package-lock.json | 4 ++--
+ package.json      | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index 3d72cf6..bbe03da 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,5 +1,5 @@
+ {
+   "name": "taleward-app",
+-  "version": "0.32.0",
++  "version": "0.33.0",
+   "lockfileVersion": 3,
+   "requires": true,
+@@ -7,5 +7,5 @@
+     "": {
+       "name": "taleward-app",
+-      "version": "0.32.0",
++      "version": "0.33.0",
+       "license": "AGPL-3.0-only",
+       "dependencies": {
+diff --git a/package.json b/package.json
+index e402cf7..1512a55 100644
+--- a/package.json
++++ b/package.json
+@@ -2,5 +2,5 @@
+   "name": "taleward-app",
+   "private": true,
+-  "version": "0.32.0",
++  "version": "0.33.0",
+   "type": "module",
+   "scripts": {

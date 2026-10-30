@@ -1,0 +1,159 @@
+From 2806dd13e4a9621b8f688e3f5daf601db0f53745 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 08:33:57 +0100
+Subject: [PATCH 201/202] =?UTF-8?q?Schnittstelle=200.4.27:=20Ger=C3=A4teke?=
+ =?UTF-8?q?nnung=20bei=20der=20Anmeldung,=20409=20email=5Fconfirmed;=20Sat?=
+ =?UTF-8?q?z=20zu=20Hinweis-Mails?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ docs/session-chronik-api.yaml | 19 ++++++++++++++++++-
+ src/api/client.ts             |  5 +++--
+ src/api/deviceId.ts           | 20 ++++++++++++++++++++
+ src/components/EmailNudge.tsx |  7 +++++--
+ src/i18n/en.ts                |  1 +
+ src/mocks/handlers.ts         |  2 +-
+ 6 files changed, 48 insertions(+), 6 deletions(-)
+ create mode 100644 src/api/deviceId.ts
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index d4591cb..3973649 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.26
++  version: 0.4.27
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -265,4 +265,6 @@ info:
+     Außerdem private Kommentare an mehrere Personen: POST …/comments nimmt recipientMemberIds, Comment liefert
+     recipientMemberIds. recipientMemberId bleibt (erster Empfänger) für ältere Apps.
++    Änderungen in 0.4.27 (Hinweis-Mail nur bei neuem Gerät): POST /auth/login und POST /auth/oidc/exchange nehmen ein
++    freiwilliges Feld deviceId. Außerdem 409 email_confirmed bei PUT /me/email beschrieben (Server ab 0.4.141).
+ 
+ servers:
+@@ -313,4 +315,13 @@ paths:
+                 username: { type: string }
+                 password: { type: string, format: password }
++                deviceId:
++                  type: string
++                  pattern: "^[A-Za-z0-9_-]{16,64}$"
++                  description: |
++                    Ab 0.4.27, freiwillig: zufällige Kennung dieser Installation (von der App einmal erzeugt und dauerhaft
++                    gespeichert, nie aus Hardware-Kennungen). Der Server speichert nur den SHA-256-Wert am Konto und
++                    schickt die Hinweis-Mail zur Anmeldung nur, wenn die Kennung für das Konto neu ist; er vergisst sie
++                    nach 180 Tagen ohne Anmeldung und nach einem neuen Passwort. Ohne Feld: höchstens eine Mail je
++                    15 Minuten. Ungültige Werte werden ignoriert (kein Fehler). Ältere Server ignorieren das Feld.
+       responses:
+         "200":
+@@ -495,4 +506,8 @@ paths:
+                 ticket: { type: string }
+                 verifier: { type: string }
++                deviceId:
++                  type: string
++                  pattern: "^[A-Za-z0-9_-]{16,64}$"
++                  description: Ab 0.4.27, freiwillig, wie bei POST /auth/login
+       responses:
+         "200":
+@@ -585,4 +600,6 @@ paths:
+         202; der Server schickt einen Bestätigungslink (24 h) auf https://<server>/konto/email/<token>. Bis dahin steht die
+         Adresse in User.emailPending. Fehler: 400 invalid_email, 409 email_taken (an anderem Konto bestätigt),
++        409 email_confirmed (Server ab 0.4.141: für dieses Konto schon bestätigt; kein neuer Vorgang, ein offener zur selben
++        Adresse wird verworfen; die App zeigt die Meldung des Servers),
+         503 mail_unavailable, 429 (höchstens 5 pro Stunde).
+       requestBody:
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 555e64c..58b1d20 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -1,3 +1,4 @@
+ import { withSafeLinks } from './safeUrl';
++import { deviceId } from './deviceId';
+ import { isSafePath } from './pathGuard';
+ import { isMusterUrl } from './muster';
+@@ -236,5 +237,5 @@ function makeApi(conn: () => Connection) {
+   return {
+   login: (username: string, password: string) =>
+-    request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/login', { body: { username, password } }),
++    request<{ accessToken: string; expiresAt: string; user: User }>('POST', '/auth/login', { body: { username, password, deviceId: deviceId() } }),
+   me: () => request<User>('GET', '/me'),
+   info: () => request<ServerInfo>('GET', '/info').then(withSafeLinks),
+@@ -253,5 +254,5 @@ function makeApi(conn: () => Connection) {
+   // Anmeldung (ab 0.4.0)
+   passwordReset: (login: string) => request<void>('POST', '/auth/password-reset', { body: { login } }),
+-  oidcExchange: (ticket: string, verifier: string) => request<OidcExchange>('POST', '/auth/oidc/exchange', { body: { ticket, verifier } }),
++  oidcExchange: (ticket: string, verifier: string) => request<OidcExchange>('POST', '/auth/oidc/exchange', { body: { ticket, verifier, deviceId: deviceId() } }),
+   setEmail: (email: string) => request<void>('PUT', '/me/email', { body: { email } }),
+   deleteEmail: () => request<void>('DELETE', '/me/email'),
+diff --git a/src/api/deviceId.ts b/src/api/deviceId.ts
+new file mode 100644
+index 0000000..babc992
+--- /dev/null
++++ b/src/api/deviceId.ts
+@@ -0,0 +1,20 @@
++/**
++ * Zufällige Kennung dieser Installation (ab Schnittstelle 0.4.27, freiwillig): Der Server schickt die Hinweis-Mail zur
++ * Anmeldung nur, wenn die Kennung für das Konto neu ist. Nie aus Hardware-Kennungen, nur einmal zufällig erzeugt.
++ * Ohne Speicher (z. B. privates Fenster) bleibt es bei einer Kennung je Sitzung.
++ */
++const KEY = 'taleward.deviceId';
++let memo: string | null = null;
++
++export function deviceId(): string {
++  if (memo) return memo;
++  try {
++    const saved = localStorage.getItem(KEY);
++    if (saved && /^[A-Za-z0-9_-]{16,64}$/.test(saved)) return (memo = saved);
++  } catch { /* weiter ohne Speicher */ }
++  const bytes = new Uint8Array(16);
++  crypto.getRandomValues(bytes);
++  memo = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
++  try { localStorage.setItem(KEY, memo); } catch { /* egal */ }
++  return memo;
++}
+diff --git a/src/components/EmailNudge.tsx b/src/components/EmailNudge.tsx
+index e9ccc7f..9d8cbb1 100644
+--- a/src/components/EmailNudge.tsx
++++ b/src/components/EmailNudge.tsx
+@@ -2,5 +2,5 @@ import { useEffect, useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { apiFor } from '../api/client';
+-import type { Connection } from '../api/connections';
++import { apiAtLeast, type Connection } from '../api/connections';
+ import { termsOutdated } from '../auth/serverAccess';
+ import { getLive, onLiveChange } from '../recorder/live';
+@@ -47,5 +47,8 @@ export function EmailNudge({ conn }: { conn: Connection }) {
+     <section className="card" aria-label={t('E-Mail hinterlegen')}>
+       <strong>{t('Willst du eine E-Mail hinterlegen?')}</strong>
+-      <span className="small">{t('Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.')}</span>
++      {/* Hinweis-Mails bei Anmeldungen schickt der Server erst in neueren Fassungen (ab Schnittstelle 0.4.26) */}
++      <span className="small">{apiAtLeast('0.4.26', conn)
++        ? t('Dann kannst du dein Passwort selbst zurücksetzen und erfährst, wenn sich jemand anderes mit deinem Konto anmeldet. Sie bleibt freiwillig, niemand am Tisch sieht sie.')
++        : t('Dann kannst du dein Passwort selbst zurücksetzen. Sie bleibt freiwillig, niemand am Tisch sieht sie.')}</span>
+       <div className="row wrap" style={{ gap: 8 }}>
+         <button type="button" className="btn small outline" onClick={() => { done(conn.id); navigate(`/konto?email=${encodeURIComponent(conn.id)}`); }}>{t('Eintragen')}</button>
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index f7c2bb9..69f7e0a 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1649,3 +1649,4 @@ export const en: Record<string, string> = {
+   "Dort braucht jede Person ein eigenes Konto und stimmt neu zu, Cloud-Freigaben und Stimmprofile richtet ihr neu ein.": "There everyone needs their own account and agrees again; you set up cloud permissions and voice profiles anew.",
+   "{name} groß öffnen": "Open {name} large",
++  "Dann kannst du dein Passwort selbst zurücksetzen und erfährst, wenn sich jemand anderes mit deinem Konto anmeldet. Sie bleibt freiwillig, niemand am Tisch sieht sie.": "Then you can reset your password yourself and find out when someone else signs in to your account. It stays optional, and nobody at the table sees it.",
+ };
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 04f6007..793fa93 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -647,5 +647,5 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.26',
++      apiVersion: nachbar ? '0.3.9' : '0.4.27',
+       serverId: nachbar ? undefined : 'testserver',
+       registration: nachbar ? 'invite_only' : registrationSetting(),
