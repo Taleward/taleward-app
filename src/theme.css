@@ -2281,9 +2281,14 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .quiet-link:disabled { opacity: .5; cursor: default; }
 
 /* Listen ohne eigenen Kasten (in einer Karte) und Häkchen als Zeile */
+/* Zeile mit eigenem Löschen-Zeichen daneben (Unterlagen in der Sammlung) */
+.list-box > .file-row { display: flex; gap: 4px; align-items: center; border-top: 1px solid var(--line); }
+.list-box > .file-row:first-child { border-top: none; }
+.list-box > .file-row > .list-row { flex: 1; border-top: none; }
+.list-box > .file-row > .btn.ghost { background: none; border: 0; box-shadow: none; color: var(--ink-muted); }
 .list-box.flat { background: none; border: 0; border-radius: 0; padding: 0; }
 .list-row.check-row { align-items: flex-start; cursor: pointer; }
-.list-row.check-row > input[type='checkbox'] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--tinte); }
+.list-row.check-row > input[type='checkbox'], .list-row.check-row > input[type='radio'] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--tinte); }
 .list-row:disabled { opacity: .55; cursor: default; }
 .card.manage .list-head { margin-top: var(--space-3); font-size: calc(17px * var(--ts)); }
 /* Zustimmung aufgeklappt in „Kampagne verwalten“ */
@@ -2318,3 +2323,8 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .screen:not(.with-nav) > .screen-main { padding-bottom: calc(var(--space-6) + var(--safe-bottom)); }
 .comment-actions { margin: -8px 0 -12px; color: var(--ink-muted); }
 .voice-hint .btn.square { background: none; border-color: transparent; color: var(--ink-muted); }
+
+/* Unterlagen aus der Sammlung lesen (PDF) */
+.pdf-pages { display: flex; flex-direction: column; gap: var(--space-2); }
+.pdf-page { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.pdf-page canvas { width: 100%; height: 100%; display: block; }

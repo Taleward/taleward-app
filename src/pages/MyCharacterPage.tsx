@@ -10,6 +10,8 @@ import { CharacterPortrait } from '../characters/Portrait';
 import { deleteCharacter, getCharacter, onCharactersChanged, STATUS_ORDER, updateCharacter, type CharacterLink, type WorldItem } from '../characters/store';
 import { fetchChronicle, linkOutdated, pushToCampaign, refreshWorld, releaseFromCampaign, serverHasCharacters } from '../characters/sync';
 import { WorldItemDialog } from '../characters/WorldItemDialog';
+import { Attachments, useCharacterFiles } from '../characters/Attachments';
+import { removeFilesOf } from '../characters/files';
 import { confirmDialog } from '../components/confirm';
 import { formatDate } from '../components/format';
 import { IconLock } from '../components/Icons';
@@ -33,6 +35,9 @@ export function MyCharacterPage() {
   const [error, setError] = useState<unknown>(null);
   const [picking, setPicking] = useState(false);
   const [fileError, setFileError] = useState<unknown>(null);
+  const files = useCharacterFiles(c?.id);
+  // Unterlagen können die Datei groß machen – mitnehmen ist Standard, abwählbar
+  const [withFiles, setWithFiles] = useState(true);
 
   useEffect(() => onCharactersChanged(() => setC(getCharacter(characterId))), [characterId]);
   // Stand der eingereichten Einträge still nachladen
@@ -74,7 +79,7 @@ export function MyCharacterPage() {
 
   const shareFile = async () => {
     setFileError(null);
-    try { await saveOrShare(characterFile(c), c.name); } catch (e) { setFileError(e); }
+    try { await saveOrShare(await characterFile(c, { withFiles: withFiles && !!files?.length }), c.name); } catch (e) { setFileError(e); }
   };
 
   const remove = async () => {
@@ -83,6 +88,7 @@ export function MyCharacterPage() {
       : t('{name} aus deiner Sammlung löschen? Private Notizen und Chroniken sind dann weg.', { name: c.name });
     if (!(await confirmDialog(q, { confirmLabel: t('Löschen'), danger: true }))) return;
     deleteCharacter(c.id);
+    removeFilesOf(c.id).catch(() => undefined);
     navigate('/charaktere', { replace: true });
   };
 
@@ -135,6 +141,8 @@ export function MyCharacterPage() {
           placeholder={t('Pläne, Verdachte, offene Rechnungen …')} />
         <span className="muted small">{t('Nur für dich – verlässt nie dieses Gerät.')}</span>
       </section>
+
+      <Attachments characterId={c.id} name={c.name} />
 
       {/* Mitgebrachte Welt */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -249,6 +257,12 @@ export function MyCharacterPage() {
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2>{t('Als Datei weitergeben')}</h2>
         <span className="small">{t('Zum Beispiel auf dein Tablet oder ein neues Handy: Dort unter „Meine Charaktere“ → „Sammlung sichern“ → „Aus Datei zurückholen“. Die Datei enthält auch deine privaten Notizen und Chroniken.')}</span>
+        {!!files?.length && (
+          <label className="check">
+            <input type="checkbox" checked={withFiles} onChange={(e) => setWithFiles(e.target.checked)} />
+            <span>{t('Unterlagen mitnehmen')}</span>
+          </label>
+        )}
         <ErrorBox error={fileError} />
         <button type="button" className="btn outline" style={{ alignSelf: 'flex-start' }} onClick={shareFile}>{t('{name} als Datei speichern', { name: c.name })}</button>
       </section>

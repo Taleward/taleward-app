@@ -8,6 +8,7 @@ import { t } from '../i18n';
 import { mergeCharacter } from './merge';
 import { sanitizeCharacter } from './sanitize';
 import { allStoredCharacters, listCharacters, myAccountKeys, putCharacters, type StoredCharacter } from './store';
+import { exportFiles, importFiles, type ExportedCharacterFile } from './files';
 
 export const BACKUP_FORMAT = 'taleward-charaktere/1';
 /** Ein einzelner Charakter als Datei (zum Weitergeben an ein anderes Gerät) */
@@ -18,6 +19,8 @@ interface CharacterFileData {
   exportedAt: string;
   appVersion: string;
   character: StoredCharacter;
+  /** Unterlagen (ab App 0.34) – ältere Apps lassen das Feld liegen */
+  files?: ExportedCharacterFile[];
 }
 
 interface BackupFile {
@@ -25,18 +28,27 @@ interface BackupFile {
   exportedAt: string;
   appVersion: string;
   characters: StoredCharacter[];
+  /** Unterlagen je Charakter (ab App 0.34) */
+  files?: Record<string, ExportedCharacterFile[]>;
 }
 
-/** Datei mit der ganzen eigenen Sammlung */
-export function backupFile(now = new Date()): File {
-  const data: BackupFile = { format: BACKUP_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, characters: listCharacters() };
+/** Datei mit der ganzen eigenen Sammlung, mit allen Unterlagen */
+export async function backupFile(now = new Date()): Promise<File> {
+  const characters = listCharacters();
+  const files: Record<string, ExportedCharacterFile[]> = {};
+  for (const c of characters) {
+    const list = await exportFiles(c.id).catch(() => []);
+    if (list.length) files[c.id] = list;
+  }
+  const data: BackupFile = { format: BACKUP_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, characters, ...(Object.keys(files).length ? { files } : {}) };
   return new File([JSON.stringify(data)], `taleward-charaktere-${now.toISOString().slice(0, 10)}.json`, { type: 'application/json' });
 }
 
-/** Datei mit einem Charakter: Stammdaten, Bild, mitgebrachte Welt, Abschriften und private Notizen */
-export function characterFile(c: StoredCharacter, now = new Date()): File {
+/** Datei mit einem Charakter: Stammdaten, Bild, mitgebrachte Welt, Abschriften, private Notizen und auf Wunsch Unterlagen */
+export async function characterFile(c: StoredCharacter, { withFiles = false, now = new Date() }: { withFiles?: boolean; now?: Date } = {}): Promise<File> {
   const { owners: _owners, ...character } = c;
-  const data: CharacterFileData = { format: CHARACTER_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, character: character as StoredCharacter };
+  const files = withFiles ? await exportFiles(c.id) : [];
+  const data: CharacterFileData = { format: CHARACTER_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, character: character as StoredCharacter, ...(files.length ? { files } : {}) };
   const slug = c.name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'charakter';
   return new File([JSON.stringify(data)], `taleward-charakter-${slug}.json`, { type: 'application/json' });
 }
@@ -67,9 +79,9 @@ export interface RestoreResult { added: number; updated: number; unchanged: numb
  * Abschriften und mitgebrachte Welt werden zusammengeführt (siehe merge.ts). Verknüpfungen mit Servern, die dieses
  * Gerät nicht kennt, fallen weg (dort muss man sich erst anmelden).
  */
-export function restoreBackup(text: string): RestoreResult {
+export async function restoreBackup(text: string): Promise<RestoreResult> {
   const wrong = () => new Error(t('Das ist weder eine Charakter-Datei noch eine Sicherung der Sammlung.'));
-  let data: { format?: string; characters?: unknown[]; character?: unknown } | null;
+  let data: { format?: string; characters?: unknown[]; character?: unknown; files?: unknown } | null;
   try {
     data = JSON.parse(text);
   } catch {
@@ -94,5 +106,15 @@ export function restoreBackup(text: string): RestoreResult {
     take.push({ ...merged, owners: [...new Set([...(old?.owners ?? []), ...mine])] });
   }
   if (take.length) putCharacters(take);
+  // Unterlagen nur zu Charakteren, die jetzt (auch) diesem Konto gehören
+  const ids = new Set(incoming.map(sanitizeCharacter).filter((x): x is StoredCharacter => !!x).map((c) => c.id));
+  if (data.format === CHARACTER_FORMAT) {
+    const id = [...ids][0];
+    if (id) await importFiles(id, data.files).catch(() => 0);
+  } else if (data.files && typeof data.files === 'object') {
+    for (const [id, list] of Object.entries(data.files as Record<string, unknown>)) {
+      if (ids.has(id)) await importFiles(id, list).catch(() => 0);
+    }
+  }
   return result;
 }

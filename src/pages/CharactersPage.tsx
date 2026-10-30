@@ -23,7 +23,7 @@ export function CharactersPage() {
   const [restored, setRestored] = useState<string | null>(null);
   const save = async () => {
     setBackupError(null);
-    try { await saveOrShare(backupFile(), t('Meine Charaktere')); } catch (e) { setBackupError(e); }
+    try { await saveOrShare(await backupFile(), t('Meine Charaktere')); } catch (e) { setBackupError(e); }
   };
   const restore = async (file: File | undefined) => {
     if (!file) return;
@@ -32,7 +32,7 @@ export function CharactersPage() {
     try {
       // Eine Sicherung mit Bildern ist selten größer als ein paar MB
       if (file.size > 30 * 1024 * 1024) throw new Error(t('Die Datei ist zu groß (höchstens {n} MB).', { n: 30 }));
-      const r = restoreBackup(await file.text());
+      const r = await restoreBackup(await file.text());
       setRestored(t('Zurückgeholt: {a} neu, {u} aktualisiert, {s} schon aktuell.', { a: r.added, u: r.updated, s: r.unchanged }));
     } catch (e) {
       setBackupError(e);

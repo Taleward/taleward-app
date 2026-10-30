@@ -32,6 +32,7 @@ import { HandoverPage } from './pages/HandoverPage';
 import { MovePage } from './pages/MovePage';
 import { CharactersPage } from './pages/CharactersPage';
 import { MyCharacterPage } from './pages/MyCharacterPage';
+import { FileViewer } from './characters/FileViewer';
 import { CharacterPage } from './pages/CharacterPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { DocumentReview } from './pages/DocumentReview';
@@ -74,6 +75,7 @@ function Routed() {
       <Route path="/schirm" element={<LastTableRedirect />} />
       <Route path="/charaktere" element={<CharactersPage />} />
       <Route path="/charaktere/:characterId" element={<MyCharacterPage />} />
+      <Route path="/charaktere/:characterId/datei/:fileId" element={<FileViewer />} />
       <Route path="/v/:conn/k/:campaignId" element={scoped(<Overview />)} />
       <Route path="/v/:conn/k/:campaignId/chronik" element={scoped(<Chronicle />)} />
       <Route path="/v/:conn/k/:campaignId/aufnahme" element={scoped(<Recording />)} />

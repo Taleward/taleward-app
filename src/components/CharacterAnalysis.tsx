@@ -10,6 +10,9 @@ import { ErrorBox } from './Screen';
 import { MAX_MB } from '../pages/DocumentsPage';
 import { t, tk, tn } from '../i18n';
 import { analysisReader } from '../characters/analysisReader';
+import { characterForCampaign } from '../characters/store';
+import { useCharacterFiles } from '../characters/Attachments';
+import { getFile, serverAccepts } from '../characters/files';
 
 /*
  * Charakterbögen und Hintergründe auswerten (Schnittstelle 0.4.18): Die SL schaltet es je Kampagne ein, die Spielerin
@@ -219,6 +222,8 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
         <span className="muted small">{t('In dieser Kampagne werden keine Charakterbögen angenommen.')}</span>
       ) : sheets.length < maxSheets ? (
         <>
+          <FromCollection campaignId={campaign.id} busy={busy} taken={sheets.map((d) => d.title)}
+            onPick={(file) => upload(file)} onError={setError} />
           <button type="button" className="btn outline" disabled={busy} onClick={() => picker.current?.click()}>
             {busy ? t('Lade hoch …') : t('Charakterbogen abgeben')}
           </button>
@@ -234,5 +239,48 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
         <span className="muted small">{t('Mehr Bögen gehen nicht. Lösch einen, um einen neuen abzugeben.')}</span>
       )}
     </section>
+  );
+}
+
+/**
+ * Bogen aus der Sammlung abgeben: Unterlagen des Charakters, der mit dieser Kampagne verknüpft ist. Angeboten wird nur,
+ * was der Server annimmt; alles andere bleibt auf dem Gerät.
+ */
+function FromCollection({ campaignId, busy, taken, onPick, onError }: {
+  campaignId: string;
+  busy: boolean;
+  taken: string[];
+  onPick: (file: File) => void;
+  onError: (e: unknown) => void;
+}) {
+  const ch = characterForCampaign(currentConnection().id, campaignId);
+  const files = useCharacterFiles(ch?.id);
+  // Schon abgegebene Bögen (gleicher Titel) nicht noch einmal anbieten
+  const open = files?.filter((f) => !(serverAccepts(f) && taken.includes(f.name.replace(/\.[^.]+$/, '')))) ?? [];
+  if (!ch || !open.length) return null;
+  const pick = async (id: string) => {
+    try {
+      const rec = await getFile(id);
+      if (rec) onPick(new File([rec.blob], rec.name, { type: rec.type }));
+    } catch (e) {
+      onError(e);
+    }
+  };
+  return (
+    <>
+      <span className="small"><strong>{t('Aus deiner Sammlung')}</strong></span>
+      <div className="list-box">
+        {open.map((f) => serverAccepts(f) ? (
+          <button key={f.id} type="button" className="list-row nav" disabled={busy} onClick={() => pick(f.id)}>
+            <span className="lr-text">{f.name}</span>
+            <span className="lr-val">{t('Hier abgeben')}</span>
+          </button>
+        ) : (
+          <div key={f.id} className="list-row">
+            <span className="lr-text">{f.name}<span className="lr-sub">{t('Diese Datei nimmt der Server nicht an. Speichere sie als PDF oder Word.')}</span></span>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
