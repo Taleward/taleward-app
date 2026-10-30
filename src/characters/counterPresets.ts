@@ -9,8 +9,8 @@ type Preset = [id: string, label: string, hint: string][];
 
 const DE: Record<GameSystem, Preset> = {
   dsa: [['lep', 'LeP', 'Lebenspunkte'], ['asp', 'AsP', 'Astralpunkte'], ['kap', 'KaP', 'Karmapunkte'], ['schip', 'SchiP', 'Schicksalspunkte']],
-  dnd: [['tp', 'TP', 'Trefferpunkte'], ['insp', 'Inspiration', 'Inspiration']],
-  pathfinder: [['tp', 'TP', 'Trefferpunkte'], ['held', 'Heldenpunkte', 'Heldenpunkte']],
+  dnd: [['stufe', 'Stufe', 'Stufe'], ['tp', 'TP', 'Trefferpunkte'], ['insp', 'Inspiration', 'Inspiration']],
+  pathfinder: [['stufe', 'Stufe', 'Stufe'], ['tp', 'TP', 'Trefferpunkte'], ['held', 'Heldenpunkte', 'Heldenpunkte']],
   cthulhu: [['tp', 'TP', 'Trefferpunkte'], ['mp', 'MP', 'Magiepunkte'], ['sta', 'STA', 'Stabilität'], ['glueck', 'Glück', 'Glück']],
   shadowrun: [['koerper', 'Körper', 'Körperlicher Zustandsmonitor'], ['geist', 'Geist', 'Geistiger Zustandsmonitor'], ['edge', 'Edge', 'Edge']],
   splittermond: [['lp', 'LP', 'Lebenspunkte'], ['fo', 'FO', 'Fokus'], ['sp', 'Splitterpunkte', 'Splitterpunkte']],
@@ -19,8 +19,8 @@ const DE: Record<GameSystem, Preset> = {
 
 const EN: Record<GameSystem, Preset> = {
   dsa: [['lep', 'LP', 'Life points'], ['asp', 'AE', 'Arcane energy'], ['kap', 'KP', 'Karma points'], ['schip', 'FP', 'Fate points']],
-  dnd: [['tp', 'HP', 'Hit points'], ['insp', 'Inspiration', 'Inspiration']],
-  pathfinder: [['tp', 'HP', 'Hit points'], ['held', 'Hero points', 'Hero points']],
+  dnd: [['stufe', 'Level', 'Level'], ['tp', 'HP', 'Hit points'], ['insp', 'Inspiration', 'Inspiration']],
+  pathfinder: [['stufe', 'Level', 'Level'], ['tp', 'HP', 'Hit points'], ['held', 'Hero points', 'Hero points']],
   cthulhu: [['tp', 'HP', 'Hit points'], ['mp', 'MP', 'Magic points'], ['sta', 'SAN', 'Sanity'], ['glueck', 'Luck', 'Luck']],
   shadowrun: [['koerper', 'Physical', 'Physical condition monitor'], ['geist', 'Stun', 'Stun condition monitor'], ['edge', 'Edge', 'Edge']],
   splittermond: [['lp', 'LP', 'Life points'], ['fo', 'Focus', 'Focus'], ['sp', 'Splinter points', 'Splinter points']],
