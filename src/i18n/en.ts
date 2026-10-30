@@ -1734,4 +1734,6 @@ export const en: Record<string, string> = {
   "Geht als Vorschlag an die Spielleitung.": "Goes to the game master as a suggestion.",
   "Noch in keiner Kampagne.": "Not in a campaign yet.",
   "Für ein anderes Gerät, mit Notizen und Chroniken.": "For another device, including notes and chronicles.",
+  "Kleiner": "Smaller",
+  "Größer": "Larger",
 };

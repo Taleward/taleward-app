@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ErrorBox, Screen } from '../components/Screen';
 import { t } from '../i18n';
+import { IconMinus, IconPlus } from '../components/Icons';
 import { fileKind, getFile, setLastPage, type StoredCharacterFile } from './files';
 import { openWithDevice } from './openFile';
 import { getCharacter } from './store';
@@ -73,7 +74,11 @@ async function loadPdf(blob: Blob): Promise<{ promise: Promise<PdfDoc>; destroy:
   const worker = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
   pdfjs.GlobalWorkerOptions.workerSrc = worker;
   const data = new Uint8Array(await blob.arrayBuffer());
-  return pdfjs.getDocument({ data, enableXfa: false }) as unknown as { promise: Promise<PdfDoc>; destroy: () => Promise<void> };
+  // Decoder und Schriften liegen bei der App (siehe vite.config.ts), nichts kommt aus dem Netz
+  const base = new URL(`${import.meta.env.BASE_URL}pdfjs/`, location.href).href;
+  return pdfjs.getDocument({
+    data, enableXfa: false, wasmUrl: `${base}wasm/`, standardFontDataUrl: `${base}standard_fonts/`, useWasm: true
+  }) as unknown as { promise: Promise<PdfDoc>; destroy: () => Promise<void> };
 }
 
 /** Seiten untereinander; gezeichnet wird erst, wenn eine Seite in die Nähe kommt */
@@ -81,6 +86,8 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
   const [doc, setDoc] = useState<PdfDoc | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [current, setCurrent] = useState(file.lastPage ?? 1);
+  // Größer: die Seiten werden breiter als der Bildschirm und lassen sich seitlich schieben
+  const [zoom, setZoom] = useState(1);
   const box = useRef<HTMLDivElement>(null);
   const jumped = useRef(false);
 
@@ -121,7 +128,7 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
     }, { rootMargin: '-40% 0px -55% 0px' });
     box.current.querySelectorAll('[data-page]').forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [doc]);
+  }, [doc, zoom]);
   useEffect(() => {
     if (!doc) return;
     const id = window.setTimeout(() => setLastPage(file.id, current).catch(() => undefined), 600);
@@ -131,9 +138,17 @@ function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: u
   if (!doc) return <div className="empty">{t('Lade …')}</div>;
   return (
     <>
-      <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
-      <div ref={box} className="pdf-pages">
-        {sizes.map((s, i) => <PdfPageView key={i} doc={doc} n={i + 1} ratio={s.h / s.w} />)}
+      <div className="row between" style={{ gap: 8, alignItems: 'center' }}>
+        <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
+        <span className="row" style={{ gap: 6 }}>
+          <button type="button" className="btn outline square" aria-label={t('Kleiner')} disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z - 0.5))}><IconMinus size={18} /></button>
+          <button type="button" className="btn outline square" aria-label={t('Größer')} disabled={zoom >= 3} onClick={() => setZoom((z) => Math.min(3, z + 0.5))}><IconPlus size={18} /></button>
+        </span>
+      </div>
+      <div className="pdf-scroll">
+        <div ref={box} className="pdf-pages" style={{ width: `${zoom * 100}%` }}>
+          {sizes.map((s, i) => <PdfPageView key={`${zoom}-${i}`} doc={doc} n={i + 1} ratio={s.h / s.w} />)}
+        </div>
       </div>
     </>
   );
