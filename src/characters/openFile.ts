@@ -21,8 +21,12 @@ async function toBase64(blob: Blob): Promise<string> {
 export async function openWithDevice(file: StoredCharacterFile, title: string): Promise<void> {
   if (Capacitor.isNativePlatform()) {
     const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
+    // Kopien früherer Teilungen zuerst wegräumen: Es liegt immer höchstens eine Unterlage im Zwischenspeicher
+    await Filesystem.rmdir({ path: 'unterlagen', directory: Directory.Cache, recursive: true }).catch(() => undefined);
     const path = `unterlagen/${file.id}/${safeName(file.name)}`;
     const written = await Filesystem.writeFile({ path, data: await toBase64(file.blob), directory: Directory.Cache, recursive: true });
+    // Die andere App liest die Datei erst nach der Auswahl; danach nach einer Minute löschen
+    window.setTimeout(() => { Filesystem.deleteFile({ path, directory: Directory.Cache }).catch(() => undefined); }, 60_000);
     try {
       await Share.share({ title, files: [written.uri], dialogTitle: title });
     } catch (e) {

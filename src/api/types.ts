@@ -131,7 +131,8 @@ export interface PlayerProposal extends PlayerProposalIn {
   id: string;
   campaignId: string;
   authorMemberId: string;
-  state: 'open' | 'accepted' | 'rejected' | 'withdrawn';
+  /** closed: für die Urheberin – abgelehnt oder nicht für sie sichtbar übernommen (nicht unterscheidbar) */
+  state: 'open' | 'accepted' | 'rejected' | 'withdrawn' | 'closed';
   createdAt: string;
   decidedAt?: string | null;
   resultEntryId?: string | null;

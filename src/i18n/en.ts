@@ -1679,7 +1679,6 @@ export const en: Record<string, string> = {
   "Deine Vorschläge": "Your suggestions",
   "Keine offenen Vorschläge von Spielenden.": "No open suggestions from players.",
   "Jemand": "Someone",
-  "Vorschlag „{title}“ ablehnen? {name} sieht nur „nicht übernommen“.": "Decline the suggestion “{title}”? {name} only sees “not taken”.",
   "{name} schlägt vor": "{name} suggests",
   "Ergänzung zu „{entry}“": "Addition to “{entry}”",
   "Übernehmen …": "Take over …",
@@ -1734,4 +1733,8 @@ export const en: Record<string, string> = {
   "Vorschlag ist bei der Spielleitung.": "Your suggestion is with the game master.",
   "Spielende dürfen Einträge vorschlagen": "Players may suggest entries",
   "Du entscheidest, was in die Bibel kommt.": "You decide what goes into the bible.",
+  "Die Spielleitung hat ihn gesehen": "The game master has seen it",
+  "Vorschlag „{title}“ ablehnen? {name} sieht nur „Die Spielleitung hat ihn gesehen“.": "Decline the suggestion “{title}”? {name} only sees “The game master has seen it”.",
+  "Der Eintrag ist nicht für alle sichtbar. Der Text landet in deiner SL-Notiz; {name} sieht nur „Die Spielleitung hat ihn gesehen“.": "This entry isn't visible to everyone. The text goes into your GM note; {name} only sees “The game master has seen it”.",
+  "{name} sieht dann nur „Die Spielleitung hat ihn gesehen“.": "{name} then only sees “The game master has seen it”.",
 };

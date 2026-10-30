@@ -76,10 +76,18 @@ export function memberCounters(c: MockCampaign, m: Member, viewer: Member | unde
   return { ...m, counters: (counters[m.id] ?? []).filter((v) => kinds.some((k) => k.id === v.kindId)) };
 }
 
-/** Für Spielende: eigener Vorschlag; resultEntryId nur, wenn der Eintrag sichtbar ist */
+/** Wo der Text gelandet ist: im sichtbaren Teil oder nur in der SL-Notiz (nur im Testmodus gemerkt) */
+const onlyInNotes = new Set<string>();
+
+/**
+ * Für Spielende (wie der Server): accepted nur, wenn sie den Eintrag sieht und ihr Text im sichtbaren Teil steht.
+ * Abgelehnt, in Verborgenes oder nur in die SL-Notiz übernommen → closed, ohne Kennung (nicht unterscheidbar).
+ */
 function forAuthor(p: PlayerProposal, visible: (e: Entry) => boolean): PlayerProposal {
+  if (p.state === 'rejected') return { ...p, state: 'closed', resultEntryId: null };
+  if (p.state !== 'accepted') return { ...p, resultEntryId: null };
   const e = p.resultEntryId ? entries.find((x) => x.id === p.resultEntryId) : undefined;
-  return { ...p, resultEntryId: e && visible(e) ? e.id : null };
+  return e && visible(e) && !onlyInNotes.has(p.id) ? p : { ...p, state: 'closed', resultEntryId: null };
 }
 
 export function playerHandlers(B: string, deps: {
@@ -116,7 +124,8 @@ export function playerHandlers(B: string, deps: {
         const t = entries.find((e) => e.id === body.targetEntryId && e.campaignId === g.c.id);
         if (!t || !deps.canSee(t, g.m)) return notFound();
       }
-      if (playerProposals.filter((p) => p.authorMemberId === g.m.id && p.state === 'open').length >= 20) {
+      if (playerProposals.filter((p) => p.authorMemberId === g.m.id && p.state === 'open').length >= 20
+        || playerProposals.filter((p) => p.campaignId === g.c.id && p.state === 'open').length >= 200) {
         return err(409, 'player_proposal_limit', 'Du hast schon 20 offene Vorschläge. Warte, bis die Spielleitung sie angesehen hat.');
       }
       const p: PlayerProposal = { id: id('pp'), campaignId: g.c.id, authorMemberId: g.m.id, entryType: body.entryType, title,
@@ -148,8 +157,12 @@ export function playerHandlers(B: string, deps: {
       if (into) {
         const e = entries.find((x) => x.id === into && x.campaignId === g.c.id);
         if (!e) return err(400, 'entry_unknown', 'Diesen Eintrag gibt es nicht.');
-        if (detail) e.summary = e.summary ? `${e.summary}\n\n${detail}` : detail;
-        if (d.gmNotes) e.gmNotes = e.gmNotes ? `${e.gmNotes}\n\n${d.gmNotes}` : d.gmNotes;
+        // In Verborgenes (gm_only oder teilweise verborgen) landet der Text nur in der SL-Notiz – wie der Server
+        const hidden = e.visibility === 'gm_only' || (e.hiddenFromMemberIds ?? []).length > 0;
+        if (detail && !hidden) e.summary = e.summary ? `${e.summary}\n\n${detail}` : detail;
+        const notes = [hidden ? detail : '', d.gmNotes ?? ''].filter(Boolean).join('\n\n');
+        if (notes) e.gmNotes = e.gmNotes ? `${e.gmNotes}\n\n${notes}` : notes;
+        if (hidden || !detail) onlyInNotes.add(p.id);
         e.updatedAt = p.decidedAt;
         p.resultEntryId = e.id;
       } else {

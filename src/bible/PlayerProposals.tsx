@@ -22,7 +22,8 @@ const STATE: Record<PlayerProposal['state'], string> = {
   open: tk('Wartet auf die Spielleitung'),
   accepted: tk('Übernommen'),
   rejected: tk('Nicht übernommen'),
-  withdrawn: tk('Zurückgezogen')
+  withdrawn: tk('Zurückgezogen'),
+  closed: tk('Die Spielleitung hat ihn gesehen')
 };
 
 /** Spielerin schlägt vor: neuer Eintrag oder Ergänzung zu einem Eintrag, den sie sieht */
@@ -96,7 +97,8 @@ export function MyProposals({ list, href, onChanged }: { list: PlayerProposal[];
       <ErrorBox error={error} />
       <div className="list-box">
         {list.map((p) => {
-          const sub = [t(STATE[p.state]), formatDate(p.decidedAt ?? p.createdAt)].join(' · ');
+          // Unbekannter Zustand (neuerer Server): neutral wie „gesehen“
+          const sub = [t(STATE[p.state] ?? STATE.closed), formatDate(p.decidedAt ?? p.createdAt)].join(' · ');
           return p.state === 'accepted' && p.resultEntryId ? (
             <Link key={p.id} className="list-row nav" to={href(p.resultEntryId)}>
               <span className="lr-text">{p.title}<span className="lr-sub">{sub}</span></span>
@@ -146,7 +148,7 @@ function GmProposalCard({ p, author, entries, players, onChanged }: { p: PlayerP
   const who = author ? figureName(author) : t('Jemand');
 
   const decide = async (accept: boolean) => {
-    if (!accept && !(await confirmDialog(t('Vorschlag „{title}“ ablehnen? {name} sieht nur „nicht übernommen“.', { title: p.title, name: who }), { confirmLabel: t('Ablehnen') }))) return;
+    if (!accept && !(await confirmDialog(t('Vorschlag „{title}“ ablehnen? {name} sieht nur „Die Spielleitung hat ihn gesehen“.', { title: p.title, name: who }), { confirmLabel: t('Ablehnen') }))) return;
     setBusy(true);
     setError(null);
     try {
@@ -186,6 +188,11 @@ function GmProposalCard({ p, author, entries, players, onChanged }: { p: PlayerP
               {entries.filter((e) => e.type !== 'pc').map((e) => <option key={e.id} value={e.id}>{t('Ergänzen: {name}', { name: e.name })}</option>)}
             </select>
           </div>
+          {(() => {
+            const e = into ? entries.find((x) => x.id === into) : undefined;
+            const hidden = e && (e.visibility === 'gm_only' || (e.hiddenFromMemberIds ?? []).length > 0);
+            return hidden ? <span className="muted small">{t('Der Eintrag ist nicht für alle sichtbar. Der Text landet in deiner SL-Notiz; {name} sieht nur „Die Spielleitung hat ihn gesehen“.', { name: who })}</span> : null;
+          })()}
           {!into && (
             <>
               <div className="field">
@@ -210,6 +217,9 @@ function GmProposalCard({ p, author, entries, players, onChanged }: { p: PlayerP
               <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
               <span className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Erst nur für die Spielleitung')}</span>
             </label>
+          )}
+          {!into && secret && (
+            <span className="muted small">{t('{name} sieht dann nur „Die Spielleitung hat ihn gesehen“.', { name: who })}</span>
           )}
           <ErrorBox error={error} />
           <div className="row" style={{ gap: 8 }}>

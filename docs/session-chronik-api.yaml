@@ -269,7 +269,8 @@ info:
     Änderungen in 0.4.28 (Spielende tragen bei; alles freiwillig, nichts davon geht an ein Sprachmodell):
     - Vorschläge von Spielenden für die Bibel: /campaigns/{id}/player-proposals, /player-proposals/{id}. Spielende sehen
       nur die eigenen, nie fremde und keine Anzahl; die SL entscheidet wie bei Session-Vorschlägen. Schalter
-      CampaignSettings.playerProposals (Standard an).
+      CampaignSettings.playerProposals (Standard an). Für die Urheberin sind „abgelehnt“ und „übernommen, aber für sie
+      nicht sichtbar“ nicht unterscheidbar (state closed). Ein Umzug nimmt Vorschläge von Spielenden nie mit.
     - „Merken“: Stellen während einer Runde markieren, nur für die Person selbst (/sessions/{id}/bookmarks,
       /bookmarks/{id}). Damit der Server die Zeit einer Stelle in der Aufnahme findet, schickt die aufnehmende App bei
       POST …/uploads die Zeiten, in denen wirklich aufgenommen wurde (spans). Campaign.liveSessionId zeigt Anwesenden
@@ -1149,8 +1150,9 @@ paths:
       tags: [Vorschläge]
       summary: Vorschläge von Spielenden (ab 0.4.28)
       description: |
-        Spielende bekommen nur die eigenen (alle Zustände, neueste zuerst), nie fremde und keine Anzahl. Die SL bekommt
-        alle offenen und die der letzten 30 Tage. Ist playerProposals aus, bekommen Spielende eine leere Liste; die SL
+        Spielende bekommen nur die eigenen (neueste zuerst), nie fremde und keine Anzahl, mit dem Zustand, wie sie ihn
+        sehen dürfen (siehe PlayerProposal.state: closed statt rejected bzw. statt accepted ohne sichtbares Ergebnis). Die
+        SL bekommt alle offenen und die der letzten 30 Tage mit dem echten Zustand. Ist playerProposals aus, bekommen Spielende eine leere Liste; die SL
         sieht bestehende weiter.
       parameters:
         - { name: state, in: query, required: false, schema: { type: string, enum: [open, all] }, description: "Standard all" }
@@ -1171,10 +1173,12 @@ paths:
         Nur aktive Mitglieder mit Rolle player; SL → 403. Mit targetEntryId eine Ergänzung zu einem Eintrag, den die
         Person sieht – sonst 404 (auch bei verborgenen Einträgen, kein Unterschied zu „gibt es nicht“). Ohne
         targetEntryId ein neuer Eintrag. Der Server prüft NICHT, ob es einen verborgenen Eintrag mit diesem Namen gibt,
-        und antwortet immer gleich (kein Hinweis auf Geheimes). Höchstens 20 offene je Mitglied → 409
-        `player_proposal_limit`; höchstens 30 je Stunde → 429. playerProposals aus → 403 `player_proposals_off`.
+        und antwortet immer gleich (kein Hinweis auf Geheimes). Höchstens 20 offene je Mitglied und 200 offene je
+        Kampagne → 409 `player_proposal_limit`; höchstens 30 je Stunde → 429. playerProposals aus → 403 `player_proposals_off`.
         Vorschläge von Spielenden gehen nie an ein Sprachmodell und nie in Kapitel; erst eine Entscheidung der SL macht
-        daraus einen Eintrag. Kein Push.
+        daraus einen Eintrag (der danach wie jeder Eintrag behandelt wird). Kein Push. Aufbewahrung: entschiedene und
+        zurückgezogene nach 90 Tagen gelöscht; beim Austritt bzw. Löschen des Kontos werden offene gelöscht, entschiedene
+        bleiben ohne Person. Umzug: nie mitgenommen, weder offene noch entschiedene.
       requestBody:
         required: true
         content:
@@ -1258,7 +1262,9 @@ paths:
         Ohne at nimmt der Server seine eigene Uhrzeit. at darf höchstens 12 Stunden vor playedAt bzw. 5 Minuten in der
         Zukunft liegen (sonst 400). Höchstens 200 je Mitglied und Runde (409 `bookmark_limit`). Gemerkte Stellen gehen
         nie an ein Sprachmodell, nie in Kapitel oder Vorschläge, nie an die SL. Beim Löschen der Runde oder des Kontos
-        werden sie mit gelöscht; ein Umzug nimmt sie nicht mit.
+        werden sie mit gelöscht, ebenso beim Austritt; ein Umzug nimmt sie nicht mit. Zusätzlich höchstens 60 POST je
+        Minute und Mitglied (429). liveSessionId und Merkstellen geben keinen Zugang zur Runde: GET /sessions/{id} und
+        alles andere bleibt für Spielende vor dem Veröffentlichen 404.
       requestBody:
         required: false
         content:
@@ -2423,7 +2429,9 @@ paths:
                     Ab 0.4.28, freiwillig, nur bei source=table: Zeiten (Uhr des aufnehmenden Geräts), in denen wirklich
                     aufgenommen wurde – zwischen zwei Spannen lag eine Pause. Zusammen ergeben sie die Länge der Aufnahme.
                     Der Server rechnet damit gemerkte Stellen (Bookmark.at) in eine Zeit der Aufnahme um. Fehlt das Feld,
-                    gilt playedAt als Beginn ohne Pausen.
+                    gilt playedAt als Beginn ohne Pausen. Der Server prüft: aufsteigend, ohne Überlappung, jede Spanne > 0,
+                    alle zwischen playedAt − 12 h und dem Ende des Hochladens, Summe passt zur Länge (± 60 s). Passt etwas
+                    nicht, verwirft er die Spannen still – nie ein Fehler, nie ein Hindernis für das Hochladen.
                   items:
                     type: object
                     required: [startedAt, endedAt]
@@ -4381,8 +4389,8 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CounterValue" }
           description: |
-            Ab 0.4.28: Zählerstände – nur für die Person selbst und die SL, für alle anderen weggelassen. Fehlt, wenn
-            counterKinds leer ist.
+            Ab 0.4.28: Zählerstände – nur für die Person selbst und die SL. Für alle anderen fehlt das Feld ganz (nicht
+            leer) in jeder Ausgabe, auch in Umzug und Datenauskunft anderer. Fehlt auch, wenn counterKinds leer ist.
         moveConsentAt:
           type: [string, "null"]
           format: date-time
@@ -4563,14 +4571,22 @@ components:
             id: { type: string }
             campaignId: { type: string }
             authorMemberId: { type: string }
-            state: { type: string, enum: [open, accepted, rejected, withdrawn] }
+            state:
+              type: string
+              enum: [open, accepted, rejected, withdrawn, closed]
+              description: |
+                Die SL sieht den echten Zustand (open, accepted, rejected, withdrawn). Die Urheberin sieht accepted nur, wenn
+                sie den Eintrag sieht UND ihr Text im für sie sichtbaren Teil steht (nicht nur in gmNotes, nicht verborgen
+                vor ihr). Abgelehnt, in Verborgenes oder nur in gmNotes übernommen → für sie closed („Die Spielleitung hat
+                ihn gesehen“), gleich und ununterscheidbar. Wird der Eintrag später für sie sichtbar, darf der Server auf
+                accepted wechseln. Ältere Apps zeigen closed wie einen unbekannten Zustand.
             createdAt: { type: string, format: date-time }
             decidedAt: { type: [string, "null"], format: date-time }
             resultEntryId:
               type: [string, "null"]
               description: |
-                Eintrag, der daraus wurde bzw. ergänzt wurde. Für die Urheberin nur, wenn sie den Eintrag sieht, sonst null
-                (state bleibt accepted – „die SL hat es aufgenommen“, ohne zu verraten, wo).
+                Eintrag, der daraus wurde bzw. ergänzt wurde. Für die Urheberin nur bei state accepted (siehe dort), sonst
+                null.
 
     PlayerProposalDecision:
       type: object
