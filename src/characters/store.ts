@@ -5,7 +5,7 @@
  * und Chronik-Abschriften verlassen das Gerät nie.
  */
 import { t } from '../i18n';
-import type { Character, CharacterStatus, Chronicle, WorldEntryIn, WorldEntryStatus } from '../api/types';
+import type { Character, CharacterClass, CharacterStatus, Chronicle, WorldEntryIn, WorldEntryStatus } from '../api/types';
 import { activeConnections, type Connection } from '../api/connections';
 
 /** Mitgebrachter Welt-Eintrag in der Sammlung */
@@ -129,11 +129,11 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
-export function createCharacter(data: { id?: string; version?: number; name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; level?: string | null; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
+export function createCharacter(data: { id?: string; version?: number; name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; level?: string | null; classes?: CharacterClass[]; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
   const now = new Date().toISOString();
   const c: StoredCharacter = {
     id: data.id ?? newId(), version: data.version ?? 1, name: data.name.trim(), nickname: data.nickname ?? null, summary: data.summary ?? null,
-    backstory: data.backstory ?? null, system: data.system ?? null, pronouns: data.pronouns ?? null, level: data.level ?? null, status: 'active', statusChangedAt: null,
+    backstory: data.backstory ?? null, system: data.system ?? null, pronouns: data.pronouns ?? null, level: data.level ?? null, classes: data.classes ?? [], status: 'active', statusChangedAt: null,
     owners: myAccountKeys(), notes: '', portrait: data.portrait ?? null, portraitMeta: data.portraitMeta ?? null, portraitChangedAt: data.portrait ? now : null, world: [], links: [], chronicles: {}, createdAt: now, updatedAt: now
   };
   persist([...load(), c]);
@@ -141,7 +141,7 @@ export function createCharacter(data: { id?: string; version?: number; name: str
 }
 
 /** Stammdaten, die auf Server gehen – ändern sie sich, steigt die Version */
-const SHARED: (keyof Character)[] = ['name', 'nickname', 'summary', 'backstory', 'system', 'pronouns', 'level', 'status'];
+const SHARED: (keyof Character)[] = ['name', 'nickname', 'summary', 'backstory', 'system', 'pronouns', 'level', 'classes', 'status'];
 
 export function updateCharacter(id: string, change: Partial<Omit<StoredCharacter, 'id' | 'version' | 'createdAt'>>): StoredCharacter {
   const list = load();
@@ -149,7 +149,10 @@ export function updateCharacter(id: string, change: Partial<Omit<StoredCharacter
   if (i < 0) throw new Error(t('Charakter nicht gefunden.'));
   const old = list[i];
   const next: StoredCharacter = { ...old, ...change, updatedAt: new Date().toISOString() };
-  if (SHARED.some((k) => k in change && ((change as Record<string, unknown>)[k] ?? null) !== (old[k] ?? null))) next.version = old.version + 1;
+  // Listen (Klassen) über ihren Text vergleichen, leer = nicht gesetzt
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+    || (Array.isArray(a) && !a.length && b == null) || (Array.isArray(b) && !b.length && a == null);
+  if (SHARED.some((k) => k in change && !same((change as Record<string, unknown>)[k], old[k]))) next.version = old.version + 1;
   if (change.status && change.status !== old.status) next.statusChangedAt = new Date().toISOString();
   if ('portrait' in change && change.portrait !== old.portrait) next.portraitChangedAt = new Date().toISOString();
   list[i] = next;
@@ -221,7 +224,8 @@ export function toServerCharacter(c: StoredCharacter): Character {
     // Ab 0.4.28; ältere Server lassen das Feld liegen
     ...(c.pronouns ? { pronouns: c.pronouns } : {}),
     // Ab 0.4.29
-    ...(c.level ? { level: c.level } : {})
+    ...(c.level ? { level: c.level } : {}),
+    ...(c.classes?.length ? { classes: c.classes } : {})
   };
 }
 

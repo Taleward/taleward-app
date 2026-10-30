@@ -1741,7 +1741,10 @@ export const en: Record<string, string> = {
   "Erfahrungsgrad (optional)": "Experience level (optional)",
   "Heldengrad (optional)": "Hero level (optional)",
   "Stufe (optional)": "Level (optional)",
-  "z. B. Magierin 3 / Schurkin 2": "e.g. Wizard 3 / Rogue 2",
   "z. B. Erfahren": "e.g. Experienced",
   "z. B. 2": "e.g. 2",
+  "Klasse": "Class",
+  "Weitere Klasse": "Another class",
+  "Stufe": "Level",
+  "Klasse entfernen": "Remove class",
 };

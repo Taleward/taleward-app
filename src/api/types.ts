@@ -84,6 +84,8 @@ export interface Member {
   characterPronouns?: string | null;
   /** Ab 0.4.29: aus Character.level, für alle Mitglieder sichtbar */
   characterLevel?: string | null;
+  /** Ab 0.4.29: aus Character.classes */
+  characterClasses?: CharacterClass[];
   /** Zählerstände (ab 0.4.28) – nur für die Person selbst und die SL */
   counters?: CounterValue[];
   /** „Meine Charakterdaten dürfen bei einem Umzug mit“ (ab 0.4.8); für alle sichtbar, null = nein */
@@ -93,6 +95,12 @@ export interface Member {
 }
 
 export type CharacterStatus = 'active' | 'retired' | 'deceased';
+
+/** Klasse mit Stufe, z. B. Magier 3 (ab 0.4.29) */
+export interface CharacterClass {
+  name: string;
+  level: number;
+}
 
 /** Serverkopie der Stammdaten eines Charakters aus der Sammlung (ab 0.4.7) */
 export interface Character {
@@ -105,8 +113,10 @@ export interface Character {
   system?: string | null;
   /** Wie andere über die Figur sprechen („sie“, „er“, eigener Text), ab 0.4.28 */
   pronouns?: string | null;
-  /** Stufe, Klasse oder Erfahrungsgrad als freier Text („Magierin 3“), ab 0.4.29 */
+  /** Stufe oder Erfahrungsgrad als freier Text („Erfahren“), ab 0.4.29 – bei Systemen ohne Klassen */
   level?: string | null;
+  /** Klassen mit Stufe (D&D, Pathfinder), ab 0.4.29 */
+  classes?: CharacterClass[];
   status: CharacterStatus;
   statusChangedAt?: string | null;
 }

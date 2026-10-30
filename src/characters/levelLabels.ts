@@ -9,7 +9,7 @@ export const LEVEL_LABEL: Record<LevelKind, string> = {
 };
 
 export const LEVEL_PLACEHOLDER: Record<LevelKind, string | null> = {
-  class: tk('z. B. Magierin 3 / Schurkin 2'),
+  class: null,
   experience: tk('z. B. Erfahren'),
   herograde: tk('z. B. 2'),
   level: null

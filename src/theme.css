@@ -583,6 +583,7 @@ h2 {
 input[type='text'],
 input[type='password'],
 input[type='search'],
+input[type='number'],
 input[type='datetime-local'],
 input[type='time'],
 select,
@@ -2278,6 +2279,13 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
   text-decoration: underline; cursor: pointer;
 }
 .quiet-link.danger { color: var(--siegel-text); }
+.quiet-link.small { font-size: calc(13px * var(--ts)); }
+
+/* Klasse und Stufe in der Sammlung */
+.class-row { display: flex; gap: 8px; align-items: center; }
+.class-row input[list] { flex: 1; min-width: 0; }
+.class-row input[type='number'] { width: 76px; flex: none; text-align: center; padding: 0 6px; }
+.class-row .icon-btn, .class-row .icon-spacer { flex: none; width: 48px; }
 .quiet-link:disabled { opacity: .5; cursor: default; }
 
 /* Listen ohne eigenen Kasten (in einer Karte) und Häkchen als Zeile */
@@ -2340,10 +2348,10 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .counter-row { gap: 6px; }
 .counter-row .lr-text { flex: 1; min-width: 3em; }
 .counter-row .lr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
-.counter-value.low { color: var(--siegel-text); }
+.counter-row .counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
+.counter-row .counter-value.low { color: var(--siegel-text); }
 .counter-max { display: flex; align-items: center; gap: 4px; color: var(--ink-muted); font-size: calc(13px * var(--ts)); }
-.counter-max input { width: 3.6em; min-height: 48px; text-align: center; padding: 4px; }
+.counter-row .counter-max input { width: 3.6em; min-height: 48px; text-align: center; padding: 4px; }
 .counters-line { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: calc(14px * var(--ts)); font-variant-numeric: tabular-nums; }
 .counters-line strong { font-weight: 700; }
 

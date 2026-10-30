@@ -29,6 +29,11 @@ export function sanitizeCharacter(raw: unknown): StoredCharacter | null {
     notes: text(x.notes, 100_000) ? x.notes : '',
     pronouns: text(x.pronouns, 32) ? x.pronouns : null,
     level: text(x.level, 64) ? x.level : null,
+    classes: Array.isArray(x.classes)
+      ? x.classes.filter((k): k is { name: string; level: number } => obj(k) && text(k.name, 40) && !!k.name.trim()
+        && Number.isInteger(k.level) && (k.level as number) >= 1 && (k.level as number) <= 30).slice(0, 4)
+        .map((k) => ({ name: k.name.trim(), level: k.level }))
+      : [],
     world,
     links,
     chronicles: chronicles as StoredCharacter['chronicles']

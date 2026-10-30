@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client';
 import type { Campaign, CounterKind, Entry, Member } from '../api/types';
 import { CountersLine, MyCounters } from '../characters/Counters';
+import { levelText } from '../characters/levelField';
 import { accountKey, addOwners, allStoredCharacters, blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
 import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
 import { useAuth } from '../auth/AuthContext';
@@ -119,7 +120,7 @@ export function CharacterPage() {
             <div className="muted">
               {member.role === 'gm' ? t('Spielleitung') : t('gespielt von {name}', { name: member.displayName })}
               {member.role !== 'gm' && member.characterPronouns && <> · {member.characterPronouns}</>}
-              {member.role !== 'gm' && member.characterLevel && <> · {member.characterLevel}</>}
+              {member.role !== 'gm' && levelText(member.characterClasses, member.characterLevel) && <> · {levelText(member.characterClasses, member.characterLevel)}</>}
             </div>
           </div>
           {member.role !== 'gm' && (

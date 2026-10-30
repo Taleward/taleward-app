@@ -319,7 +319,8 @@ function applyCharacter(c: MockCampaign, m: Member, ch: Character) {
   Object.assign(m, {
     characterId: ch.id, characterVersion: ch.version, characterName: ch.name.trim(), characterNickname: ch.nickname ?? null,
     characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status,
-    characterPronouns: ch.pronouns?.trim() || null, characterLevel: ch.level?.trim().slice(0, 64) || null
+    characterPronouns: ch.pronouns?.trim() || null, characterLevel: ch.level?.trim().slice(0, 64) || null,
+    characterClasses: (ch.classes ?? []).filter((k) => k.name.trim() && Number.isInteger(k.level) && k.level >= 1 && k.level <= 30).slice(0, 4)
   });
   const pc = entries.find((e) => e.campaignId === c.id && e.type === 'pc' && e.holderMemberId === m.id);
   if (pc) Object.assign(pc, { name: m.characterName, summary: ch.summary ?? '', updatedAt: new Date().toISOString() });
