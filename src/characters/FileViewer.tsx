@@ -23,7 +23,7 @@ export function FileViewer() {
 
   // „Mit einer anderen App öffnen“ als Zeichen oben rechts, neben der Seitenangabe
   const openOther = file ? (
-    <button type="button" className="btn outline square" aria-label={t('Mit einer anderen App öffnen')} title={t('Mit einer anderen App öffnen')}
+    <button type="button" className="icon-btn" aria-label={t('Mit einer anderen App öffnen')} title={t('Mit einer anderen App öffnen')}
       onClick={() => openWithDevice(file, file.name).catch(setError)}><IconExternal size={18} /></button>
   ) : null;
   const back = { to: `/charaktere/${characterId}`, label: c?.name ?? t('Meine Charaktere') };
@@ -145,8 +145,8 @@ function PdfPages({ file, onError, openOther }: { file: StoredCharacterFile; onE
         <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
         <span className="row" style={{ gap: 6 }}>
           {openOther}
-          <button type="button" className="btn outline square" aria-label={t('Kleiner')} disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z - 0.5))}><IconMinus size={18} /></button>
-          <button type="button" className="btn outline square" aria-label={t('Größer')} disabled={zoom >= 3} onClick={() => setZoom((z) => Math.min(3, z + 0.5))}><IconPlus size={18} /></button>
+          <button type="button" className="icon-btn" aria-label={t('Kleiner')} disabled={zoom <= 1} onClick={() => setZoom((z) => Math.max(1, z - 0.5))}><IconMinus size={18} /></button>
+          <button type="button" className="icon-btn" aria-label={t('Größer')} disabled={zoom >= 3} onClick={() => setZoom((z) => Math.min(3, z + 0.5))}><IconPlus size={18} /></button>
         </span>
       </div>
       <div className="pdf-scroll">

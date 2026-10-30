@@ -2325,6 +2325,12 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .voice-hint .btn.square { background: none; border-color: transparent; color: var(--ink-muted); }
 
 /* Unterlagen aus der Sammlung lesen (PDF) */
+/* Leises Zeichen ohne Rahmen (Werkzeuge am Rand einer Ansicht), Tippfläche 48 px */
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0;
+  background: none; border: 0; border-radius: var(--radius-pill); color: var(--ink-muted); cursor: pointer; }
+.icon-btn:hover:not(:disabled) { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.icon-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.icon-btn:disabled { opacity: .4; cursor: default; }
 .pdf-scroll { overflow-x: auto; overflow-y: hidden; flex-shrink: 0; -webkit-overflow-scrolling: touch; }
 .pdf-pages { display: flex; flex-direction: column; gap: var(--space-2); }
 .pdf-page { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
