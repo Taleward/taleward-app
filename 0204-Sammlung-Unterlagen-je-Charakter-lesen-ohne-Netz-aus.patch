@@ -1,0 +1,1184 @@
+From c2e89c39cf5e57f575d651923604b128331a260d Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 19:12:24 +0100
+Subject: [PATCH 204/206] Sammlung: Unterlagen je Charakter, lesen ohne Netz,
+ aus der Sammlung abgeben
+
+---
+ package-lock.json                      | 282 +++++++++++++++++++++++++
+ package.json                           |   2 +
+ scripts/tests/character-files.test.mjs |  25 +++
+ src/App.tsx                            |   2 +
+ src/characters/Attachments.tsx         |  93 ++++++++
+ src/characters/FileViewer.tsx          | 170 +++++++++++++++
+ src/characters/backup.ts               |  38 +++-
+ src/characters/files.ts                | 198 +++++++++++++++++
+ src/characters/openFile.ts             |  40 ++++
+ src/components/CharacterAnalysis.tsx   |  48 +++++
+ src/i18n/en.ts                         |  12 ++
+ src/pages/CharactersPage.tsx           |   4 +-
+ src/pages/MyCharacterPage.tsx          |  16 +-
+ src/theme.css                          |  12 +-
+ 14 files changed, 930 insertions(+), 12 deletions(-)
+ create mode 100644 scripts/tests/character-files.test.mjs
+ create mode 100644 src/characters/Attachments.tsx
+ create mode 100644 src/characters/FileViewer.tsx
+ create mode 100644 src/characters/files.ts
+ create mode 100644 src/characters/openFile.ts
+
+diff --git a/package-lock.json b/package-lock.json
+index bbe03da..39a4b4e 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -15,8 +15,10 @@
+         "@capacitor/clipboard": "^8.0.1",
+         "@capacitor/core": "^8.5.2",
++        "@capacitor/filesystem": "8.1.5",
+         "@capacitor/share": "^8.0.2",
+         "@fontsource/alegreya": "^5.3.0",
+         "@fontsource/alegreya-sans": "^5.3.0",
+         "jsqr": "^1.4.0",
++        "pdfjs-dist": "6.4.299",
+         "qrcode": "^1.5.4",
+         "react": "^19.3.0",
+@@ -116,4 +118,16 @@
+       }
+     },
++    "node_modules/@capacitor/filesystem": {
++      "version": "8.1.5",
++      "resolved": "https://registry.npmjs.org/@capacitor/filesystem/-/filesystem-8.1.5.tgz",
++      "integrity": "sha512-m1RkI8L83NJeppEKyRWioK3MDp2vjlA+QfUQcF8/xRlcXNC2HYxqoyYJ+K4M0EcVovy+g+4F24S05+bhK4Vgdg==",
++      "license": "MIT",
++      "dependencies": {
++        "@capacitor/synapse": "^1.0.4"
++      },
++      "peerDependencies": {
++        "@capacitor/core": ">=8.0.0"
++      }
++    },
+     "node_modules/@capacitor/share": {
+       "version": "8.0.2",
+@@ -125,4 +139,10 @@
+       }
+     },
++    "node_modules/@capacitor/synapse": {
++      "version": "1.0.4",
++      "resolved": "https://registry.npmjs.org/@capacitor/synapse/-/synapse-1.0.4.tgz",
++      "integrity": "sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==",
++      "license": "ISC"
++    },
+     "node_modules/@fontsource/alegreya": {
+       "version": "5.3.0",
+@@ -429,4 +449,254 @@
+       "license": "MIT"
+     },
++    "node_modules/@napi-rs/canvas": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas/-/canvas-1.1.0.tgz",
++      "integrity": "sha512-k+ph/D8H9GS8ZZ48okvHrKeJynkqAA1kMUZRuzRWNlQUDHXngq7oRaWMZBdmSfd9ZhVy9bwNKei/7wMboI/uMg==",
++      "license": "MIT",
++      "optional": true,
++      "workspaces": [
++        "e2e/*"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      },
++      "optionalDependencies": {
++        "@napi-rs/canvas-android-arm64": "1.1.0",
++        "@napi-rs/canvas-darwin-arm64": "1.1.0",
++        "@napi-rs/canvas-darwin-x64": "1.1.0",
++        "@napi-rs/canvas-linux-arm-gnueabihf": "1.1.0",
++        "@napi-rs/canvas-linux-arm64-gnu": "1.1.0",
++        "@napi-rs/canvas-linux-arm64-musl": "1.1.0",
++        "@napi-rs/canvas-linux-riscv64-gnu": "1.1.0",
++        "@napi-rs/canvas-linux-x64-gnu": "1.1.0",
++        "@napi-rs/canvas-linux-x64-musl": "1.1.0",
++        "@napi-rs/canvas-win32-arm64-msvc": "1.1.0",
++        "@napi-rs/canvas-win32-x64-msvc": "1.1.0"
++      }
++    },
++    "node_modules/@napi-rs/canvas-android-arm64": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-android-arm64/-/canvas-android-arm64-1.1.0.tgz",
++      "integrity": "sha512-mKrSmRyhWK4q699Q1xthbZIZi7JBvLtsRNnOZAeFaLPOFT1yo8y82aRC2nNZbXTGJXU7fVDONgGQPr0vo3kerw==",
++      "cpu": [
++        "arm64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-darwin-arm64": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-darwin-arm64/-/canvas-darwin-arm64-1.1.0.tgz",
++      "integrity": "sha512-iqwST4g0oH+x8VCpBIYh+MYokv/mVvkM+v9oJGB0d9A3P2qBh42ogJlVyWq9SpPCrAjS7tplMb1D3OIfxl+utw==",
++      "cpu": [
++        "arm64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-darwin-x64": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-darwin-x64/-/canvas-darwin-x64-1.1.0.tgz",
++      "integrity": "sha512-jkeA8eVTxDum03LTvc32YJ28F6KB1U0gYwnWMfOAUQZvWWEh/kvONby4iWGJx3+Tw45UqMGMXjtw2GKNVZDhVg==",
++      "cpu": [
++        "x64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-linux-arm-gnueabihf": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-linux-arm-gnueabihf/-/canvas-linux-arm-gnueabihf-1.1.0.tgz",
++      "integrity": "sha512-Y4YkKG1ijoqkgUdTEEBNG4k+2BK5bR5jGL6S56YxCXYPwGfUd5nED8/74xyc7z+bpixPasCjSYoP3xYPOIGNxw==",
++      "cpu": [
++        "arm"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-linux-arm64-gnu": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-linux-arm64-gnu/-/canvas-linux-arm64-gnu-1.1.0.tgz",
++      "integrity": "sha512-dE/XthqYkiWcBVtKFlZbUXwAYfDuQGqDWixznipJNmevLGpprNnTVQZyftm1RZJudkIOn2EkzYZDMMETM08Row==",
++      "cpu": [
++        "arm64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-linux-arm64-musl": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-linux-arm64-musl/-/canvas-linux-arm64-musl-1.1.0.tgz",
++      "integrity": "sha512-DqZ/CMcHlhU56pPjv9AP0h3U7MFQ5LzC1HzMyRMotL+PFsJmZJA/ziApPYVyyz78DaVLhI8t3So3ztqtijbYpg==",
++      "cpu": [
++        "arm64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-linux-riscv64-gnu": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-linux-riscv64-gnu/-/canvas-linux-riscv64-gnu-1.1.0.tgz",
++      "integrity": "sha512-kJ7m5n2VffxWXM5QGa5lfq8ZN4LdOJEoz3aAJAmIqYvKiZw1gRdXqpucnRXsF6D9nLYiiIlevaAtAclR7c5ilg==",
++      "cpu": [
++        "riscv64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-linux-x64-gnu": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-linux-x64-gnu/-/canvas-linux-x64-gnu-1.1.0.tgz",
++      "integrity": "sha512-uQ9JuJlRhQdHyttcMWOiwLkfIqkqaB0YFUVe835LUe12THt2b51HXkTItq0fxWT1jdhUPX2ylWZ1walkJyD6GQ==",
++      "cpu": [
++        "x64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-linux-x64-musl": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-linux-x64-musl/-/canvas-linux-x64-musl-1.1.0.tgz",
++      "integrity": "sha512-has4CPPAkkCac/LZ13VAw5p+MJLdaKVoyrhumN/A7uJd6960xYkJNDZgUebyxiha82AFzXx6RV+QJg5qGG079g==",
++      "cpu": [
++        "x64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-win32-arm64-msvc": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-win32-arm64-msvc/-/canvas-win32-arm64-msvc-1.1.0.tgz",
++      "integrity": "sha512-MJnktLKNijmXqdjTughHDZ9TDLZ9uUm2hvFXqaOqn0+w7lphXFnft6bpSgQAc9U1exc20UGIBlzGu9+kiCj9Ag==",
++      "cpu": [
++        "arm64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
++    "node_modules/@napi-rs/canvas-win32-x64-msvc": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/@napi-rs/canvas-win32-x64-msvc/-/canvas-win32-x64-msvc-1.1.0.tgz",
++      "integrity": "sha512-08575bFk7iiadxap4h+JxgGut9xDCHAGum6wh0eInN53zEMImkmEHi5MushX2FOmNO7qRNX7BPiDC5ZYBwHeEg==",
++      "cpu": [
++        "x64"
++      ],
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">= 10"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/Brooooooklyn"
++      }
++    },
+     "node_modules/@open-draft/deferred-promise": {
+       "version": "3.0.0",
+@@ -2554,4 +2824,16 @@
+       "license": "MIT"
+     },
++    "node_modules/pdfjs-dist": {
++      "version": "6.4.299",
++      "resolved": "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.4.299.tgz",
++      "integrity": "sha512-AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g==",
++      "license": "Apache-2.0",
++      "engines": {
++        "node": ">=22.13.0 || >=24"
++      },
++      "optionalDependencies": {
++        "@napi-rs/canvas": "^1.0.10"
++      }
++    },
+     "node_modules/pend": {
+       "version": "1.2.0",
+diff --git a/package.json b/package.json
+index 1512a55..9f413a6 100644
+--- a/package.json
++++ b/package.json
+@@ -26,8 +26,10 @@
+     "@capacitor/clipboard": "^8.0.1",
+     "@capacitor/core": "^8.5.2",
++    "@capacitor/filesystem": "8.1.5",
+     "@capacitor/share": "^8.0.2",
+     "@fontsource/alegreya": "^5.3.0",
+     "@fontsource/alegreya-sans": "^5.3.0",
+     "jsqr": "^1.4.0",
++    "pdfjs-dist": "6.4.299",
+     "qrcode": "^1.5.4",
+     "react": "^19.3.0",
+diff --git a/scripts/tests/character-files.test.mjs b/scripts/tests/character-files.test.mjs
+new file mode 100644
+index 0000000..a8b1151
+--- /dev/null
++++ b/scripts/tests/character-files.test.mjs
+@@ -0,0 +1,25 @@
++// Unterlagen in der Sammlung: was die App selbst zeigt, was der Server als Bogen annimmt
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { fileKind, formatSize, serverAccepts } from '../../src/characters/files.ts';
++
++test('PDF, Bild und Text zeigt die App selbst, Word öffnet ein Programm', () => {
++  assert.equal(fileKind({ name: 'bogen.PDF', type: '' }), 'pdf');
++  assert.equal(fileKind({ name: 'karte', type: 'image/jpeg' }), 'image');
++  assert.equal(fileKind({ name: 'notizen.md', type: '' }), 'text');
++  assert.equal(fileKind({ name: 'bogen.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), 'other');
++  assert.equal(fileKind({ name: 'bild.svg', type: 'image/svg+xml' }), 'other');
++});
++
++test('abgeben nur, was der Server annimmt', () => {
++  assert.ok(serverAccepts({ name: 'bogen.docx', type: '' }));
++  assert.ok(serverAccepts({ name: 'Bogen.PDF', type: '' }));
++  assert.ok(!serverAccepts({ name: 'bogen.odt', type: '' }));
++  assert.ok(!serverAccepts({ name: 'foto.jpg', type: 'image/jpeg' }));
++});
++
++test('Größen lesbar', () => {
++  assert.equal(formatSize(512), '512 B');
++  assert.equal(formatSize(2048), '2 KB');
++  assert.equal(formatSize(5 * 1024 * 1024 + 300000), '5,3 MB');
++});
+diff --git a/src/App.tsx b/src/App.tsx
+index c76597a..0b6b76f 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -33,4 +33,5 @@ import { MovePage } from './pages/MovePage';
+ import { CharactersPage } from './pages/CharactersPage';
+ import { MyCharacterPage } from './pages/MyCharacterPage';
++import { FileViewer } from './characters/FileViewer';
+ import { CharacterPage } from './pages/CharacterPage';
+ import { DocumentsPage } from './pages/DocumentsPage';
+@@ -75,4 +76,5 @@ function Routed() {
+       <Route path="/charaktere" element={<CharactersPage />} />
+       <Route path="/charaktere/:characterId" element={<MyCharacterPage />} />
++      <Route path="/charaktere/:characterId/datei/:fileId" element={<FileViewer />} />
+       <Route path="/v/:conn/k/:campaignId" element={scoped(<Overview />)} />
+       <Route path="/v/:conn/k/:campaignId/chronik" element={scoped(<Chronicle />)} />
+diff --git a/src/characters/Attachments.tsx b/src/characters/Attachments.tsx
+new file mode 100644
+index 0000000..1a216a2
+--- /dev/null
++++ b/src/characters/Attachments.tsx
+@@ -0,0 +1,93 @@
++import { useEffect, useRef, useState } from 'react';
++import { Link } from 'react-router-dom';
++import { confirmDialog } from '../components/confirm';
++import { formatDate } from '../components/format';
++import { ErrorBox } from '../components/Screen';
++import { IconTrash } from '../components/Icons';
++import { t } from '../i18n';
++import { addFile, fileKind, formatSize, getFile, listFiles, onFilesChanged, removeFile, type CharacterFileMeta } from './files';
++import { openWithDevice } from './openFile';
++
++export function useCharacterFiles(characterId: string | undefined): CharacterFileMeta[] | null {
++  const [files, setFiles] = useState<CharacterFileMeta[] | null>(null);
++  useEffect(() => {
++    if (!characterId) return;
++    const load = () => listFiles(characterId).then(setFiles).catch(() => setFiles([]));
++    load();
++    return onFilesChanged(load);
++  }, [characterId]);
++  return files;
++}
++
++/** Datei öffnen: PDF, Bild und Text zeigt die App selbst, alles andere ein Programm des Geräts */
++export function fileHref(characterId: string, f: CharacterFileMeta): string | null {
++  return fileKind(f) === 'other' ? null : `/charaktere/${characterId}/datei/${f.id}`;
++}
++
++/**
++ * „Unterlagen“ in der Sammlung: beliebig viele Dateien je Charakter, nur auf diesem Gerät. Beim Abgeben in einer
++ * Kampagne gelten die Grenzen des Servers.
++ */
++export function Attachments({ characterId, name }: { characterId: string; name: string }) {
++  const files = useCharacterFiles(characterId);
++  const picker = useRef<HTMLInputElement>(null);
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++
++  const add = async (list: FileList | null) => {
++    if (!list?.length) return;
++    setBusy(true);
++    setError(null);
++    try {
++      for (const f of Array.from(list)) await addFile(characterId, f);
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const openOther = async (f: CharacterFileMeta) => {
++    setError(null);
++    try {
++      const rec = await getFile(f.id);
++      if (rec) await openWithDevice(rec, f.name);
++    } catch (e) {
++      setError(e);
++    }
++  };
++
++  const remove = async (f: CharacterFileMeta) => {
++    if (!(await confirmDialog(t('„{file}“ von {name} löschen?', { file: f.name, name }), { confirmLabel: t('Löschen'), danger: true }))) return;
++    removeFile(f.id).catch(setError);
++  };
++
++  return (
++    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++      <h2>{t('Unterlagen')}</h2>
++      {files && files.length > 0 && (
++        <div className="list-box">
++          {files.map((f) => {
++            const href = fileHref(characterId, f);
++            const sub = [formatSize(f.size), formatDate(f.addedAt)].join(' · ');
++            const label = <span className="lr-text">{f.name}<span className="lr-sub">{sub}</span></span>;
++            return (
++              <div key={f.id} className="file-row">
++                {href
++                  ? <Link className="list-row nav" to={href}>{label}</Link>
++                  : <button type="button" className="list-row nav" onClick={() => openOther(f)}>{label}<span className="lr-val">{t('Öffnen mit …')}</span></button>}
++                <button type="button" className="btn ghost square" aria-label={t('„{file}“ löschen', { file: f.name })} onClick={() => remove(f)}><IconTrash size={18} /></button>
++              </div>
++            );
++          })}
++        </div>
++      )}
++      <ErrorBox error={error} />
++      <button type="button" className="btn outline" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={() => picker.current?.click()}>
++        {busy ? t('Wird gespeichert …') : t('Datei anhängen')}
++      </button>
++      <input ref={picker} type="file" hidden multiple onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
++      <span className="muted small">{t('Charakterbogen, Notizen, Karten – jede Datei. Bleibt auf diesem Gerät, bis du sie selbst in einer Kampagne abgibst.')}</span>
++    </section>
++  );
++}
+diff --git a/src/characters/FileViewer.tsx b/src/characters/FileViewer.tsx
+new file mode 100644
+index 0000000..878e06a
+--- /dev/null
++++ b/src/characters/FileViewer.tsx
+@@ -0,0 +1,170 @@
++import { useEffect, useRef, useState } from 'react';
++import { Link, useParams } from 'react-router-dom';
++import { ErrorBox, Screen } from '../components/Screen';
++import { t } from '../i18n';
++import { fileKind, getFile, setLastPage, type StoredCharacterFile } from './files';
++import { openWithDevice } from './openFile';
++import { getCharacter } from './store';
++
++/**
++ * Unterlage aus der Sammlung lesen, ohne Netz. PDF über pdf.js (ohne Formular-Skripte; ab 6.x ohne eval), Bild als Bild, Text als
++ * Text – nie als HTML. Bei PDFs merkt sich die App die zuletzt gelesene Seite.
++ */
++export function FileViewer() {
++  const { characterId = '', fileId = '' } = useParams();
++  const c = getCharacter(characterId);
++  const [file, setFile] = useState<StoredCharacterFile | null | undefined>(undefined);
++  const [error, setError] = useState<unknown>(null);
++
++  useEffect(() => {
++    getFile(fileId).then((f) => setFile(f && f.characterId === characterId ? f : null)).catch((e) => { setError(e); setFile(null); });
++  }, [fileId, characterId]);
++
++  const back = { to: `/charaktere/${characterId}`, label: c?.name ?? t('Meine Charaktere') };
++  const kind = file ? fileKind(file) : null;
++
++  return (
++    <Screen nav={false} wide={kind === 'pdf'} backTo={back} overline={c?.name ?? ' '} title={file?.name ?? ' '}>
++      <ErrorBox error={error} />
++      {file === null && (
++        <>
++          <div className="empty">{t('Diese Datei gibt es nicht mehr.')}</div>
++          <Link className="btn outline" to={back.to}>{t('Zurück')}</Link>
++        </>
++      )}
++      {file && kind === 'pdf' && <PdfPages file={file} onError={setError} />}
++      {file && kind === 'image' && <ImageView file={file} />}
++      {file && kind === 'text' && <TextView file={file} />}
++      {file && (
++        <button type="button" className="quiet-link" onClick={() => openWithDevice(file, file.name).catch(setError)}>{t('Mit einer anderen App öffnen')}</button>
++      )}
++    </Screen>
++  );
++}
++
++function ImageView({ file }: { file: StoredCharacterFile }) {
++  const [url, setUrl] = useState<string | null>(null);
++  useEffect(() => {
++    const u = URL.createObjectURL(file.blob);
++    setUrl(u);
++    return () => URL.revokeObjectURL(u);
++  }, [file]);
++  return url ? <img src={url} alt={file.name} style={{ maxWidth: '100%', height: 'auto', borderRadius: 'var(--radius-card)' }} /> : null;
++}
++
++function TextView({ file }: { file: StoredCharacterFile }) {
++  const [text, setText] = useState<string | null>(null);
++  useEffect(() => { file.blob.text().then(setText).catch(() => setText('')); }, [file]);
++  return <div className="card"><p style={{ margin: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text ?? t('Lade …')}</p></div>;
++}
++
++type PdfDoc = { numPages: number; getPage: (n: number) => Promise<PdfPage> };
++type PdfPage = {
++  getViewport: (o: { scale: number }) => { width: number; height: number };
++  render: (o: { canvas: HTMLCanvasElement; viewport: { width: number; height: number } }) => { promise: Promise<void> };
++};
++
++/**
++ * pdf.js in der „legacy“-Fassung: Sie bringt Ersatz für neue JavaScript-Funktionen mit, die ältere WebViews auf
++ * Android noch nicht kennen. Wird erst beim ersten Öffnen eines PDF geladen.
++ */
++async function loadPdf(blob: Blob): Promise<{ promise: Promise<PdfDoc>; destroy: () => Promise<void> }> {
++  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
++  const worker = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
++  pdfjs.GlobalWorkerOptions.workerSrc = worker;
++  const data = new Uint8Array(await blob.arrayBuffer());
++  return pdfjs.getDocument({ data, enableXfa: false }) as unknown as { promise: Promise<PdfDoc>; destroy: () => Promise<void> };
++}
++
++/** Seiten untereinander; gezeichnet wird erst, wenn eine Seite in die Nähe kommt */
++function PdfPages({ file, onError }: { file: StoredCharacterFile; onError: (e: unknown) => void }) {
++  const [doc, setDoc] = useState<PdfDoc | null>(null);
++  const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
++  const [current, setCurrent] = useState(file.lastPage ?? 1);
++  const box = useRef<HTMLDivElement>(null);
++  const jumped = useRef(false);
++
++  useEffect(() => {
++    let alive = true;
++    let task: { destroy: () => Promise<void> } | null = null;
++    loadPdf(file.blob).then(async (loading) => {
++      task = loading;
++      const d = await loading.promise;
++      if (!alive) return;
++      // Seitengrößen vorab, damit die Platzhalter stimmen und der Sprung zur letzten Seite passt
++      const list: { w: number; h: number }[] = [];
++      for (let n = 1; n <= d.numPages; n++) {
++        const v = (await d.getPage(n)).getViewport({ scale: 1 });
++        list.push({ w: v.width, h: v.height });
++      }
++      if (!alive) return;
++      setSizes(list);
++      setDoc(d);
++    }).catch((e) => alive && onError(e));
++    return () => { alive = false; task?.destroy().catch(() => undefined); };
++  }, [file, onError]);
++
++  // Zur zuletzt gelesenen Seite springen
++  useEffect(() => {
++    if (!doc || jumped.current) return;
++    jumped.current = true;
++    const start = Math.min(file.lastPage ?? 1, doc.numPages);
++    if (start > 1) window.setTimeout(() => box.current?.querySelector(`[data-page="${start}"]`)?.scrollIntoView({ block: 'start' }), 50);
++  }, [doc, file.lastPage]);
++
++  // Aktuelle Seite merken
++  useEffect(() => {
++    if (!doc || !box.current) return;
++    const io = new IntersectionObserver((items) => {
++      const seen = items.filter((i) => i.isIntersecting).map((i) => Number((i.target as HTMLElement).dataset.page));
++      if (seen.length) setCurrent(Math.min(...seen));
++    }, { rootMargin: '-40% 0px -55% 0px' });
++    box.current.querySelectorAll('[data-page]').forEach((el) => io.observe(el));
++    return () => io.disconnect();
++  }, [doc]);
++  useEffect(() => {
++    if (!doc) return;
++    const id = window.setTimeout(() => setLastPage(file.id, current).catch(() => undefined), 600);
++    return () => window.clearTimeout(id);
++  }, [current, doc, file.id]);
++
++  if (!doc) return <div className="empty">{t('Lade …')}</div>;
++  return (
++    <>
++      <span className="muted small" role="status">{t('Seite {n} von {total}', { n: current, total: doc.numPages })}</span>
++      <div ref={box} className="pdf-pages">
++        {sizes.map((s, i) => <PdfPageView key={i} doc={doc} n={i + 1} ratio={s.h / s.w} />)}
++      </div>
++    </>
++  );
++}
++
++function PdfPageView({ doc, n, ratio }: { doc: PdfDoc; n: number; ratio: number }) {
++  const holder = useRef<HTMLDivElement>(null);
++  const canvas = useRef<HTMLCanvasElement>(null);
++  const [drawn, setDrawn] = useState(false);
++  useEffect(() => {
++    const el = holder.current;
++    if (!el || drawn) return;
++    const io = new IntersectionObserver(async (items) => {
++      if (!items.some((i) => i.isIntersecting) || !canvas.current) return;
++      io.disconnect();
++      const page = await doc.getPage(n);
++      const width = el.clientWidth;
++      const base = page.getViewport({ scale: 1 });
++      const scale = (width / base.width) * Math.min(window.devicePixelRatio || 1, 2);
++      const viewport = page.getViewport({ scale });
++      canvas.current.width = Math.floor(viewport.width);
++      canvas.current.height = Math.floor(viewport.height);
++      await page.render({ canvas: canvas.current, viewport }).promise.catch(() => undefined);
++      setDrawn(true);
++    }, { rootMargin: '600px 0px' });
++    io.observe(el);
++    return () => io.disconnect();
++  }, [doc, n, drawn]);
++  return (
++    <div ref={holder} data-page={n} className="pdf-page" style={{ aspectRatio: `1 / ${ratio}` }}>
++      <canvas ref={canvas} aria-label={t('Seite {n}', { n })} role="img" />
++    </div>
++  );
++}
+diff --git a/src/characters/backup.ts b/src/characters/backup.ts
+index dd640e5..de5de10 100644
+--- a/src/characters/backup.ts
++++ b/src/characters/backup.ts
+@@ -9,4 +9,5 @@ import { mergeCharacter } from './merge';
+ import { sanitizeCharacter } from './sanitize';
+ import { allStoredCharacters, listCharacters, myAccountKeys, putCharacters, type StoredCharacter } from './store';
++import { exportFiles, importFiles, type ExportedCharacterFile } from './files';
+ 
+ export const BACKUP_FORMAT = 'taleward-charaktere/1';
+@@ -19,4 +20,6 @@ interface CharacterFileData {
+   appVersion: string;
+   character: StoredCharacter;
++  /** Unterlagen (ab App 0.34) – ältere Apps lassen das Feld liegen */
++  files?: ExportedCharacterFile[];
+ }
+ 
+@@ -26,16 +29,25 @@ interface BackupFile {
+   appVersion: string;
+   characters: StoredCharacter[];
++  /** Unterlagen je Charakter (ab App 0.34) */
++  files?: Record<string, ExportedCharacterFile[]>;
+ }
+ 
+-/** Datei mit der ganzen eigenen Sammlung */
+-export function backupFile(now = new Date()): File {
+-  const data: BackupFile = { format: BACKUP_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, characters: listCharacters() };
++/** Datei mit der ganzen eigenen Sammlung, mit allen Unterlagen */
++export async function backupFile(now = new Date()): Promise<File> {
++  const characters = listCharacters();
++  const files: Record<string, ExportedCharacterFile[]> = {};
++  for (const c of characters) {
++    const list = await exportFiles(c.id).catch(() => []);
++    if (list.length) files[c.id] = list;
++  }
++  const data: BackupFile = { format: BACKUP_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, characters, ...(Object.keys(files).length ? { files } : {}) };
+   return new File([JSON.stringify(data)], `taleward-charaktere-${now.toISOString().slice(0, 10)}.json`, { type: 'application/json' });
+ }
+ 
+-/** Datei mit einem Charakter: Stammdaten, Bild, mitgebrachte Welt, Abschriften und private Notizen */
+-export function characterFile(c: StoredCharacter, now = new Date()): File {
++/** Datei mit einem Charakter: Stammdaten, Bild, mitgebrachte Welt, Abschriften, private Notizen und auf Wunsch Unterlagen */
++export async function characterFile(c: StoredCharacter, { withFiles = false, now = new Date() }: { withFiles?: boolean; now?: Date } = {}): Promise<File> {
+   const { owners: _owners, ...character } = c;
+-  const data: CharacterFileData = { format: CHARACTER_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, character: character as StoredCharacter };
++  const files = withFiles ? await exportFiles(c.id) : [];
++  const data: CharacterFileData = { format: CHARACTER_FORMAT, exportedAt: now.toISOString(), appVersion: APP_VERSION, character: character as StoredCharacter, ...(files.length ? { files } : {}) };
+   const slug = c.name.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'charakter';
+   return new File([JSON.stringify(data)], `taleward-charakter-${slug}.json`, { type: 'application/json' });
+@@ -68,7 +80,7 @@ export interface RestoreResult { added: number; updated: number; unchanged: numb
+  * Gerät nicht kennt, fallen weg (dort muss man sich erst anmelden).
+  */
+-export function restoreBackup(text: string): RestoreResult {
++export async function restoreBackup(text: string): Promise<RestoreResult> {
+   const wrong = () => new Error(t('Das ist weder eine Charakter-Datei noch eine Sicherung der Sammlung.'));
+-  let data: { format?: string; characters?: unknown[]; character?: unknown } | null;
++  let data: { format?: string; characters?: unknown[]; character?: unknown; files?: unknown } | null;
+   try {
+     data = JSON.parse(text);
+@@ -95,4 +107,14 @@ export function restoreBackup(text: string): RestoreResult {
+   }
+   if (take.length) putCharacters(take);
++  // Unterlagen nur zu Charakteren, die jetzt (auch) diesem Konto gehören
++  const ids = new Set(incoming.map(sanitizeCharacter).filter((x): x is StoredCharacter => !!x).map((c) => c.id));
++  if (data.format === CHARACTER_FORMAT) {
++    const id = [...ids][0];
++    if (id) await importFiles(id, data.files).catch(() => 0);
++  } else if (data.files && typeof data.files === 'object') {
++    for (const [id, list] of Object.entries(data.files as Record<string, unknown>)) {
++      if (ids.has(id)) await importFiles(id, list).catch(() => 0);
++    }
++  }
+   return result;
+ }
+diff --git a/src/characters/files.ts b/src/characters/files.ts
+new file mode 100644
+index 0000000..bf02af6
+--- /dev/null
++++ b/src/characters/files.ts
+@@ -0,0 +1,198 @@
++/*
++ * Unterlagen in der Sammlung: Dateien, die an einem Charakter hängen (Charakterbogen, Notizen, Karten …). Sie liegen
++ * nur im Gerät (IndexedDB), ohne Begrenzung durch die App, und gehen nie von selbst an einen Server. Grenzen gelten
++ * erst, wenn jemand einen Bogen in einer Kampagne abgibt (characterSheetLimits des Servers).
++ */
++
++export interface CharacterFileMeta {
++  id: string;
++  characterId: string;
++  name: string;
++  /** MIME-Typ, wie ihn das Gerät meldet (kann leer sein) */
++  type: string;
++  size: number;
++  addedAt: string;
++  /** Zuletzt gelesene Seite (PDF, ab 1) */
++  lastPage?: number;
++}
++
++export interface StoredCharacterFile extends CharacterFileMeta {
++  blob: Blob;
++}
++
++/** So reisen Unterlagen in einer Charakter-Datei oder Sicherung mit (Inhalt als Base64) */
++export interface ExportedCharacterFile extends CharacterFileMeta {
++  data: string;
++}
++
++const DB = 'taleward-unterlagen';
++const STORE = 'dateien';
++const CHANGED = 'taleward-unterlagen-changed';
++
++function req<T>(r: IDBRequest<T>): Promise<T> {
++  return new Promise((resolve, reject) => {
++    r.onsuccess = () => resolve(r.result);
++    r.onerror = () => reject(r.error);
++  });
++}
++
++let dbPromise: Promise<IDBDatabase> | null = null;
++function db(): Promise<IDBDatabase> {
++  if (typeof indexedDB === 'undefined') return Promise.reject(new Error('IndexedDB fehlt'));
++  dbPromise ??= new Promise((resolve, reject) => {
++    const open = indexedDB.open(DB, 1);
++    open.onupgradeneeded = () => {
++      const store = open.result.createObjectStore(STORE, { keyPath: 'id' });
++      store.createIndex('characterId', 'characterId');
++    };
++    open.onsuccess = () => resolve(open.result);
++    open.onerror = () => { dbPromise = null; reject(open.error); };
++  });
++  return dbPromise;
++}
++
++async function tx<T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
++  const d = await db();
++  const t = d.transaction(STORE, mode);
++  const result = await req(run(t.objectStore(STORE)));
++  await new Promise<void>((resolve, reject) => {
++    t.oncomplete = () => resolve();
++    t.onerror = () => reject(t.error);
++    t.onabort = () => reject(t.error);
++  });
++  return result;
++}
++
++const changed = () => window.dispatchEvent(new Event(CHANGED));
++
++export function onFilesChanged(listener: () => void): () => void {
++  window.addEventListener(CHANGED, listener);
++  return () => window.removeEventListener(CHANGED, listener);
++}
++
++const meta = ({ blob: _blob, ...m }: StoredCharacterFile): CharacterFileMeta => m;
++
++/** Unterlagen eines Charakters, neueste zuerst (ohne Inhalt) */
++export async function listFiles(characterId: string): Promise<CharacterFileMeta[]> {
++  const all = await tx('readonly', (s) => s.index('characterId').getAll(characterId) as IDBRequest<StoredCharacterFile[]>);
++  return all.map(meta).sort((a, b) => b.addedAt.localeCompare(a.addedAt));
++}
++
++export async function getFile(id: string): Promise<StoredCharacterFile | undefined> {
++  return tx('readonly', (s) => s.get(id) as IDBRequest<StoredCharacterFile | undefined>);
++}
++
++const newId = () => (crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9-]/g, '');
++
++export async function addFile(characterId: string, file: File): Promise<CharacterFileMeta> {
++  const rec: StoredCharacterFile = {
++    id: newId(), characterId, name: file.name || 'Datei', type: file.type || '', size: file.size,
++    addedAt: new Date().toISOString(), blob: file
++  };
++  await tx('readwrite', (s) => s.put(rec));
++  changed();
++  return meta(rec);
++}
++
++export async function removeFile(id: string): Promise<void> {
++  await tx('readwrite', (s) => s.delete(id));
++  changed();
++}
++
++export async function removeFilesOf(characterId: string): Promise<void> {
++  const list = await listFiles(characterId).catch(() => []);
++  for (const f of list) await tx('readwrite', (s) => s.delete(f.id));
++  if (list.length) changed();
++}
++
++export async function setLastPage(id: string, page: number): Promise<void> {
++  const rec = await getFile(id);
++  if (!rec || rec.lastPage === page) return;
++  await tx('readwrite', (s) => s.put({ ...rec, lastPage: page }));
++}
++
++/** Was die App selbst anzeigt; alles andere öffnet ein Programm des Geräts */
++export type FileKind = 'pdf' | 'image' | 'text' | 'other';
++
++export function fileKind(f: Pick<CharacterFileMeta, 'name' | 'type'>): FileKind {
++  const ext = f.name.toLowerCase().split('.').pop() ?? '';
++  if (f.type === 'application/pdf' || ext === 'pdf') return 'pdf';
++  if (/^image\/(png|jpe?g|gif|webp|avif|bmp)$/.test(f.type) || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp'].includes(ext)) return 'image';
++  if (f.type === 'text/plain' || f.type === 'text/markdown' || ['txt', 'md'].includes(ext)) return 'text';
++  return 'other';
++}
++
++/** Dateiarten, die der Server als Charakterbogen annimmt (wie ACCEPT in CharacterAnalysis) */
++export function serverAccepts(f: Pick<CharacterFileMeta, 'name' | 'type'>): boolean {
++  const ext = f.name.toLowerCase().split('.').pop() ?? '';
++  return ['pdf', 'docx', 'txt', 'md'].includes(ext);
++}
++
++export function formatSize(bytes: number): string {
++  if (bytes < 1024) return `${bytes} B`;
++  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
++  return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
++}
++
++async function toBase64(blob: Blob): Promise<string> {
++  const buf = new Uint8Array(await blob.arrayBuffer());
++  let s = '';
++  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
++  return btoa(s);
++}
++
++function fromBase64(data: string, type: string): Blob {
++  const bin = atob(data);
++  const buf = new Uint8Array(bin.length);
++  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
++  return new Blob([buf], { type });
++}
++
++export async function exportFiles(characterId: string): Promise<ExportedCharacterFile[]> {
++  const out: ExportedCharacterFile[] = [];
++  for (const m of await listFiles(characterId)) {
++    const rec = await getFile(m.id);
++    if (rec) out.push({ ...meta(rec), data: await toBase64(rec.blob) });
++  }
++  return out;
++}
++
++/** Ohne Steuer- und Richtungszeichen (die einen Dateinamen in der Anzeige umdrehen könnten) */
++function plainName(name: string): string {
++  return [...name].filter((ch) => {
++    const c = ch.codePointAt(0)!;
++    return c >= 0x20 && c !== 0x7f && !(c >= 0x202a && c <= 0x202e) && !(c >= 0x2066 && c <= 0x2069);
++  }).join('');
++}
++
++const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
++
++/**
++ * Unterlagen aus einer Datei übernehmen. Alles wird geprüft wie fremde Daten: nur bekannte Felder, Name und Typ als
++ * Text, Inhalt nur gültiges Base64. Vorhandene Dateien mit gleicher Kennung bleiben (kein Überschreiben).
++ */
++export async function importFiles(characterId: string, incoming: unknown): Promise<number> {
++  if (!Array.isArray(incoming)) return 0;
++  let n = 0;
++  for (const raw of incoming) {
++    if (!raw || typeof raw !== 'object') continue;
++    const r = raw as Record<string, unknown>;
++    const id = str(r.id, 64).replace(/[^A-Za-z0-9-]/g, '') || newId();
++    const data = typeof r.data === 'string' && /^[A-Za-z0-9+/]*={0,2}$/.test(r.data) ? r.data : null;
++    if (!data) continue;
++    if (await getFile(id)) continue;
++    const type = /^[\w.+-]+\/[\w.+-]+$/.test(str(r.type, 120)) ? str(r.type, 120) : '';
++    let blob: Blob;
++    try { blob = fromBase64(data, type); } catch { continue; }
++    const added = str(r.addedAt, 40);
++    const rec: StoredCharacterFile = {
++      id, characterId, name: plainName(str(r.name, 200)) || 'Datei', type, size: blob.size,
++      addedAt: !Number.isNaN(Date.parse(added)) ? new Date(added).toISOString() : new Date().toISOString(),
++      lastPage: typeof r.lastPage === 'number' && r.lastPage >= 1 ? Math.floor(r.lastPage) : undefined, blob
++    };
++    await tx('readwrite', (s) => s.put(rec));
++    n++;
++  }
++  if (n) changed();
++  return n;
++}
+diff --git a/src/characters/openFile.ts b/src/characters/openFile.ts
+new file mode 100644
+index 0000000..305940c
+--- /dev/null
++++ b/src/characters/openFile.ts
+@@ -0,0 +1,40 @@
++import { Capacitor } from '@capacitor/core';
++import type { StoredCharacterFile } from './files';
++
++/** Dateiname, der in jedem Dateisystem geht (Original bleibt in der Sammlung) */
++function safeName(name: string): string {
++  const cleaned = name.normalize('NFC').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/^\.+/, '').slice(0, 120);
++  return cleaned || 'datei';
++}
++
++async function toBase64(blob: Blob): Promise<string> {
++  const buf = new Uint8Array(await blob.arrayBuffer());
++  let s = '';
++  for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
++  return btoa(s);
++}
++
++/**
++ * Datei mit einem Programm des Geräts öffnen („Öffnen mit …“), z. B. Word-Dateien. In der Android-App wird sie dafür
++ * kurz in den Zwischenspeicher der App geschrieben und über das Teilen-Menü angeboten; im Browser lädt sie herunter.
++ */
++export async function openWithDevice(file: StoredCharacterFile, title: string): Promise<void> {
++  if (Capacitor.isNativePlatform()) {
++    const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
++    const path = `unterlagen/${file.id}/${safeName(file.name)}`;
++    const written = await Filesystem.writeFile({ path, data: await toBase64(file.blob), directory: Directory.Cache, recursive: true });
++    try {
++      await Share.share({ title, files: [written.uri], dialogTitle: title });
++    } catch (e) {
++      // Abbrechen im Teilen-Menü ist kein Fehler
++      if (!/cancel/i.test(String((e as Error)?.message ?? e))) throw e;
++    }
++    return;
++  }
++  const a = document.createElement('a');
++  a.href = URL.createObjectURL(file.blob);
++  a.download = safeName(file.name);
++  a.rel = 'noopener';
++  a.click();
++  window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
++}
+diff --git a/src/components/CharacterAnalysis.tsx b/src/components/CharacterAnalysis.tsx
+index e99ca89..484ab2f 100644
+--- a/src/components/CharacterAnalysis.tsx
++++ b/src/components/CharacterAnalysis.tsx
+@@ -11,4 +11,7 @@ import { MAX_MB } from '../pages/DocumentsPage';
+ import { t, tk, tn } from '../i18n';
+ import { analysisReader } from '../characters/analysisReader';
++import { characterForCampaign } from '../characters/store';
++import { useCharacterFiles } from '../characters/Attachments';
++import { getFile, serverAccepts } from '../characters/files';
+ 
+ /*
+@@ -220,4 +223,6 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
+       ) : sheets.length < maxSheets ? (
+         <>
++          <FromCollection campaignId={campaign.id} busy={busy} taken={sheets.map((d) => d.title)}
++            onPick={(file) => upload(file)} onError={setError} />
+           <button type="button" className="btn outline" disabled={busy} onClick={() => picker.current?.click()}>
+             {busy ? t('Lade hoch …') : t('Charakterbogen abgeben')}
+@@ -237,2 +242,45 @@ export function MyAnalyses({ campaign, me, info }: { campaign: Campaign; me: Mem
+   );
+ }
++
++/**
++ * Bogen aus der Sammlung abgeben: Unterlagen des Charakters, der mit dieser Kampagne verknüpft ist. Angeboten wird nur,
++ * was der Server annimmt; alles andere bleibt auf dem Gerät.
++ */
++function FromCollection({ campaignId, busy, taken, onPick, onError }: {
++  campaignId: string;
++  busy: boolean;
++  taken: string[];
++  onPick: (file: File) => void;
++  onError: (e: unknown) => void;
++}) {
++  const ch = characterForCampaign(currentConnection().id, campaignId);
++  const files = useCharacterFiles(ch?.id);
++  // Schon abgegebene Bögen (gleicher Titel) nicht noch einmal anbieten
++  const open = files?.filter((f) => !(serverAccepts(f) && taken.includes(f.name.replace(/\.[^.]+$/, '')))) ?? [];
++  if (!ch || !open.length) return null;
++  const pick = async (id: string) => {
++    try {
++      const rec = await getFile(id);
++      if (rec) onPick(new File([rec.blob], rec.name, { type: rec.type }));
++    } catch (e) {
++      onError(e);
++    }
++  };
++  return (
++    <>
++      <span className="small"><strong>{t('Aus deiner Sammlung')}</strong></span>
++      <div className="list-box">
++        {open.map((f) => serverAccepts(f) ? (
++          <button key={f.id} type="button" className="list-row nav" disabled={busy} onClick={() => pick(f.id)}>
++            <span className="lr-text">{f.name}</span>
++            <span className="lr-val">{t('Hier abgeben')}</span>
++          </button>
++        ) : (
++          <div key={f.id} className="list-row">
++            <span className="lr-text">{f.name}<span className="lr-sub">{t('Diese Datei nimmt der Server nicht an. Speichere sie als PDF oder Word.')}</span></span>
++          </div>
++        ))}
++      </div>
++    </>
++  );
++}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 2f2c92f..c43bb8b 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1657,3 +1657,15 @@ export const en: Record<string, string> = {
+   "Sobald jemand mitspielt, kannst du den Gegenstand einer Figur geben.": "Once someone joins, you can give the item to a character.",
+   "Dabei": "Carrying",
++  "„{file}“ von {name} löschen?": "Delete “{file}” from {name}?",
++  "Öffnen mit …": "Open with …",
++  "„{file}“ löschen": "Delete “{file}”",
++  "Datei anhängen": "Attach file",
++  "Charakterbogen, Notizen, Karten – jede Datei. Bleibt auf diesem Gerät, bis du sie selbst in einer Kampagne abgibst.": "Character sheet, notes, maps – any file. Stays on this device until you hand it in to a campaign yourself.",
++  "Diese Datei gibt es nicht mehr.": "This file no longer exists.",
++  "Mit einer anderen App öffnen": "Open in another app",
++  "Seite {n} von {total}": "Page {n} of {total}",
++  "Aus deiner Sammlung": "From your collection",
++  "Diese Datei nimmt der Server nicht an. Speichere sie als PDF oder Word.": "The server doesn't accept this file. Save it as PDF or Word.",
++  "Unterlagen mitnehmen": "Include documents",
++  "Hier abgeben": "Hand in",
+ };
+diff --git a/src/pages/CharactersPage.tsx b/src/pages/CharactersPage.tsx
+index f21483a..2713aca 100644
+--- a/src/pages/CharactersPage.tsx
++++ b/src/pages/CharactersPage.tsx
+@@ -24,5 +24,5 @@ export function CharactersPage() {
+   const save = async () => {
+     setBackupError(null);
+-    try { await saveOrShare(backupFile(), t('Meine Charaktere')); } catch (e) { setBackupError(e); }
++    try { await saveOrShare(await backupFile(), t('Meine Charaktere')); } catch (e) { setBackupError(e); }
+   };
+   const restore = async (file: File | undefined) => {
+@@ -33,5 +33,5 @@ export function CharactersPage() {
+       // Eine Sicherung mit Bildern ist selten größer als ein paar MB
+       if (file.size > 30 * 1024 * 1024) throw new Error(t('Die Datei ist zu groß (höchstens {n} MB).', { n: 30 }));
+-      const r = restoreBackup(await file.text());
++      const r = await restoreBackup(await file.text());
+       setRestored(t('Zurückgeholt: {a} neu, {u} aktualisiert, {s} schon aktuell.', { a: r.added, u: r.updated, s: r.unchanged }));
+     } catch (e) {
+diff --git a/src/pages/MyCharacterPage.tsx b/src/pages/MyCharacterPage.tsx
+index f690d77..db912a3 100644
+--- a/src/pages/MyCharacterPage.tsx
++++ b/src/pages/MyCharacterPage.tsx
+@@ -11,4 +11,6 @@ import { deleteCharacter, getCharacter, onCharactersChanged, STATUS_ORDER, updat
+ import { fetchChronicle, linkOutdated, pushToCampaign, refreshWorld, releaseFromCampaign, serverHasCharacters } from '../characters/sync';
+ import { WorldItemDialog } from '../characters/WorldItemDialog';
++import { Attachments, useCharacterFiles } from '../characters/Attachments';
++import { removeFilesOf } from '../characters/files';
+ import { confirmDialog } from '../components/confirm';
+ import { formatDate } from '../components/format';
+@@ -34,4 +36,7 @@ export function MyCharacterPage() {
+   const [picking, setPicking] = useState(false);
+   const [fileError, setFileError] = useState<unknown>(null);
++  const files = useCharacterFiles(c?.id);
++  // Unterlagen können die Datei groß machen – mitnehmen ist Standard, abwählbar
++  const [withFiles, setWithFiles] = useState(true);
+ 
+   useEffect(() => onCharactersChanged(() => setC(getCharacter(characterId))), [characterId]);
+@@ -75,5 +80,5 @@ export function MyCharacterPage() {
+   const shareFile = async () => {
+     setFileError(null);
+-    try { await saveOrShare(characterFile(c), c.name); } catch (e) { setFileError(e); }
++    try { await saveOrShare(await characterFile(c, { withFiles: withFiles && !!files?.length }), c.name); } catch (e) { setFileError(e); }
+   };
+ 
+@@ -84,4 +89,5 @@ export function MyCharacterPage() {
+     if (!(await confirmDialog(q, { confirmLabel: t('Löschen'), danger: true }))) return;
+     deleteCharacter(c.id);
++    removeFilesOf(c.id).catch(() => undefined);
+     navigate('/charaktere', { replace: true });
+   };
+@@ -137,4 +143,6 @@ export function MyCharacterPage() {
+       </section>
+ 
++      <Attachments characterId={c.id} name={c.name} />
++
+       {/* Mitgebrachte Welt */}
+       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+@@ -250,4 +258,10 @@ export function MyCharacterPage() {
+         <h2>{t('Als Datei weitergeben')}</h2>
+         <span className="small">{t('Zum Beispiel auf dein Tablet oder ein neues Handy: Dort unter „Meine Charaktere“ → „Sammlung sichern“ → „Aus Datei zurückholen“. Die Datei enthält auch deine privaten Notizen und Chroniken.')}</span>
++        {!!files?.length && (
++          <label className="check">
++            <input type="checkbox" checked={withFiles} onChange={(e) => setWithFiles(e.target.checked)} />
++            <span>{t('Unterlagen mitnehmen')}</span>
++          </label>
++        )}
+         <ErrorBox error={fileError} />
+         <button type="button" className="btn outline" style={{ alignSelf: 'flex-start' }} onClick={shareFile}>{t('{name} als Datei speichern', { name: c.name })}</button>
+diff --git a/src/theme.css b/src/theme.css
+index 99b7b08..78939d7 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2282,7 +2282,12 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ 
+ /* Listen ohne eigenen Kasten (in einer Karte) und Häkchen als Zeile */
++/* Zeile mit eigenem Löschen-Zeichen daneben (Unterlagen in der Sammlung) */
++.list-box > .file-row { display: flex; gap: 4px; align-items: center; border-top: 1px solid var(--line); }
++.list-box > .file-row:first-child { border-top: none; }
++.list-box > .file-row > .list-row { flex: 1; border-top: none; }
++.list-box > .file-row > .btn.ghost { background: none; border: 0; box-shadow: none; color: var(--ink-muted); }
+ .list-box.flat { background: none; border: 0; border-radius: 0; padding: 0; }
+ .list-row.check-row { align-items: flex-start; cursor: pointer; }
+-.list-row.check-row > input[type='checkbox'] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--tinte); }
++.list-row.check-row > input[type='checkbox'], .list-row.check-row > input[type='radio'] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--tinte); }
+ .list-row:disabled { opacity: .55; cursor: default; }
+ .card.manage .list-head { margin-top: var(--space-3); font-size: calc(17px * var(--ts)); }
+@@ -2319,2 +2324,7 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ .comment-actions { margin: -8px 0 -12px; color: var(--ink-muted); }
+ .voice-hint .btn.square { background: none; border-color: transparent; color: var(--ink-muted); }
++
++/* Unterlagen aus der Sammlung lesen (PDF) */
++.pdf-pages { display: flex; flex-direction: column; gap: var(--space-2); }
++.pdf-page { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
++.pdf-page canvas { width: 100%; height: 100%; display: block; }

@@ -1,0 +1,1172 @@
+From b0036e2f8697c799de5a5f9a6048414c665f6846 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 19:18:34 +0100
+Subject: [PATCH 205/206] =?UTF-8?q?Schnittstelle=200.4.28:=20Vorschl=C3=A4?=
+ =?UTF-8?q?ge=20von=20Spielenden,=20Merken,=20Pronomen,=20Z=C3=A4hler;=20T?=
+ =?UTF-8?q?estserver?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ docs/session-chronik-api.yaml | 340 +++++++++++++++++++++++++++++++++-
+ scripts/tests/spans.test.mjs  |  33 ++++
+ src/api/client.ts             |  23 ++-
+ src/api/types.ts              |  70 ++++++-
+ src/api/upload.ts             |   6 +-
+ src/mocks/billing.ts          |  24 ++-
+ src/mocks/db.ts               |   6 +
+ src/mocks/handlers.ts         |  33 +++-
+ src/mocks/players.ts          | 207 +++++++++++++++++++++
+ src/pages/Recording.tsx       |  23 ++-
+ src/pages/TablePage.tsx       |   9 +-
+ src/recorder/spans.ts         |  65 +++++++
+ 12 files changed, 814 insertions(+), 25 deletions(-)
+ create mode 100644 scripts/tests/spans.test.mjs
+ create mode 100644 src/mocks/players.ts
+ create mode 100644 src/recorder/spans.ts
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 3973649..a2eae68 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.27
++  version: 0.4.28
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -267,4 +267,17 @@ info:
+     Änderungen in 0.4.27 (Hinweis-Mail nur bei neuem Gerät): POST /auth/login und POST /auth/oidc/exchange nehmen ein
+     freiwilliges Feld deviceId. Außerdem 409 email_confirmed bei PUT /me/email beschrieben (Server ab 0.4.141).
++    Änderungen in 0.4.28 (Spielende tragen bei; alles freiwillig, nichts davon geht an ein Sprachmodell):
++    - Vorschläge von Spielenden für die Bibel: /campaigns/{id}/player-proposals, /player-proposals/{id}. Spielende sehen
++      nur die eigenen, nie fremde und keine Anzahl; die SL entscheidet wie bei Session-Vorschlägen. Schalter
++      CampaignSettings.playerProposals (Standard an).
++    - „Merken“: Stellen während einer Runde markieren, nur für die Person selbst (/sessions/{id}/bookmarks,
++      /bookmarks/{id}). Damit der Server die Zeit einer Stelle in der Aufnahme findet, schickt die aufnehmende App bei
++      POST …/uploads die Zeiten, in denen wirklich aufgenommen wurde (spans). Campaign.liveSessionId zeigt Anwesenden
++      die laufende Runde.
++    - Pronomen: Character.pronouns → Member.characterPronouns, EntryInput.pronouns für NSC. Öffentlich wie Name und
++      Kurzbeschreibung; das Kapitel nutzt sie (nur bei Einträgen, die der Recap-Pipeline ohnehin offenstehen).
++    - Zähler am Charakter (LeP, AsP …): CampaignSettings.counterKinds (leer = aus, Standard), Stände je Mitglied über
++      PUT /campaigns/{id}/members/me/counters, Member.counters nur für die Person selbst und die SL.
++    Ältere Apps sehen davon nichts; ältere Server ignorieren pronouns und spans.
+ 
+ servers:
+@@ -1131,4 +1144,186 @@ paths:
+         "409": { $ref: "#/components/responses/Conflict" }
+ 
++  /campaigns/{campaignId}/player-proposals:
++    parameters: [{ $ref: "#/components/parameters/campaignId" }]
++    get:
++      tags: [Vorschläge]
++      summary: Vorschläge von Spielenden (ab 0.4.28)
++      description: |
++        Spielende bekommen nur die eigenen (alle Zustände, neueste zuerst), nie fremde und keine Anzahl. Die SL bekommt
++        alle offenen und die der letzten 30 Tage. Ist playerProposals aus, bekommen Spielende eine leere Liste; die SL
++        sieht bestehende weiter.
++      parameters:
++        - { name: state, in: query, required: false, schema: { type: string, enum: [open, all] }, description: "Standard all" }
++      responses:
++        "200":
++          description: OK
++          content:
++            application/json:
++              schema:
++                type: array
++                items: { $ref: "#/components/schemas/PlayerProposal" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++    post:
++      tags: [Vorschläge]
++      summary: Eintrag oder Ergänzung vorschlagen (nur Spielende, ab 0.4.28)
++      description: |
++        Nur aktive Mitglieder mit Rolle player; SL → 403. Mit targetEntryId eine Ergänzung zu einem Eintrag, den die
++        Person sieht – sonst 404 (auch bei verborgenen Einträgen, kein Unterschied zu „gibt es nicht“). Ohne
++        targetEntryId ein neuer Eintrag. Der Server prüft NICHT, ob es einen verborgenen Eintrag mit diesem Namen gibt,
++        und antwortet immer gleich (kein Hinweis auf Geheimes). Höchstens 20 offene je Mitglied → 409
++        `player_proposal_limit`; höchstens 30 je Stunde → 429. playerProposals aus → 403 `player_proposals_off`.
++        Vorschläge von Spielenden gehen nie an ein Sprachmodell und nie in Kapitel; erst eine Entscheidung der SL macht
++        daraus einen Eintrag. Kein Push.
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema: { $ref: "#/components/schemas/PlayerProposalIn" }
++      responses:
++        "201":
++          description: Angelegt
++          content:
++            application/json:
++              schema: { $ref: "#/components/schemas/PlayerProposal" }
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "403": { $ref: "#/components/responses/Forbidden" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++
++  /player-proposals/{proposalId}:
++    parameters:
++      - { name: proposalId, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" } }
++    delete:
++      tags: [Vorschläge]
++      summary: Eigenen offenen Vorschlag zurückziehen (ab 0.4.28)
++      description: Nur die Urheberin und nur im Zustand open (sonst 409). Fremde → 404. Wird zu state withdrawn.
++      responses:
++        "204": { description: Zurückgezogen }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++
++  /player-proposals/{proposalId}/decision:
++    parameters:
++      - { name: proposalId, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" } }
++    post:
++      tags: [Vorschläge]
++      summary: Vorschlag einer Spielerin übernehmen oder ablehnen (nur SL, ab 0.4.28)
++      description: |
++        accept legt einen Eintrag an (Felder aus dem Vorschlag, von der SL geändert) oder ergänzt mergeIntoEntryId
++        (Standard: targetEntryId) – angehängt wie bei Session-Vorschlägen, nie überschrieben. Die SL darf auch in einen
++        Eintrag ergänzen, den die Urheberin nicht sieht, oder den Text in gmNotes legen. Sichtbarkeit ohne Angabe:
++        public. reject schließt ihn ohne Eintrag. Nur im Zustand open, sonst 409.
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema: { $ref: "#/components/schemas/PlayerProposalDecision" }
++      responses:
++        "200":
++          description: Neuer Stand des Vorschlags (resultEntryId gesetzt bei accept)
++          content:
++            application/json:
++              schema: { $ref: "#/components/schemas/PlayerProposal" }
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++
++  /sessions/{sessionId}/bookmarks:
++    parameters: [{ $ref: "#/components/parameters/sessionId" }]
++    get:
++      tags: [Chronik]
++      summary: Eigene gemerkte Stellen einer Runde (ab 0.4.28)
++      description: |
++        Nur die eigenen. Niemand sonst sieht sie – auch die SL nicht, auch nicht als Anzahl. Spielende bekommen sie zu
++        jeder Runde, die sie sehen dürfen (vor dem Veröffentlichen nur Anwesende der Runde, sonst 404).
++      responses:
++        "200":
++          description: OK
++          content:
++            application/json:
++              schema:
++                type: array
++                items: { $ref: "#/components/schemas/Bookmark" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++    post:
++      tags: [Chronik]
++      summary: Stelle merken (ab 0.4.28)
++      description: |
++        Nur Anwesende der Runde (Attendee.memberId) und nur bis zur Veröffentlichung (danach 409 `session_published`).
++        Ohne at nimmt der Server seine eigene Uhrzeit. at darf höchstens 12 Stunden vor playedAt bzw. 5 Minuten in der
++        Zukunft liegen (sonst 400). Höchstens 200 je Mitglied und Runde (409 `bookmark_limit`). Gemerkte Stellen gehen
++        nie an ein Sprachmodell, nie in Kapitel oder Vorschläge, nie an die SL. Beim Löschen der Runde oder des Kontos
++        werden sie mit gelöscht; ein Umzug nimmt sie nicht mit.
++      requestBody:
++        required: false
++        content:
++          application/json:
++            schema:
++              type: object
++              properties:
++                at: { type: string, format: date-time }
++                note: { type: [string, "null"], maxLength: 280 }
++      responses:
++        "201":
++          description: Angelegt
++          content:
++            application/json:
++              schema: { $ref: "#/components/schemas/Bookmark" }
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++
++  /bookmarks/{bookmarkId}:
++    parameters:
++      - { name: bookmarkId, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" } }
++    delete:
++      tags: [Chronik]
++      summary: Gemerkte Stelle löschen (ab 0.4.28; nur die eigene, sonst 404)
++      responses:
++        "204": { description: Gelöscht }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++
++  /campaigns/{campaignId}/members/me/counters:
++    parameters: [{ $ref: "#/components/parameters/campaignId" }]
++    put:
++      tags: [Charaktere]
++      summary: Eigene Zählerstände setzen (ab 0.4.28)
++      description: |
++        Nur das Mitglied selbst (Rolle player); die SL liest sie, ändert sie aber nicht. Ersetzt alle Stände. Nur
++        Zählerarten aus CampaignSettings.counterKinds (andere → 400 `counter_unknown`); counterKinds leer → 403
++        `counters_off`. Zähler gehen nie an ein Sprachmodell, nie in Kapitel, nie an andere Spielende und nicht in einen
++        Umzug. Wird eine Zählerart entfernt, verwirft der Server ihre Stände.
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              type: object
++              required: [values]
++              properties:
++                values:
++                  type: array
++                  maxItems: 12
++                  items: { $ref: "#/components/schemas/CounterValue" }
++      responses:
++        "200":
++          description: Neuer Stand
++          content:
++            application/json:
++              schema:
++                type: array
++                items: { $ref: "#/components/schemas/CounterValue" }
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "403": { $ref: "#/components/responses/Forbidden" }
++        "404": { $ref: "#/components/responses/NotFound" }
++
+   /campaigns/{campaignId}/members/me/world:
+     parameters: [{ $ref: "#/components/parameters/campaignId" }]
+@@ -2222,4 +2417,18 @@ paths:
+                         type: string
+                         description: Nur bei source=discord – welches Mitglied auf dieser Spur spricht
++                spans:
++                  type: array
++                  maxItems: 500
++                  description: |
++                    Ab 0.4.28, freiwillig, nur bei source=table: Zeiten (Uhr des aufnehmenden Geräts), in denen wirklich
++                    aufgenommen wurde – zwischen zwei Spannen lag eine Pause. Zusammen ergeben sie die Länge der Aufnahme.
++                    Der Server rechnet damit gemerkte Stellen (Bookmark.at) in eine Zeit der Aufnahme um. Fehlt das Feld,
++                    gilt playedAt als Beginn ohne Pausen.
++                  items:
++                    type: object
++                    required: [startedAt, endedAt]
++                    properties:
++                      startedAt: { type: string, format: date-time }
++                      endedAt: { type: string, format: date-time }
+       responses:
+         "201":
+@@ -3798,4 +4007,10 @@ components:
+         allowExternalTranscription: { type: boolean }
+         allowCharacterAnalysis: { type: boolean }
++        playerProposals: { type: boolean, description: "Ab 0.4.28" }
++        counterKinds:
++          type: array
++          maxItems: 8
++          items: { $ref: "#/components/schemas/CounterKind" }
++          description: Ab 0.4.28, ersetzt die ganze Liste
+ 
+     CampaignSettings:
+@@ -3811,4 +4026,16 @@ components:
+         allowExternalTranscription: { type: boolean }
+         allowCharacterAnalysis: { type: boolean }
++        playerProposals:
++          type: boolean
++          description: |
++            Ab 0.4.28: Spielende dürfen Einträge für die Bibel vorschlagen. Standard true. Fehlt bei älteren Servern
++            (dann gibt es die Funktion nicht).
++        counterKinds:
++          type: array
++          maxItems: 8
++          items: { $ref: "#/components/schemas/CounterKind" }
++          description: |
++            Ab 0.4.28: Zähler am Charakter (LeP, AsP …). Leer = aus (Standard). Die App schlägt Arten je Spielsystem vor;
++            die SL wählt. Fehlt bei älteren Servern.
+         characterSheetLimits:
+           description: Nur lesbar, wie Campaign.characterSheetLimits
+@@ -4146,4 +4373,15 @@ components:
+           description: Ab 0.4.7
+         characterNickname: { type: [string, "null"], description: "Ab 0.4.7" }
++        characterPronouns:
++          type: [string, "null"]
++          description: |
++            Ab 0.4.28: wie über die Figur gesprochen wird (aus Character.pronouns), für alle Mitglieder sichtbar und für
++            die Recap-Pipeline erlaubt (wie characterSummary).
++        counters:
++          type: array
++          items: { $ref: "#/components/schemas/CounterValue" }
++          description: |
++            Ab 0.4.28: Zählerstände – nur für die Person selbst und die SL, für alle anderen weggelassen. Fehlt, wenn
++            counterKinds leer ist.
+         moveConsentAt:
+           type: [string, "null"]
+@@ -4293,8 +4531,96 @@ components:
+                 frei (PATCH /entries/{id}) und erledigt den Hinweis mit DELETE /campaigns/{id}/gm-notices/{noticeId}.
+               items: { $ref: "#/components/schemas/GmNotice" }
++            openPlayerProposals:
++              type: integer
++              description: Ab 0.4.28, nur für die SL (für Spielende weggelassen) – offene Vorschläge von Spielenden
++            liveSessionId:
++              type: [string, "null"]
++              description: |
++                Ab 0.4.28: Runde, die gerade aufgenommen wird oder auf das Hochladen wartet (state created oder uploading,
++                playedAt in den letzten 16 Stunden). Nur für die SL und für Anwesende dieser Runde, sonst null. Die App
++                zeigt Anwesenden damit „Merken“.
+             members:
+               type: array
+               items: { $ref: "#/components/schemas/Member" }
+ 
++    PlayerProposalIn:
++      type: object
++      required: [entryType, title]
++      properties:
++        entryType: { type: string, enum: [npc, location, quest, item, faction, other] }
++        title: { type: string, minLength: 1, maxLength: 120 }
++        detail: { type: string, maxLength: 2000 }
++        targetEntryId:
++          type: [string, "null"]
++          description: Ergänzung zu diesem Eintrag (muss für die Person sichtbar sein, sonst 404)
++
++    PlayerProposal:
++      allOf:
++        - $ref: "#/components/schemas/PlayerProposalIn"
++        - type: object
++          required: [id, campaignId, authorMemberId, state, createdAt]
++          properties:
++            id: { type: string }
++            campaignId: { type: string }
++            authorMemberId: { type: string }
++            state: { type: string, enum: [open, accepted, rejected, withdrawn] }
++            createdAt: { type: string, format: date-time }
++            decidedAt: { type: [string, "null"], format: date-time }
++            resultEntryId:
++              type: [string, "null"]
++              description: |
++                Eintrag, der daraus wurde bzw. ergänzt wurde. Für die Urheberin nur, wenn sie den Eintrag sieht, sonst null
++                (state bleibt accepted – „die SL hat es aufgenommen“, ohne zu verraten, wo).
++
++    PlayerProposalDecision:
++      type: object
++      required: [decision]
++      properties:
++        decision: { type: string, enum: [accept, reject] }
++        entryType: { type: string, enum: [npc, location, quest, item, faction, other] }
++        title: { type: string, minLength: 1, maxLength: 120 }
++        detail: { type: string, maxLength: 2000 }
++        gmNotes: { type: [string, "null"] }
++        visibility: { $ref: "#/components/schemas/Visibility" }
++        hiddenFromMemberIds: { type: array, items: { type: string } }
++        mergeIntoEntryId:
++          type: [string, "null"]
++          description: Ergänzen statt neu anlegen; Standard targetEntryId. null mit targetEntryId = doch neu anlegen
++        holderMemberId: { type: [string, "null"], description: "Nur bei item" }
++
++    Bookmark:
++      type: object
++      required: [id, sessionId, at, createdAt]
++      properties:
++        id: { type: string }
++        sessionId: { type: string }
++        at: { type: string, format: date-time, description: "Uhrzeit, zu der gemerkt wurde" }
++        note: { type: [string, "null"] }
++        offsetMs:
++          type: [integer, "null"]
++          description: Zeit in der Aufnahme (aus Upload spans); null, solange unbekannt oder außerhalb der Aufnahme
++        recapParagraph:
++          type: [integer, "null"]
++          description: |
++            Nach dem Veröffentlichen: Absatz des Kapitels (ab 0 in Recap.text), der diese Stelle erzählt – soweit der
++            Server ihn über die Belege findet; sonst null. Nur ein Hinweis, das Kapitel ändert sich dadurch nicht.
++        createdAt: { type: string, format: date-time }
++
++    CounterKind:
++      type: object
++      required: [id, label]
++      properties:
++        id: { type: string, pattern: "^[a-z0-9_-]{1,24}$" }
++        label: { type: string, minLength: 1, maxLength: 24, description: "z. B. LeP" }
++        hint: { type: [string, "null"], maxLength: 60, description: "z. B. Lebenspunkte" }
++
++    CounterValue:
++      type: object
++      required: [kindId, value]
++      properties:
++        kindId: { type: string }
++        value: { type: integer, minimum: -9999, maximum: 99999 }
++        max: { type: [integer, "null"], minimum: 0, maximum: 99999 }
++
+     Attendee:
+       type: object
+@@ -4795,4 +5121,10 @@ components:
+             verborgener Einträge; Vorschlags-Pipeline, Dublettenprüfung (Proposal.match) und Namenshilfe: alle. Doppelte und
+             der Name selbst fallen beim Speichern weg. Fehlt bei älteren Servern.
++        pronouns:
++          type: [string, "null"]
++          maxLength: 32
++          description: |
++            Ab 0.4.28, freiwillig, sinnvoll bei npc: wie über die Figur gesprochen wird. Sichtbar wie der Name. Die
++            Recap-Pipeline bekommt es nur bei Einträgen, die sie ohnehin bekommt (öffentlich, nicht teilweise verborgen).
+         visibility: { $ref: "#/components/schemas/Visibility" }
+         hiddenFromMemberIds:
+@@ -4861,4 +5193,10 @@ components:
+         backstory: { type: [string, "null"], maxLength: 20000, description: "wird zu Member.characterBackstory (nur Person und SL; nie in Recap/Vorschläge)" }
+         system: { type: [string, "null"], maxLength: 64, description: "Regelsystem als freier Text, nur Anzeige" }
++        pronouns:
++          type: [string, "null"]
++          maxLength: 32
++          description: |
++            Ab 0.4.28, freiwillig: wie andere über die Figur sprechen („sie“, „er“ oder eigener Text). Wird zu
++            Member.characterPronouns. Ältere Server ignorieren das Feld.
+         status: { type: string, enum: [active, retired, deceased] }
+         statusChangedAt: { type: [string, "null"], format: date-time }
+diff --git a/scripts/tests/spans.test.mjs b/scripts/tests/spans.test.mjs
+new file mode 100644
+index 0000000..91b5b0a
+--- /dev/null
++++ b/scripts/tests/spans.test.mjs
+@@ -0,0 +1,33 @@
++// Aufnahmezeiten für „Merken“: Spannen und Abgleich mit der gemessenen Länge
++import { test, beforeEach } from 'node:test';
++import assert from 'node:assert/strict';
++
++const store = new Map();
++globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
++const { spanOpen, spanClose, spansFor, clearSpans } = await import('../../src/recorder/spans.ts');
++const at = (min) => new Date(Date.UTC(2026, 9, 30, 18, min));
++
++beforeEach(() => store.clear());
++
++test('Pause trennt zwei Spannen', () => {
++  spanOpen('s1', at(0)); spanClose('s1', at(30)); spanOpen('s1', at(40)); spanClose('s1', at(70));
++  const out = spansFor('s1', 60 * 60_000);
++  assert.equal(out.length, 2);
++  assert.equal(out[1].startedAt, at(40).toISOString());
++});
++
++test('doppeltes Öffnen und Schließen schadet nicht', () => {
++  spanOpen('s1', at(0)); spanOpen('s1', at(5)); spanClose('s1', at(10)); spanClose('s1', at(12));
++  assert.deepEqual(spansFor('s1'), [{ startedAt: at(0).toISOString(), endedAt: at(10).toISOString() }]);
++});
++
++test('passt die Länge nicht (Pause außerhalb der App), lieber nichts schicken', () => {
++  spanOpen('s1', at(0)); spanClose('s1', at(60));
++  assert.equal(spansFor('s1', 40 * 60_000), undefined);
++  assert.ok(spansFor('s1', 59.5 * 60_000));
++});
++
++test('aufräumen', () => {
++  spanOpen('s1', at(0)); clearSpans('s1');
++  assert.equal(spansFor('s1'), undefined);
++});
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 58b1d20..a9baa0c 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -57,5 +57,5 @@ import type { InvitePreview, CharacterAnalysis,
+   Attendee,
+   Visibility,
+-  VoiceProfile
++  VoiceProfile, Bookmark, CounterValue, PlayerProposal, PlayerProposalDecision, PlayerProposalIn
+ } from './types';
+ 
+@@ -421,6 +421,23 @@ function makeApi(conn: () => Connection) {
+     sessionId: string,
+     source: 'table' | 'discord',
+-    files: { fileName: string; sizeBytes: number; mimeType: string; trackMemberId?: string }[]
+-  ) => request<UploadCreated>('POST', `/sessions/${sessionId}/uploads`, { body: { source, files } }),
++    files: { fileName: string; sizeBytes: number; mimeType: string; trackMemberId?: string }[],
++    spans?: { startedAt: string; endedAt: string }[]
++  ) => request<UploadCreated>('POST', `/sessions/${sessionId}/uploads`, { body: { source, files, ...(spans?.length ? { spans } : {}) } }),
++  /** Ab 0.4.28: Vorschläge von Spielenden für die Bibel */
++  playerProposals: (campaignId: string, state: 'open' | 'all' = 'all') =>
++    request<PlayerProposal[]>('GET', `/campaigns/${campaignId}/player-proposals?state=${state}`),
++  addPlayerProposal: (campaignId: string, input: PlayerProposalIn) =>
++    request<PlayerProposal>('POST', `/campaigns/${campaignId}/player-proposals`, { body: input }),
++  withdrawPlayerProposal: (id: string) => request<void>('DELETE', `/player-proposals/${id}`),
++  decidePlayerProposal: (id: string, decision: PlayerProposalDecision) =>
++    request<PlayerProposal>('POST', `/player-proposals/${id}/decision`, { body: decision }),
++  /** Ab 0.4.28: gemerkte Stellen, nur die eigenen */
++  bookmarks: (sessionId: string) => request<Bookmark[]>('GET', `/sessions/${sessionId}/bookmarks`),
++  addBookmark: (sessionId: string, note?: string | null, at?: string) =>
++    request<Bookmark>('POST', `/sessions/${sessionId}/bookmarks`, { body: { ...(at ? { at } : {}), ...(note ? { note } : {}) } }),
++  deleteBookmark: (id: string) => request<void>('DELETE', `/bookmarks/${id}`),
++  /** Ab 0.4.28: eigene Zählerstände */
++  setCounters: (campaignId: string, values: CounterValue[]) =>
++    request<CounterValue[]>('PUT', `/campaigns/${campaignId}/members/me/counters`, { body: { values } }),
+   putChunk: (uploadId: string, fileId: string, index: number, data: Blob, sha256?: string) =>
+     request<void>('PUT', `/uploads/${uploadId}/files/${fileId}/chunks/${index}`, {
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 8d61bc4..fa50b7b 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -81,4 +81,8 @@ export interface Member {
+   characterStatus?: CharacterStatus | null;
+   characterNickname?: string | null;
++  /** Wie über die Figur gesprochen wird (ab 0.4.28), für alle sichtbar */
++  characterPronouns?: string | null;
++  /** Zählerstände (ab 0.4.28) – nur für die Person selbst und die SL */
++  counters?: CounterValue[];
+   /** „Meine Charakterdaten dürfen bei einem Umzug mit“ (ab 0.4.8); für alle sichtbar, null = nein */
+   moveConsentAt?: string | null;
+@@ -98,8 +102,62 @@ export interface Character {
+   backstory?: string | null;
+   system?: string | null;
++  /** Wie andere über die Figur sprechen („sie“, „er“, eigener Text), ab 0.4.28 */
++  pronouns?: string | null;
+   status: CharacterStatus;
+   statusChangedAt?: string | null;
+ }
+ 
++/** Ab 0.4.28: Zählerart am Charakter (LeP, AsP …), festgelegt von der SL */
++export interface CounterKind {
++  id: string;
++  label: string;
++  hint?: string | null;
++}
++export interface CounterValue {
++  kindId: string;
++  value: number;
++  max?: number | null;
++}
++
++/** Ab 0.4.28: Vorschlag einer Spielerin für die Bibel */
++export type PlayerProposalType = 'npc' | 'location' | 'quest' | 'item' | 'faction' | 'other';
++export interface PlayerProposalIn {
++  entryType: PlayerProposalType;
++  title: string;
++  detail?: string;
++  targetEntryId?: string | null;
++}
++export interface PlayerProposal extends PlayerProposalIn {
++  id: string;
++  campaignId: string;
++  authorMemberId: string;
++  state: 'open' | 'accepted' | 'rejected' | 'withdrawn';
++  createdAt: string;
++  decidedAt?: string | null;
++  resultEntryId?: string | null;
++}
++export interface PlayerProposalDecision {
++  decision: 'accept' | 'reject';
++  entryType?: PlayerProposalType;
++  title?: string;
++  detail?: string;
++  gmNotes?: string | null;
++  visibility?: Visibility;
++  hiddenFromMemberIds?: string[];
++  mergeIntoEntryId?: string | null;
++  holderMemberId?: string | null;
++}
++
++/** Ab 0.4.28: gemerkte Stelle einer Runde, nur für die Person selbst */
++export interface Bookmark {
++  id: string;
++  sessionId: string;
++  at: string;
++  note?: string | null;
++  offsetMs?: number | null;
++  recapParagraph?: number | null;
++  createdAt: string;
++}
++
+ /** Mitgebrachter Welt-Eintrag (ab 0.4.7) */
+ export interface WorldEntryIn {
+@@ -230,4 +288,8 @@ export interface Campaign extends CampaignSummary {
+   /** Wer zahlt – nur für SL und nur mit Guthaben (ab 0.4.25) */
+   billing?: CampaignBilling | null;
++  /** Offene Vorschläge von Spielenden – nur SL (ab 0.4.28) */
++  openPlayerProposals?: number;
++  /** Runde, die gerade aufgenommen wird – nur SL und Anwesende (ab 0.4.28) */
++  liveSessionId?: string | null;
+   members: Member[];
+ }
+@@ -294,5 +356,5 @@ export interface CreditWaitingJob {
+ /** Ab 0.4.25: Einstellungen einer Kampagne an einem Ort */
+ export type SettingField = 'allowCloudSummary' | 'allowExternalTranscription' | 'allowCharacterAnalysis';
+-export type CampaignSettingsIn = Partial<Record<SettingField, boolean>>;
++export type CampaignSettingsIn = Partial<Record<SettingField, boolean>> & { playerProposals?: boolean; counterKinds?: CounterKind[] };
+ export interface CampaignSettings {
+   version: number;
+@@ -300,4 +362,8 @@ export interface CampaignSettings {
+   allowExternalTranscription: boolean;
+   allowCharacterAnalysis: boolean;
++  /** Ab 0.4.28; fehlt bei älteren Servern */
++  playerProposals?: boolean;
++  /** Ab 0.4.28; leer = aus */
++  counterKinds?: CounterKind[];
+   characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
+   locks: { field: SettingField | (string & {}); value: boolean; reason: 'unavailable' | 'operator' | (string & {}) }[];
+@@ -574,4 +640,6 @@ export interface EntryInput {
+   /** Andere Namen oder Schreibweisen („Auch genannt“, ab 0.4.21), sichtbar wie der Name */
+   aliases?: string[];
++  /** Wie über die Figur gesprochen wird (ab 0.4.28, v. a. NSC), sichtbar wie der Name */
++  pronouns?: string | null;
+   visibility: Visibility;
+   /** Geheimer Teil, nur für die SL; der Server lässt ihn für Spieler weg (ab 0.3.2) */
+diff --git a/src/api/upload.ts b/src/api/upload.ts
+index f766d65..7fc4022 100644
+--- a/src/api/upload.ts
++++ b/src/api/upload.ts
+@@ -59,5 +59,6 @@ export async function uploadSessionAudio(
+   source: 'table' | 'discord',
+   files: UploadFile[],
+-  onProgress: (fraction: number) => void
++  onProgress: (fraction: number) => void,
++  spans?: { startedAt: string; endedAt: string }[]
+ ): Promise<void> {
+   const created = await api.startUpload(
+@@ -70,5 +71,6 @@ export async function uploadSessionAudio(
+       // Bei source=table bleibt trackMemberId leer
+       trackMemberId: source === 'discord' ? f.trackMemberId : undefined
+-    }))
++    })),
++    source === 'table' ? spans : undefined
+   );
+ 
+diff --git a/src/mocks/billing.ts b/src/mocks/billing.ts
+index 863ace6..5755687 100644
+--- a/src/mocks/billing.ts
++++ b/src/mocks/billing.ts
+@@ -10,5 +10,5 @@
+  */
+ import { HttpResponse, http } from 'msw';
+-import type { Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
++import type { CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
+ import { campaigns } from './db';
+ import type { MockCampaign } from './db';
+@@ -102,4 +102,6 @@ export function settingsOf(c: MockCampaign, gm: boolean): CampaignSettings {
+     allowExternalTranscription: !!c.allowExternalTranscription,
+     allowCharacterAnalysis: !!c.allowCharacterAnalysis,
++    playerProposals: c.playerProposals !== false,
++    counterKinds: c.counterKinds ?? [],
+     characterSheetLimits: { maxSheets: own.sheetsPerPlayer, maxPages: own.sheetMaxPages },
+     locks: locked && FIELDS.includes(locked) ? [{ field: locked, value: !!c[locked], reason: 'operator' }] : [],
+@@ -231,5 +233,5 @@ export function billingHandlers(B: string, deps: {
+       const g = gmCampaign(String(params.id));
+       if (!g) return notFound();
+-      const body = (await request.json()) as Partial<Record<SettingField, boolean>> & { version?: number };
++      const body = (await request.json()) as Partial<Record<SettingField, boolean>> & { version?: number; playerProposals?: boolean; counterKinds?: CounterKind[] };
+       if (body.version !== record(g.c).version) return err(409, 'settings_conflict', 'Inzwischen hat jemand die Einstellungen geändert.', { current: settingsOf(g.c, true) });
+       const locked = lockField();
+@@ -239,4 +241,22 @@ export function billingHandlers(B: string, deps: {
+       for (const f of FIELDS) if (typeof body[f] === 'boolean') g.c[f] = body[f];
+       recordChange(g.c, before, g.m.id);
++      // 0.4.28: Vorschläge von Spielenden und Zählerarten
++      const r = record(g.c);
++      const log = (field: string, oldValue: boolean | number, newValue: boolean | number) => {
++        r.version += 1; r.updatedAt = new Date().toISOString(); r.updatedByMemberId = g.m.id;
++        r.log.unshift({ at: r.updatedAt, field, oldValue, newValue, version: r.version, byMemberId: g.m.id, byOperator: false });
++      };
++      if (typeof body.playerProposals === 'boolean' && body.playerProposals !== (g.c.playerProposals !== false)) {
++        log('playerProposals', g.c.playerProposals !== false, body.playerProposals);
++        g.c.playerProposals = body.playerProposals;
++      }
++      if (Array.isArray(body.counterKinds)) {
++        const next = body.counterKinds.slice(0, 8).map((k) => ({ id: String(k.id).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24), label: String(k.label).trim().slice(0, 24), hint: k.hint ?? null }))
++          .filter((k) => k.id && k.label);
++        if (JSON.stringify(next) !== JSON.stringify(g.c.counterKinds ?? [])) {
++          log('counterKinds', (g.c.counterKinds ?? []).length, next.length);
++          g.c.counterKinds = next;
++        }
++      }
+       return HttpResponse.json(settingsOf(g.c, true));
+     }),
+diff --git a/src/mocks/db.ts b/src/mocks/db.ts
+index 68833ca..0a1e4ad 100644
+--- a/src/mocks/db.ts
++++ b/src/mocks/db.ts
+@@ -35,4 +35,8 @@ export interface MockCampaign {
+   /** Auswertung von Charakterbögen und Hintergründen (ab 0.4.18) */
+   allowCharacterAnalysis?: boolean;
++  /** Vorschläge von Spielenden (ab 0.4.28); fehlt = an */
++  playerProposals?: boolean;
++  /** Zähler am Charakter (ab 0.4.28); leer = aus */
++  counterKinds?: { id: string; label: string; hint?: string | null }[];
+   archivedAt?: string | null;
+   /** Namenshilfe (ab 0.4.6, nur SL) */
+@@ -51,4 +55,5 @@ export const campaigns: MockCampaign[] = [
+   {
+     id: 'c-grau',
++    counterKinds: [{ id: 'lep', label: 'LeP', hint: 'Lebenspunkte' }, { id: 'asp', label: 'AsP', hint: 'Astralpunkte' }, { id: 'schip', label: 'SchiP', hint: 'Schicksalspunkte' }],
+     title: 'Die Schatten von Grauwacht',
+     description: 'Düstere Stadtkampagne am Grauen Strom.',
+@@ -73,4 +78,5 @@ export const campaigns: MockCampaign[] = [
+   {
+     id: 'c-drache',
++    counterKinds: [{ id: 'lep', label: 'LeP', hint: 'Lebenspunkte' }, { id: 'asp', label: 'AsP', hint: 'Astralpunkte' }, { id: 'schip', label: 'SchiP', hint: 'Schicksalspunkte' }],
+     title: 'Die Erben des Drachenpasses',
+     description: 'Reisekampagne durch das Hochgebirge.',
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 793fa93..9243a3d 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -4,4 +4,5 @@ import { textToPdf } from './minipdf';
+ import { cleanAliases, findMatch, secretWarnings } from './checks';
+ import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
++import { memberCounters, playerExtras, playerHandlers } from './players';
+ 
+ /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
+@@ -318,5 +319,6 @@ function applyCharacter(c: MockCampaign, m: Member, ch: Character) {
+   Object.assign(m, {
+     characterId: ch.id, characterVersion: ch.version, characterName: ch.name.trim(), characterNickname: ch.nickname ?? null,
+-    characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status
++    characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status,
++    characterPronouns: ch.pronouns?.trim() || null
+   });
+   const pc = entries.find((e) => e.campaignId === c.id && e.type === 'pc' && e.holderMemberId === m.id);
+@@ -517,5 +519,11 @@ function importView(i: (typeof importsMock)[string]): ImportStatus {
+ function membersFor(c: MockCampaign) {
+   const gm = isGm(c.id);
+-  return c.members.map((m) => (gm || m.userId === ME.id ? m : { ...m, characterBackstory: undefined }));
++  const viewer = myMember(c);
++  return c.members.map((m) => memberCounters(c, gm || m.userId === ME.id ? m : { ...m, characterBackstory: undefined }, viewer));
++}
++
++/** Sieht dieses Mitglied den Eintrag? (gm_only und „verborgen vor“ = nein) */
++function canSee(e: Entry, m: Member): boolean {
++  return m.role === 'gm' || (e.visibility === 'public' && !(e.hiddenFromMemberIds ?? []).includes(m.id));
+ }
+ 
+@@ -647,5 +655,5 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.27',
++      apiVersion: nachbar ? '0.3.9' : '0.4.28',
+       serverId: nachbar ? undefined : 'testserver',
+       registration: nachbar ? 'invite_only' : registrationSetting(),
+@@ -971,5 +979,5 @@ export const handlers = [
+       seen.chronicle[c.id] = seen.bible[c.id] = new Date().toISOString();
+     }
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), members: membersFor(c) });
+   }),
+ 
+@@ -977,5 +985,5 @@ export const handlers = [
+     const c = campaigns.find((x) => x.id === params.id);
+     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+   }),
+ 
+@@ -2252,5 +2260,5 @@ export const handlers = [
+       body.links = ok;
+     }
+-    Object.assign(e, Object.fromEntries(Object.entries(body).filter(([k]) => ['name', 'summary', 'gmNotes', 'visibility', 'status', 'holderMemberId', 'type', 'hiddenFromMemberIds', 'links'].includes(k))));
++    Object.assign(e, Object.fromEntries(Object.entries(body).filter(([k]) => ['name', 'summary', 'gmNotes', 'visibility', 'status', 'holderMemberId', 'type', 'hiddenFromMemberIds', 'links', 'pronouns'].includes(k))));
+     // 0.4.21: „Auch genannt“ bereinigt speichern (ohne Namen, ohne Doppelte)
+     if (body.aliases !== undefined || body.name !== undefined) e.aliases = cleanAliases(body.aliases ?? e.aliases ?? [], e.name);
+@@ -2313,4 +2321,15 @@ export const handlers = [
+   }),
+   // 0.4.25: Guthaben und Kampagnen-Einstellungen
+-  ...billingHandlers(B, { myMember, terms: () => !termsOutdated() })
++  ...billingHandlers(B, { myMember, terms: () => !termsOutdated() }),
++  // 0.4.28: Vorschläge von Spielenden, Merken, Zähler
++  ...playerHandlers(B, {
++    myMember, canSee,
++    createEntry: (c, input) => {
++      const e: Entry = { type: 'other', name: '', summary: '', visibility: 'public', status: null, holderMemberId: null, ...input,
++        aliases: [], id: 'e-' + crypto.randomUUID().slice(0, 8), campaignId: c.id,
++        firstSessionNumber: null, lastSessionNumber: null, mentions: [], updatedAt: new Date().toISOString() } as Entry;
++      entries.push(e);
++      return e;
++    }
++  })
+ ];
+diff --git a/src/mocks/players.ts b/src/mocks/players.ts
+new file mode 100644
+index 0000000..aee28f8
+--- /dev/null
++++ b/src/mocks/players.ts
+@@ -0,0 +1,207 @@
++/*
++ * Testmodus zu Schnittstelle 0.4.28: Vorschläge von Spielenden, „Merken“, Zähler, laufende Runde.
++ * Wie der echte Server: Spielende sehen nur die eigenen Vorschläge und Merkstellen, nie fremde und keine Anzahl;
++ * Zähler sieht nur die Person selbst und die SL. Zum Ausprobieren in localStorage:
++ * - „taleward.mock.live“ = 1: In „Die Erben des Drachenpasses“ läuft gerade eine Runde (Robin ist anwesend).
++ */
++import { HttpResponse, http } from 'msw';
++import type { Bookmark, CounterKind, CounterValue, Entry, Member, PlayerProposal, PlayerProposalDecision, PlayerProposalIn } from '../api/types';
++import { campaigns, entries, sessions } from './db';
++import type { MockCampaign } from './db';
++
++const setting = (key: string): string | null => { try { return localStorage.getItem(`taleward.mock.${key}`); } catch { return null; } };
++const err = (status: number, code: string, message: string) => HttpResponse.json({ code, message }, { status });
++const notFound = () => err(404, 'not_found', 'Nicht gefunden.');
++const ago = (h: number) => new Date(Date.now() - h * 36e5).toISOString();
++const id = (p: string) => `${p}-${crypto.randomUUID().slice(0, 8)}`;
++
++export const DSA_COUNTERS: CounterKind[] = [
++  { id: 'lep', label: 'LeP', hint: 'Lebenspunkte' },
++  { id: 'asp', label: 'AsP', hint: 'Astralpunkte' },
++  { id: 'schip', label: 'SchiP', hint: 'Schicksalspunkte' }
++];
++
++/** Zählerstände je Mitglied */
++const counters: Record<string, CounterValue[]> = {
++  'm-jonas': [{ kindId: 'lep', value: 21, max: 34 }, { kindId: 'schip', value: 2, max: 3 }],
++  'm-lea': [{ kindId: 'lep', value: 28, max: 28 }, { kindId: 'asp', value: 9, max: 30 }, { kindId: 'schip', value: 3, max: 3 }],
++  'm-robin2': [{ kindId: 'lep', value: 30, max: 32 }, { kindId: 'schip', value: 1, max: 3 }]
++};
++
++export const playerProposals: PlayerProposal[] = [
++  { id: 'pp1', campaignId: 'c-grau', authorMemberId: 'm-lea', entryType: 'npc', title: 'Der Fährmann',
++    detail: 'Bringt Leute über den Moorsee, will nie Geld, nur eine Geschichte.', targetEntryId: null, state: 'open', createdAt: ago(20) },
++  { id: 'pp2', campaignId: 'c-grau', authorMemberId: 'm-jonas', entryType: 'quest', title: 'Die schweigende Glocke',
++    detail: 'Thorwald glaubt, dass jemand den Klöppel ausgetauscht hat.', targetEntryId: 'e6', state: 'open', createdAt: ago(5) },
++  { id: 'pp3', campaignId: 'c-drache', authorMemberId: 'm-robin2', entryType: 'location', title: 'Hirtenhütte am Nebelkamm',
++    detail: 'Hier hat Ilvara als Kind die Winter verbracht.', targetEntryId: null, state: 'accepted', createdAt: ago(200), decidedAt: ago(150), resultEntryId: null },
++  { id: 'pp4', campaignId: 'c-drache', authorMemberId: 'm-robin2', entryType: 'npc', title: 'Kesh',
++    detail: 'Ilvaras Bruder, seit drei Wintern verschwunden.', targetEntryId: null, state: 'open', createdAt: ago(30) }
++];
++
++const bookmarks: (Bookmark & { memberId: string })[] = [
++  { id: 'bm1', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T17:12:00Z', note: 'Die Stimme unter dem Eis', offsetMs: 4320000, recapParagraph: 0, createdAt: '2026-09-14T17:12:00Z' },
++  { id: 'bm2', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T18:40:00Z', note: null, offsetMs: null, recapParagraph: null, createdAt: '2026-09-14T18:40:00Z' }
++];
++
++// Laufende Runde zum Ausprobieren von „Merken“
++if (setting('live') === '1' && !sessions.some((s) => s.id === 's-c-drache-live')) {
++  sessions.push({
++    id: 's-c-drache-live', campaignId: 'c-drache', number: 8, title: null, playedAt: ago(1), state: 'created', source: 'table',
++    attendees: [{ memberId: 'm-robin2', consent: true, consentSource: 'app' }, { memberId: 'm-tim', consent: true, consentSource: 'app' }],
++    durationSeconds: null, audioDeletedAt: null, transcriptionEngine: null, publishedAt: null, unreadComments: 0, phaseStartedAt: null
++  });
++}
++
++export function counterKindsOf(c: MockCampaign): CounterKind[] {
++  return c.counterKinds ?? [];
++}
++
++/** Zusätze für Campaign (0.4.28) */
++export function playerExtras(c: MockCampaign, me: Member | undefined) {
++  const gm = me?.role === 'gm';
++  const live = sessions.find((s) => s.campaignId === c.id && (s.state === 'created' || s.state === 'uploading')
++    && Date.now() - Date.parse(s.playedAt) < 16 * 36e5 && (gm || s.attendees.some((a) => a.memberId === me?.id)));
++  return {
++    ...(gm ? { openPlayerProposals: playerProposals.filter((p) => p.campaignId === c.id && p.state === 'open').length } : {}),
++    liveSessionId: live?.id ?? null
++  };
++}
++
++/** Mitglied, wie es die betrachtende Person sehen darf: Zähler nur für sich selbst und die SL */
++export function memberCounters(c: MockCampaign, m: Member, viewer: Member | undefined): Member {
++  const kinds = counterKindsOf(c);
++  const mine = viewer?.id === m.id || viewer?.role === 'gm';
++  if (!kinds.length || !mine || m.role !== 'player') return { ...m, counters: undefined };
++  return { ...m, counters: (counters[m.id] ?? []).filter((v) => kinds.some((k) => k.id === v.kindId)) };
++}
++
++/** Für Spielende: eigener Vorschlag; resultEntryId nur, wenn der Eintrag sichtbar ist */
++function forAuthor(p: PlayerProposal, visible: (e: Entry) => boolean): PlayerProposal {
++  const e = p.resultEntryId ? entries.find((x) => x.id === p.resultEntryId) : undefined;
++  return { ...p, resultEntryId: e && visible(e) ? e.id : null };
++}
++
++export function playerHandlers(B: string, deps: {
++  myMember: (c: MockCampaign) => Member | undefined;
++  /** Sieht diese Person den Eintrag? (wie der Server: gm_only und verborgen vor ihr = nein) */
++  canSee: (e: Entry, m: Member) => boolean;
++  createEntry: (c: MockCampaign, input: Partial<Entry>) => Entry;
++}) {
++  const campaignOf = (cid: string) => {
++    const c = campaigns.find((x) => x.id === cid);
++    const m = c && deps.myMember(c);
++    return c && m ? { c, m } : null;
++  };
++  return [
++    http.get(`${B}/campaigns/:id/player-proposals`, ({ params, request }) => {
++      const g = campaignOf(String(params.id));
++      if (!g) return notFound();
++      const onlyOpen = new URL(request.url).searchParams.get('state') === 'open';
++      const list = playerProposals.filter((p) => p.campaignId === g.c.id && (!onlyOpen || p.state === 'open'))
++        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
++      if (g.m.role === 'gm') return HttpResponse.json(list);
++      if (g.c.playerProposals === false) return HttpResponse.json([]);
++      return HttpResponse.json(list.filter((p) => p.authorMemberId === g.m.id).map((p) => forAuthor(p, (e) => deps.canSee(e, g.m))));
++    }),
++    http.post(`${B}/campaigns/:id/player-proposals`, async ({ params, request }) => {
++      const g = campaignOf(String(params.id));
++      if (!g) return notFound();
++      if (g.m.role !== 'player') return err(403, 'forbidden', 'Nur Spielende schlagen vor.');
++      if (g.c.playerProposals === false) return err(403, 'player_proposals_off', 'In dieser Kampagne nimmt die Spielleitung gerade keine Vorschläge an.');
++      const body = (await request.json()) as PlayerProposalIn;
++      const title = body.title?.trim() ?? '';
++      if (!title || title.length > 120 || (body.detail ?? '').length > 2000) return err(400, 'invalid_input', 'Bitte einen Namen angeben (höchstens 120 Zeichen).');
++      if (body.targetEntryId) {
++        const t = entries.find((e) => e.id === body.targetEntryId && e.campaignId === g.c.id);
++        if (!t || !deps.canSee(t, g.m)) return notFound();
++      }
++      if (playerProposals.filter((p) => p.authorMemberId === g.m.id && p.state === 'open').length >= 20) {
++        return err(409, 'player_proposal_limit', 'Du hast schon 20 offene Vorschläge. Warte, bis die Spielleitung sie angesehen hat.');
++      }
++      const p: PlayerProposal = { id: id('pp'), campaignId: g.c.id, authorMemberId: g.m.id, entryType: body.entryType, title,
++        detail: body.detail?.trim() ?? '', targetEntryId: body.targetEntryId ?? null, state: 'open', createdAt: new Date().toISOString() };
++      playerProposals.push(p);
++      return HttpResponse.json(p, { status: 201 });
++    }),
++    http.delete(`${B}/player-proposals/:pid`, ({ params }) => {
++      const p = playerProposals.find((x) => x.id === params.pid);
++      const g = p && campaignOf(p.campaignId);
++      if (!p || !g || p.authorMemberId !== g.m.id) return notFound();
++      if (p.state !== 'open') return err(409, 'wrong_state', 'Die Spielleitung hat schon entschieden.');
++      p.state = 'withdrawn';
++      return new HttpResponse(null, { status: 204 });
++    }),
++    http.post(`${B}/player-proposals/:pid/decision`, async ({ params, request }) => {
++      const p = playerProposals.find((x) => x.id === params.pid);
++      const g = p && campaignOf(p.campaignId);
++      if (!p || !g || g.m.role !== 'gm') return notFound();
++      if (p.state !== 'open') return err(409, 'wrong_state', 'Darüber ist schon entschieden.');
++      const d = (await request.json()) as PlayerProposalDecision;
++      p.decidedAt = new Date().toISOString();
++      if (d.decision === 'reject') {
++        p.state = 'rejected';
++        return HttpResponse.json(p);
++      }
++      const into = d.mergeIntoEntryId === undefined ? p.targetEntryId : d.mergeIntoEntryId;
++      const detail = (d.detail ?? p.detail ?? '').trim();
++      if (into) {
++        const e = entries.find((x) => x.id === into && x.campaignId === g.c.id);
++        if (!e) return err(400, 'entry_unknown', 'Diesen Eintrag gibt es nicht.');
++        if (detail) e.summary = e.summary ? `${e.summary}\n\n${detail}` : detail;
++        if (d.gmNotes) e.gmNotes = e.gmNotes ? `${e.gmNotes}\n\n${d.gmNotes}` : d.gmNotes;
++        e.updatedAt = p.decidedAt;
++        p.resultEntryId = e.id;
++      } else {
++        const e = deps.createEntry(g.c, {
++          type: d.entryType ?? p.entryType, name: (d.title ?? p.title).trim(), summary: detail, gmNotes: d.gmNotes ?? null,
++          visibility: d.visibility ?? 'public', hiddenFromMemberIds: d.hiddenFromMemberIds ?? [],
++          holderMemberId: (d.entryType ?? p.entryType) === 'item' ? d.holderMemberId ?? null : null
++        });
++        p.resultEntryId = e.id;
++      }
++      p.state = 'accepted';
++      return HttpResponse.json(p);
++    }),
++
++    http.get(`${B}/sessions/:sid/bookmarks`, ({ params }) => {
++      const s = sessions.find((x) => x.id === params.sid);
++      const g = s && campaignOf(s.campaignId);
++      if (!s || !g) return notFound();
++      if (s.state !== 'published' && g.m.role !== 'gm' && !s.attendees.some((a) => a.memberId === g.m.id)) return notFound();
++      return HttpResponse.json(bookmarks.filter((b) => b.sessionId === s.id && b.memberId === g.m.id).map(({ memberId: _m, ...b }) => b));
++    }),
++    http.post(`${B}/sessions/:sid/bookmarks`, async ({ params, request }) => {
++      const s = sessions.find((x) => x.id === params.sid);
++      const g = s && campaignOf(s.campaignId);
++      if (!s || !g || !s.attendees.some((a) => a.memberId === g.m.id)) return notFound();
++      if (s.state === 'published') return err(409, 'session_published', 'Die Runde ist schon veröffentlicht.');
++      const body = (await request.json().catch(() => ({}))) as { at?: string; note?: string | null };
++      const now = new Date().toISOString();
++      const b = { id: id('bm'), memberId: g.m.id, sessionId: s.id, at: body.at ?? now, note: body.note?.trim() || null, offsetMs: null, recapParagraph: null, createdAt: now };
++      bookmarks.push(b);
++      const { memberId: _m, ...out } = b;
++      return HttpResponse.json(out, { status: 201 });
++    }),
++    http.delete(`${B}/bookmarks/:bid`, ({ params }) => {
++      const i = bookmarks.findIndex((b) => b.id === params.bid);
++      const s = i >= 0 ? sessions.find((x) => x.id === bookmarks[i].sessionId) : undefined;
++      const g = s && campaignOf(s.campaignId);
++      if (i < 0 || !g || bookmarks[i].memberId !== g.m.id) return notFound();
++      bookmarks.splice(i, 1);
++      return new HttpResponse(null, { status: 204 });
++    }),
++
++    http.put(`${B}/campaigns/:id/members/me/counters`, async ({ params, request }) => {
++      const g = campaignOf(String(params.id));
++      if (!g) return notFound();
++      const kinds = counterKindsOf(g.c);
++      if (!kinds.length) return err(403, 'counters_off', 'In dieser Kampagne gibt es keine Zähler.');
++      if (g.m.role !== 'player') return err(403, 'forbidden', 'Zähler gehören zu einer Figur.');
++      const { values } = (await request.json()) as { values: CounterValue[] };
++      if (!Array.isArray(values) || values.some((v) => !kinds.some((k) => k.id === v.kindId))) return err(400, 'counter_unknown', 'Diesen Zähler gibt es hier nicht.');
++      counters[g.m.id] = values.map((v) => ({ kindId: v.kindId, value: Math.round(v.value), max: v.max ?? null }));
++      return HttpResponse.json(counters[g.m.id]);
++    })
++  ];
++}
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index a43017a..a642ad5 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -14,4 +14,5 @@ import { api } from '../api/client';
+ import type { Attendee, Member } from '../api/types';
+ import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } from '../api/upload';
++import { clearSpans, spanClose, spanOpen, spansFor } from '../recorder/spans';
+ import { ConsentHandover } from '../components/ConsentHandover';
+ import { IconCheck, IconMic, IconPlus } from '../components/Icons';
+@@ -208,5 +209,5 @@ export function Recording() {
+ 
+   /** storedId: Aufnahme im Zwischenspeicher des Browsers – nach erfolgreichem Hochladen löschen, sonst wieder anbieten */
+-  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null) => {
++  const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null, elapsedMs?: number) => {
+     setPhase('uploading');
+     setProgress(0);
+@@ -214,5 +215,8 @@ export function Recording() {
+     try {
+       const id = existingSessionId ?? (await ensureSession());
+-      await uploadSessionAudio(id, source, files, setProgress);
++      // Aufnahmezeiten nur zu einer Aufnahme dieses Geräts; bei hochgeladenen Dateien gibt es keine
++      const spans = source === 'table' && (existingSessionId || storedId || elapsedMs != null) ? spansFor(id, elapsedMs) : undefined;
++      await uploadSessionAudio(id, source, files, setProgress, spans);
++      clearSpans(id);
+       if (native && existingSessionId) await BackgroundRecorder.discard({ sessionId: id }).catch(() => undefined);
+       if (storedId) await removeRecording(storedId).catch(() => undefined);
+@@ -238,5 +242,5 @@ export function Recording() {
+   const uploadLeftover = (st: NativeStatus) => {
+     setLeftover(null);
+-    upload('table', nativeUploadFiles(st.files), st.sessionId);
++    upload('table', nativeUploadFiles(st.files), st.sessionId, null, st.elapsedMs);
+   };
+ 
+@@ -250,5 +254,5 @@ export function Recording() {
+     setWebLeftover(null);
+     const blob = await loadRecording(r);
+-    upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], r.sessionId, r.id);
++    upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], r.sessionId, r.id, r.elapsedMs);
+   };
+ 
+@@ -286,4 +290,5 @@ export function Recording() {
+         setLive({ recorder: recorder.current, connId: currentConnection().id, campaignId, sessionId: id, consented: attendees.filter((a) => a.consent).length });
+       }
++      spanOpen(id);
+       setElapsed(0);
+       setPaused(false);
+@@ -313,4 +318,5 @@ export function Recording() {
+       // Die angelegte, leere Runde auf dem Server wieder entfernen (ältere Server: bleibt liegen, schadet nicht)
+       if (id) await api.deleteSession(id).catch(() => undefined);
++      if (id) clearSpans(id);
+       sessionId.current = null;
+       setElapsed(0);
+@@ -326,4 +332,5 @@ export function Recording() {
+       const st = paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause();
+       setPaused(st.state === 'paused');
++      if (st.sessionId) (st.state === 'paused' ? spanClose : spanOpen)(st.sessionId);
+       return;
+     }
+@@ -333,4 +340,5 @@ export function Recording() {
+     else recorder.current.pause();
+     setPaused(recorder.current.state === 'paused');
++    if (sessionId.current) (recorder.current.state === 'paused' ? spanClose : spanOpen)(sessionId.current);
+   };
+ 
+@@ -344,13 +352,16 @@ export function Recording() {
+         return;
+       }
+-      await upload('table', nativeUploadFiles(st.files), st.sessionId);
++      spanClose(st.sessionId);
++      await upload('table', nativeUploadFiles(st.files), st.sessionId, null, st.elapsedMs);
+       return;
+     }
+     if (!recorder.current) return;
+     const storedId = recorder.current.storedId;
++    const elapsedMs = recorder.current.elapsedMs();
+     const blob = await recorder.current.stop();
+     recorder.current = null;
+     setLive(null);
+-    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId);
++    if (sessionId.current) spanClose(sessionId.current);
++    await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId, elapsedMs);
+   };
+ 
+diff --git a/src/pages/TablePage.tsx b/src/pages/TablePage.tsx
+index eaff45e..67af5fd 100644
+--- a/src/pages/TablePage.tsx
++++ b/src/pages/TablePage.tsx
+@@ -1,3 +1,4 @@
+ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
++import { spanClose, spanOpen } from '../recorder/spans';
+ import { Link, useNavigate, useParams } from 'react-router-dom';
+ import { api } from '../api/client';
+@@ -77,9 +78,11 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
+   const toggle = async () => {
+     if (web) {
+-      if (paused) web.recorder.resume();
+-      else web.recorder.pause();
++      if (paused) { web.recorder.resume(); spanOpen(web.sessionId); }
++      else { web.recorder.pause(); spanClose(web.sessionId); }
+       return;
+     }
+-    setSt(paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause());
++    const next = paused ? await BackgroundRecorder.resume() : await BackgroundRecorder.pause();
++    if (next.sessionId) (next.state === 'paused' ? spanClose : spanOpen)(next.sessionId);
++    setSt(next);
+   };
+   const target = web ? web.campaignId : campaignId;
+diff --git a/src/recorder/spans.ts b/src/recorder/spans.ts
+new file mode 100644
+index 0000000..c50e9fd
+--- /dev/null
++++ b/src/recorder/spans.ts
+@@ -0,0 +1,65 @@
++/*
++ * Zeiten, in denen wirklich aufgenommen wurde (ab Schnittstelle 0.4.28). Der Server rechnet damit gemerkte Stellen
++ * („Merken“ der Spielenden, Uhrzeit ihres Handys) in eine Zeit der Aufnahme um. Gespeichert je Runde im Gerät, bis
++ * die Aufnahme hochgeladen ist. Pausen, die die App nicht mitbekommt (z. B. aus der Benachrichtigung), fallen beim
++ * Abgleich mit der Länge der Aufnahme auf – dann schicken wir lieber nichts als falsche Zeiten.
++ */
++
++interface Span { s: string; e: string | null }
++
++const KEY = 'taleward.spans';
++/** So viel Abweichung zur gemessenen Länge nehmen wir hin */
++const TOLERANCE_MS = 60_000;
++
++function load(): Record<string, Span[]> {
++  try {
++    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}');
++    return raw && typeof raw === 'object' ? raw : {};
++  } catch {
++    return {};
++  }
++}
++
++function save(all: Record<string, Span[]>): void {
++  try { localStorage.setItem(KEY, JSON.stringify(all)); } catch { /* ohne Speicher eben ohne Zeiten */ }
++}
++
++export function spanOpen(sessionId: string, now = new Date()): void {
++  const all = load();
++  const list = all[sessionId] ?? [];
++  if (list.length && list[list.length - 1].e === null) return;
++  all[sessionId] = [...list, { s: now.toISOString(), e: null }].slice(-500);
++  save(all);
++}
++
++export function spanClose(sessionId: string, now = new Date()): void {
++  const all = load();
++  const list = all[sessionId];
++  if (!list?.length || list[list.length - 1].e !== null) return;
++  list[list.length - 1].e = now.toISOString();
++  save(all);
++}
++
++/**
++ * Spannen für den Upload. Offene Spanne gilt bis jetzt. Mit elapsedMs (gemessene Länge der Aufnahme) wird geprüft,
++ * ob die Spannen dazu passen; sonst undefined.
++ */
++export function spansFor(sessionId: string, elapsedMs?: number, now = new Date()): { startedAt: string; endedAt: string }[] | undefined {
++  const list = load()[sessionId];
++  if (!list?.length) return undefined;
++  const out = list.map((x) => ({ startedAt: x.s, endedAt: x.e ?? now.toISOString() }))
++    .filter((x) => Date.parse(x.endedAt) > Date.parse(x.startedAt));
++  if (!out.length) return undefined;
++  if (elapsedMs != null) {
++    const sum = out.reduce((n, x) => n + Date.parse(x.endedAt) - Date.parse(x.startedAt), 0);
++    if (Math.abs(sum - elapsedMs) > TOLERANCE_MS) return undefined;
++  }
++  return out;
++}
++
++export function clearSpans(sessionId: string): void {
++  const all = load();
++  if (!(sessionId in all)) return;
++  delete all[sessionId];
++  save(all);
++}

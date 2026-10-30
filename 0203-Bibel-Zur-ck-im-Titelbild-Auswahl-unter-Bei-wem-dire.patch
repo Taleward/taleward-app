@@ -1,0 +1,355 @@
+From 3234a0899671548b87a052a9142c5cb4f3df0997 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 19:05:18 +0100
+Subject: [PATCH 203/206] =?UTF-8?q?Bibel:=20Zur=C3=BCck=20im=20Titelbild,?=
+ =?UTF-8?q?=20Auswahl=20unter=20+,=20Bei=20wem=20direkt,=20Suche=20nach=20?=
+ =?UTF-8?q?Figur,=20Dabei,=20Aufdecken=20mit=20R=C3=BCckweg?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/i18n/en.ts              |   7 ++
+ src/pages/Bible.tsx         | 142 +++++++++++++++++++++++++++++++-----
+ src/pages/CharacterPage.tsx |  30 +++++++-
+ src/pages/TablePage.tsx     |   1 -
+ src/theme.css               |   4 +-
+ 5 files changed, 164 insertions(+), 20 deletions(-)
+
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 69f7e0a..2f2c92f 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1650,3 +1650,10 @@ export const en: Record<string, string> = {
+   "{name} groß öffnen": "Open {name} large",
+   "Dann kannst du dein Passwort selbst zurücksetzen und erfährst, wenn sich jemand anderes mit deinem Konto anmeldet. Sie bleibt freiwillig, niemand am Tisch sieht sie.": "Then you can reset your password yourself and find out when someone else signs in to your account. It stays optional, and nobody at the table sees it.",
++  "Etwas hinzufügen": "Add something",
++  "Eintrag anlegen": "Create entry",
++  "NSC, Ort, Quest, Beute …": "NPC, place, quest, loot …",
++  "Aus Unterlagen auswerten lassen": "Have documents analysed",
++  "Taleward schlägt Einträge aus deinen Notizen und Abenteuern vor": "Taleward suggests entries from your notes and adventures",
++  "Sobald jemand mitspielt, kannst du den Gegenstand einer Figur geben.": "Once someone joins, you can give the item to a character.",
++  "Dabei": "Carrying",
+ };
+diff --git a/src/pages/Bible.tsx b/src/pages/Bible.tsx
+index 05b298b..0945885 100644
+--- a/src/pages/Bible.tsx
++++ b/src/pages/Bible.tsx
+@@ -16,5 +16,5 @@ import { Dialog } from '../components/Dialog';
+ import { AssignFigureDialog } from '../components/Seats';
+ import { ENTRY_KIND } from '../components/ProposalCard';
+-import { HolderSelect, NOBODY } from '../bible/HolderSelect';
++import { HolderSelect, NOBODY, figureName } from '../bible/HolderSelect';
+ import { IconEye, IconLock, IconPlus } from '../components/Icons';
+ import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSet } from '../components/Screen';
+@@ -41,4 +41,6 @@ const GROUPS: { type: EntryType; label: string }[] = [
+ ];
+ 
++const UNDO_SECONDS = 10;
++
+ const ADD_TYPES: EntryType[] = ['npc', 'location', 'quest', 'item', 'faction', 'other'];
+ 
+@@ -81,4 +83,5 @@ export function Bible() {
+   const [error, setError] = useState<unknown>(null);
+   const [adding, setAdding] = useState(false);
++  const [menu, setMenu] = useState(false);
+   const [reload, setReload] = useState(0);
+ 
+@@ -100,8 +103,14 @@ export function Bible() {
+   const gm = campaign?.myRole === 'gm';
+   const players = campaign?.members.filter((m) => m.role === 'player' && !isDeletedMember(m)) ?? [];
++  const holderMember = (id: string | null | undefined) => (id ? campaign?.members.find((x) => x.id === id) : undefined);
+   const holder = (id: string | null | undefined) => {
+-    const m = campaign?.members.find((x) => x.id === id);
++    const m = holderMember(id);
+     return m ? t('Bei {name}', { name: m.characterName ?? m.displayName }) : null;
+   };
++  // Beute findet man auch über die Figur bzw. Person, die sie hat („Nyra“ findet den Runenschlüssel)
++  const holderNames = (e: Entry) => {
++    const m = e.type === 'item' ? holderMember(e.holderMemberId) : undefined;
++    return m ? [m.characterName ?? '', m.displayName] : [];
++  };
+ 
+   const withParam = (key: string, value: string | null) => {
+@@ -153,5 +162,5 @@ export function Bible() {
+   const sorted = all && [...all].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
+   const hits = sorted && query.trim()
+-    ? fuzzyFilter(sorted, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? ''])
++    ? fuzzyFilter(sorted, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? '', ...holderNames(e)])
+     : null;
+   const shown = sorted && (tab === 'all' ? sorted : sorted.filter((e) => e.type === tab));
+@@ -165,6 +174,6 @@ export function Bible() {
+           value={query} onChange={(e) => setQuery(e.target.value)} />
+         {gm && (
+-          <button type="button" className="btn outline square" aria-label={t('Eintrag hinzufügen')} aria-expanded={adding}
+-            onClick={() => setAdding((v) => !v)}>
++          <button type="button" className="btn outline square" aria-label={t('Etwas hinzufügen')} aria-expanded={menu || adding}
++            onClick={() => { if (adding) setAdding(false); else setMenu((v) => !v); }}>
+             <IconPlus />
+           </button>
+@@ -172,4 +181,15 @@ export function Bible() {
+       </div>
+ 
++      {gm && menu && (
++        <div className="list-box">
++          <button type="button" className="list-row nav" onClick={() => { setMenu(false); setAdding(true); }}>
++            <span className="lr-text">{t('Eintrag anlegen')}<span className="lr-sub">{t('NSC, Ort, Quest, Beute …')}</span></span>
++          </button>
++          <Link className="list-row nav" to={p(`/k/${campaignId}/unterlagen`)}>
++            <span className="lr-text">{t('Aus Unterlagen auswerten lassen')}<span className="lr-sub">{t('Taleward schlägt Einträge aus deinen Notizen und Abenteuern vor')}</span></span>
++          </Link>
++        </div>
++      )}
++
+       {gm && adding && (
+         <AddEntry campaignId={campaignId} type={tab === 'all' ? 'npc' : tab} players={players}
+@@ -181,5 +201,5 @@ export function Bible() {
+ 
+       {hits ? (
+-        <SearchResults hits={hits} query={query} gm={gm} href={href} />
++        <SearchResults hits={hits} query={query} gm={gm} href={href} holder={(e) => holder(e.holderMemberId)} holderNames={holderNames} />
+       ) : (
+         <>
+@@ -214,6 +234,7 @@ export function Bible() {
+       )}
+ 
+-      {gm && (
+-        <Link to={p(`/k/${campaignId}/unterlagen`)} className="quiet-link">{t('Unterlagen auswerten lassen')}</Link>
++      {/* In der leeren Bibel hilft der Weg über die Unterlagen am meisten; sonst steht er unter „+“ */}
++      {gm && all?.length === 0 && !adding && (
++        <Link to={p(`/k/${campaignId}/unterlagen`)} className="quiet-link">{t('Aus Unterlagen auswerten lassen')}</Link>
+       )}
+     </Screen>
+@@ -251,5 +272,12 @@ function EntryRow({ entry: e, gm, href, holder }: { entry: Entry; gm: boolean; h
+ }
+ 
+-function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string; gm: boolean; href: (id: string) => string }) {
++function SearchResults({ hits, query, gm, href, holder, holderNames }: {
++  hits: Entry[];
++  query: string;
++  gm: boolean;
++  href: (id: string) => string;
++  holder: (e: Entry) => string | null;
++  holderNames: (e: Entry) => string[];
++}) {
+   if (hits.length === 0) {
+     return <div className="empty">{t('Nichts gefunden für „{q}“.', { q: query })}</div>;
+@@ -271,4 +299,5 @@ function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string
+                 const inSummary = !!e.summary && matchScore(query, e.summary) > 0;
+                 const inNotes = gm && !inName && !alias && !inSummary && !!e.gmNotes && matchScore(query, e.gmNotes) > 0;
++                const byHolder = !inName && !alias && !inSummary && !inNotes && holderNames(e).some((n) => !!n && matchScore(query, n) > 0);
+                 return (
+                   <Link key={e.id} className="list-row entry" to={href(e.id)}>
+@@ -280,4 +309,5 @@ function SearchResults({ hits, query, gm, href }: { hits: Entry[]; query: string
+                         : e.summary && <span className="entry-sum">{highlight(inSummary ? snippet(e.summary, query) : e.summary, query)}</span>}
+                       {inNotes && <span className="entry-tag"><IconLock size={14} /> {t('Treffer in der SL-Notiz')}</span>}
++                      {byHolder && <span className="lr-sub">{highlight(holder(e) ?? '', query)}</span>}
+                     </span>
+                   </Link>
+@@ -363,4 +393,5 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+ }) {
+   const [choosing, setChoosing] = useState(false);
++  const [pickingHolder, setPickingHolder] = useState(false);
+   const [assigning, setAssigning] = useState(false);
+   const [editing, setEditing] = useState(false);
+@@ -391,4 +422,6 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+   };
+ 
++  const holderPerson = e.holderMemberId ? players.find((m) => m.id === e.holderMemberId) : undefined;
++  const holderLabel = holderPerson ? figureName(holderPerson) : holder;
+   const hiddenIds = e.hiddenFromMemberIds ?? [];
+   const hiddenNames = hiddenIds
+@@ -405,6 +438,30 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+   };
+ 
++  // Aufdecken mit Rückweg: ein paar Sekunden lang lässt es sich zurücknehmen (wie am SL-Schirm)
++  const [undo, setUndo] = useState<{ before: { visibility: Entry['visibility']; hiddenFromMemberIds: string[] }; left: number } | null>(null);
++  useEffect(() => {
++    if (!undo) return;
++    if (undo.left <= 0) { setUndo(null); return; }
++    const id = window.setTimeout(() => setUndo((u) => (u ? { ...u, left: u.left - 1 } : u)), 1000);
++    return () => window.clearTimeout(id);
++  }, [undo]);
++  const open = (hiddenFromMemberIds: string[]) => {
++    const before = { visibility: e.visibility, hiddenFromMemberIds: e.hiddenFromMemberIds ?? [] };
++    const moreVisible = before.visibility === 'gm_only' || hiddenFromMemberIds.length < before.hiddenFromMemberIds.length;
++    run(async () => {
++      const u = await api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds });
++      if (moreVisible) setUndo({ before, left: UNDO_SECONDS });
++      return u;
++    });
++  };
++  const takeBack = () => {
++    if (!undo) return;
++    const { before } = undo;
++    setUndo(null);
++    run(() => api.updateEntry(e.id, before));
++  };
++
+   const release = () => {
+-    if (!needsText()) run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: [] }));
++    if (!needsText()) open([]);
+   };
+ 
+@@ -414,5 +471,5 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+     // Vor allen verborgen = wieder ganz geheim
+     if (ids.length === players.length) return run(() => api.updateEntry(e.id, { visibility: 'gm_only', hiddenFromMemberIds: [] }));
+-    if (!needsText()) run(() => api.updateEntry(e.id, { visibility: 'public', hiddenFromMemberIds: ids }));
++    if (!needsText()) open(ids);
+   };
+ 
+@@ -485,16 +542,34 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+       {gm && e.gmNotes && <SecretBox><span style={{ whiteSpace: 'pre-wrap' }}>{e.gmNotes}</span></SecretBox>}
+       <LinkButtons links={e.links} />
+-      {e.type === 'item' && holder && <span className="small">{holder}</span>}
++      {!gm && e.type === 'item' && holder && <span className="small">{holder}</span>}
+       {gm && former && <span className="muted small">{t('Früher gespielt von {name}', { name: former.displayName || t('einem gelöschten Konto') })}</span>}
+ 
+-      {gm && players.length > 0 && (
++      {gm && (players.length > 0 || e.type === 'item') && (
+         <div className="list-box">
+-          <button type="button" className="list-row nav" onClick={() => setChoosing(true)} disabled={busy}>
+-            <span className="lr-text">{t('Wer sieht das?')}<span className="lr-sub">{who}</span></span>
+-            <span className="lr-val">{t('Ändern')}</span>
+-          </button>
++          {players.length > 0 && (
++            <button type="button" className="list-row nav" onClick={() => setChoosing(true)} disabled={busy}>
++              <span className="lr-text">{t('Wer sieht das?')}<span className="lr-sub">{who}</span></span>
++              <span className="lr-val">{t('Ändern')}</span>
++            </button>
++          )}
++          {e.type === 'item' && (players.length > 0 ? (
++            <button type="button" className="list-row nav" onClick={() => setPickingHolder(true)} disabled={busy}>
++              <span className="lr-text">{t('Bei wem?')}<span className="lr-sub">{holderLabel ?? t('Bei keiner Figur')}</span></span>
++              <span className="lr-val">{t('Ändern')}</span>
++            </button>
++          ) : (
++            <div className="list-row">
++              <span className="lr-text">{t('Bei wem?')}<span className="lr-sub">{t('Sobald jemand mitspielt, kannst du den Gegenstand einer Figur geben.')}</span></span>
++            </div>
++          ))}
+         </div>
+       )}
+       <ErrorBox error={error} />
++      {undo && (
++        <div className="notice" role="status" style={{ alignItems: 'center' }}>
++          <span style={{ flex: 1 }}>{t('„{name}“ ist aufgedeckt.', { name: e.name })}</span>
++          <button type="button" className="btn small outline" onClick={takeBack}>{t('Zurücknehmen ({n})', { n: undo.left })}</button>
++        </div>
++      )}
+       {gm && (
+         <div className="row wrap" style={{ gap: 8 }}>
+@@ -528,4 +603,11 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+           onDone={() => { setAssigning(false); onChanged(null); }} />
+       )}
++      {pickingHolder && (
++        <HolderDialog players={players} initial={e.holderMemberId ?? NOBODY} onClose={() => setPickingHolder(false)}
++          onSave={(id) => {
++            setPickingHolder(false);
++            run(() => api.updateEntry(e.id, { holderMemberId: id === NOBODY ? null : id }));
++          }} />
++      )}
+       {choosing && (
+         <VisibilityDialog players={players}
+@@ -564,2 +646,28 @@ function VisibilityDialog({ players, initial, onSave, onClose }: {
+   );
+ }
++
++/** „Bei wem?“ für einen Gegenstand, direkt aus der Ansicht des Eintrags */
++function HolderDialog({ players, initial, onSave, onClose }: {
++  players: Member[];
++  initial: string;
++  onSave: (id: string) => void;
++  onClose: () => void;
++}) {
++  const [value, setValue] = useState(initial);
++  return (
++    <Dialog title={t('Bei wem?')} onClose={onClose}>
++      <div className="list-box" role="radiogroup" aria-label={t('Bei wem?')}>
++        {[{ id: NOBODY, name: t('Bei keiner Figur') }, ...players.map((m) => ({ id: m.id, name: figureName(m) }))].map((o) => (
++          <label key={o.id} className="list-row check-row">
++            <input type="radio" name="holder" checked={value === o.id} onChange={() => setValue(o.id)} />
++            <span className="lr-text">{o.name}</span>
++          </label>
++        ))}
++      </div>
++      <div className="row" style={{ gap: 8 }}>
++        <button type="button" className="btn" style={{ flex: 1 }} onClick={() => onSave(value)}>{t('Speichern')}</button>
++        <button type="button" className="btn outline" onClick={onClose}>{t('Abbrechen')}</button>
++      </div>
++    </Dialog>
++  );
++}
+diff --git a/src/pages/CharacterPage.tsx b/src/pages/CharacterPage.tsx
+index d59d3b4..918052d 100644
+--- a/src/pages/CharacterPage.tsx
++++ b/src/pages/CharacterPage.tsx
+@@ -5,5 +5,5 @@ import { useEffect, useState, type ReactNode } from 'react';
+ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+ import { api } from '../api/client';
+-import type { Campaign, Member } from '../api/types';
++import type { Campaign, Entry, Member } from '../api/types';
+ import { blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
+ import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
+@@ -119,4 +119,5 @@ export function CharacterPage() {
+               : <div className="muted small" style={{ textAlign: 'center' }}>{own ? t('Noch keine Kurzbeschreibung.') : t('Noch keine Beschreibung.')}</div>
+           )}
++          {member.role === 'player' && <CarriedItems campaignId={campaign.id} memberId={member.id} />}
+           {member.characterBackstory && (
+             <section className="card secret">
+@@ -267,2 +268,29 @@ async function squareOf(blob: Blob): Promise<{ x: number; y: number; size: numbe
+   return r;
+ }
++
++/**
++ * „Dabei“: Beute, die gerade bei dieser Figur liegt. Der Server liefert nur Einträge, die die betrachtende Person
++ * sehen darf – Verborgenes taucht hier also nicht auf, auch nicht als Anzahl.
++ */
++function CarriedItems({ campaignId, memberId }: { campaignId: string; memberId: string }) {
++  const [items, setItems] = useState<Entry[] | null>(null);
++  useEffect(() => {
++    api.entries(campaignId).then((list) => setItems(list.filter((e) => e.type === 'item' && e.holderMemberId === memberId))).catch(() => setItems([]));
++  }, [campaignId, memberId]);
++  if (!items?.length) return null;
++  return (
++    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
++      <h2 className="list-head">{t('Dabei')}</h2>
++      <div className="list-box">
++        {items.map((e) => (
++          <Link key={e.id} className="list-row nav entry" to={p(`/k/${campaignId}/bibel?art=item&e=${encodeURIComponent(e.id)}`)}>
++            <span className="lr-text">
++              <span className="entry-name">{e.name}</span>
++              {e.summary && <span className="entry-sum">{e.summary}</span>}
++            </span>
++          </Link>
++        ))}
++      </div>
++    </section>
++  );
++}
+diff --git a/src/pages/TablePage.tsx b/src/pages/TablePage.tsx
+index b898879..eaff45e 100644
+--- a/src/pages/TablePage.tsx
++++ b/src/pages/TablePage.tsx
+@@ -89,5 +89,4 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
+       <span style={{ flex: 1 }}>
+         {paused ? t('Aufnahme pausiert') : t('Aufnahme läuft')} · {clock(elapsedMs)}
+-        {web && <> · {t('am Mikrofon dieses Geräts')} · {t('{n} von {n} haben zugestimmt', { n: web.consented })}</>}
+       </span>
+       <button type="button" className="btn small outline" onClick={toggle}>{paused ? t('Weiter') : t('Pause')}</button>
+diff --git a/src/theme.css b/src/theme.css
+index 48b2352..99b7b08 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -1149,7 +1149,9 @@ details.card[open] { padding-bottom: var(--space-4); }
+ .hero .hero-back {
+   position: absolute;
++  /* über dem Titelblock, der seit dem mitwachsenden Kopf darüber liegt */
++  z-index: 1;
+   top: 10px;
+   left: 12px;
+-  min-height: 40px;
++  min-height: 48px;
+   padding: 6px 12px;
+   border-radius: var(--radius-pill);
