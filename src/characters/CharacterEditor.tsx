@@ -4,6 +4,8 @@ import { ImageCropper } from '../components/ImageCropper';
 import { IconLock } from '../components/Icons';
 import { ErrorBox } from '../components/Screen';
 import { t } from '../i18n';
+import { guessSystem, levelKind } from './levelField';
+import { LEVEL_LABEL, LEVEL_PLACEHOLDER } from './levelLabels';
 import { CharacterPortrait } from './Portrait';
 import { blobToPortrait, createCharacter, updateCharacter, type PortraitMeta, type StoredCharacter } from './store';
 
@@ -22,6 +24,8 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
   const [nickname, setNickname] = useState(character?.nickname ?? '');
   const [system, setSystem] = useState(character?.system ?? '');
   const [pronouns, setPronouns] = useState(character?.pronouns ?? '');
+  const [level, setLevel] = useState(character?.level ?? '');
+  const kind = levelKind(guessSystem(system));
   const [summary, setSummary] = useState(character?.summary ?? '');
   const [backstory, setBackstory] = useState(character?.backstory ?? '');
   const [portrait, setPortrait] = useState<{ portrait: string | null; portraitMeta: PortraitMeta | null }>({
@@ -36,6 +40,8 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
     try {
       const data = {
         name: name.trim(), nickname: nickname.trim() || null, system: system.trim() || null, pronouns: pronouns.trim() || null,
+        // Ohne Feld (z. B. Shadowrun) bleibt ein früher eingetragener Wert stehen
+        level: kind ? level.trim() || null : character?.level ?? null,
         summary: summary.trim() || null, backstory: backstory.trim() || null, ...portrait
       };
       onSaved(character ? updateCharacter(character.id, data) : createCharacter(data));
@@ -78,6 +84,13 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
         </div>
       </div>
       <PronounField id="ch-pronouns" value={pronouns} onChange={setPronouns} />
+      {kind && (
+        <div className="field">
+          <label htmlFor="ch-level">{t(LEVEL_LABEL[kind])}</label>
+          <input id="ch-level" type="text" maxLength={64} value={level} onChange={(e) => setLevel(e.target.value)}
+            placeholder={LEVEL_PLACEHOLDER[kind] ? t(LEVEL_PLACEHOLDER[kind]!) : undefined} />
+        </div>
+      )}
       <div className="field">
         <label htmlFor="ch-summary">{t('Kurzbeschreibung (sehen alle am Tisch)')}</label>
         <textarea id="ch-summary" rows={3} maxLength={2000} value={summary} onChange={(e) => setSummary(e.target.value)}

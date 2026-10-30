@@ -82,6 +82,8 @@ export interface Member {
   characterNickname?: string | null;
   /** Wie über die Figur gesprochen wird (ab 0.4.28), für alle sichtbar */
   characterPronouns?: string | null;
+  /** Ab 0.4.29: aus Character.level, für alle Mitglieder sichtbar */
+  characterLevel?: string | null;
   /** Zählerstände (ab 0.4.28) – nur für die Person selbst und die SL */
   counters?: CounterValue[];
   /** „Meine Charakterdaten dürfen bei einem Umzug mit“ (ab 0.4.8); für alle sichtbar, null = nein */
@@ -103,6 +105,8 @@ export interface Character {
   system?: string | null;
   /** Wie andere über die Figur sprechen („sie“, „er“, eigener Text), ab 0.4.28 */
   pronouns?: string | null;
+  /** Stufe, Klasse oder Erfahrungsgrad als freier Text („Magierin 3“), ab 0.4.29 */
+  level?: string | null;
   status: CharacterStatus;
   statusChangedAt?: string | null;
 }

@@ -1737,4 +1737,11 @@ export const en: Record<string, string> = {
   "Größer": "Larger",
   "Auf dieses Gerät holen": "Bring to this device",
   "Der Charakter fehlt in der Sammlung auf diesem Gerät.": "This character is missing from the collection on this device.",
+  "Klasse und Stufe (optional)": "Class and level (optional)",
+  "Erfahrungsgrad (optional)": "Experience level (optional)",
+  "Heldengrad (optional)": "Hero level (optional)",
+  "Stufe (optional)": "Level (optional)",
+  "z. B. Magierin 3 / Schurkin 2": "e.g. Wizard 3 / Rogue 2",
+  "z. B. Erfahren": "e.g. Experienced",
+  "z. B. 2": "e.g. 2",
 };

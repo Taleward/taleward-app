@@ -119,6 +119,7 @@ export function CharacterPage() {
             <div className="muted">
               {member.role === 'gm' ? t('Spielleitung') : t('gespielt von {name}', { name: member.displayName })}
               {member.role !== 'gm' && member.characterPronouns && <> · {member.characterPronouns}</>}
+              {member.role !== 'gm' && member.characterLevel && <> · {member.characterLevel}</>}
             </div>
           </div>
           {member.role !== 'gm' && (

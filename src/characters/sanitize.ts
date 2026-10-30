@@ -28,6 +28,7 @@ export function sanitizeCharacter(raw: unknown): StoredCharacter | null {
     version: Number.isInteger(x.version) ? (x.version as number) : 1,
     notes: text(x.notes, 100_000) ? x.notes : '',
     pronouns: text(x.pronouns, 32) ? x.pronouns : null,
+    level: text(x.level, 64) ? x.level : null,
     world,
     links,
     chronicles: chronicles as StoredCharacter['chronicles']

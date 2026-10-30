@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Taleward API
-  version: 0.4.28
+  version: 0.4.29
   description: |
     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
 
@@ -280,6 +280,10 @@ info:
     - Zähler am Charakter (LeP, AsP …): CampaignSettings.counterKinds (leer = aus, Standard), Stände je Mitglied über
       PUT /campaigns/{id}/members/me/counters, Member.counters nur für die Person selbst und die SL.
     Ältere Apps sehen davon nichts; ältere Server ignorieren pronouns und spans.
+    Änderungen in 0.4.29 (Stufe am Charakter): Character.level → Member.characterLevel, freier Text wie „Magierin 3 /
+    Schurkin 2“ oder „Erfahren“. Die App benennt das Feld je Spielsystem (Klasse und Stufe, Erfahrungsgrad, Heldengrad,
+    Stufe) und rechnet nichts damit aus. Sichtbar für alle Mitglieder; geht nie an ein Sprachmodell (Kapitel enthalten
+    keine Regelangaben). Ältere Server ignorieren das Feld.
 
 servers:
   - url: https://taleward.example.org/api/v1
@@ -4385,6 +4389,11 @@ components:
           description: |
             Ab 0.4.28: wie über die Figur gesprochen wird (aus Character.pronouns), für alle Mitglieder sichtbar und für
             die Recap-Pipeline erlaubt (wie characterSummary).
+        characterLevel:
+          type: [string, "null"]
+          description: |
+            Ab 0.4.29: Stufe, Klasse oder Erfahrungsgrad (aus Character.level), für alle Mitglieder sichtbar. Nie an ein
+            Sprachmodell, nicht in Kapitel oder Vorschläge. Beim Umzug wie characterSummary (nur mit moveConsentAt).
         counters:
           type: array
           items: { $ref: "#/components/schemas/CounterValue" }
@@ -5214,6 +5223,14 @@ components:
           description: |
             Ab 0.4.28, freiwillig: wie andere über die Figur sprechen („sie“, „er“ oder eigener Text). Wird zu
             Member.characterPronouns. Ältere Server ignorieren das Feld.
+        level:
+          type: [string, "null"]
+          maxLength: 64
+          description: |
+            Ab 0.4.29, freiwillig: Stufe, Klasse oder Erfahrungsgrad als freier Text („Magierin 3 / Schurkin 2“,
+            „Erfahren“). Wird zu Member.characterLevel. Leerer Text = null. Der Server prüft nur die Länge und entfernt
+            Steuerzeichen. Ändert sich das Feld, steigt wie bei den anderen Stammdaten die Fassung. Ältere Server
+            ignorieren das Feld.
         status: { type: string, enum: [active, retired, deceased] }
         statusChangedAt: { type: [string, "null"], format: date-time }
 

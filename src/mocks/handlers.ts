@@ -319,7 +319,7 @@ function applyCharacter(c: MockCampaign, m: Member, ch: Character) {
   Object.assign(m, {
     characterId: ch.id, characterVersion: ch.version, characterName: ch.name.trim(), characterNickname: ch.nickname ?? null,
     characterSummary: ch.summary ?? null, characterBackstory: ch.backstory ?? null, characterStatus: ch.status,
-    characterPronouns: ch.pronouns?.trim() || null
+    characterPronouns: ch.pronouns?.trim() || null, characterLevel: ch.level?.trim().slice(0, 64) || null
   });
   const pc = entries.find((e) => e.campaignId === c.id && e.type === 'pc' && e.holderMemberId === m.id);
   if (pc) Object.assign(pc, { name: m.characterName, summary: ch.summary ?? '', updatedAt: new Date().toISOString() });
@@ -654,7 +654,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.28',
+      apiVersion: nachbar ? '0.3.9' : '0.4.29',
       serverId: nachbar ? undefined : 'testserver',
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',

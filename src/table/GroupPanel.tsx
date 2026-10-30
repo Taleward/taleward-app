@@ -88,7 +88,7 @@ export function GroupPanel({ campaign, onEntry, compact }: {
                 <Avatar campaignId={campaign.id} member={m} size={48} />
                 <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left' }}>
                   <strong>{m.characterName ?? t('Noch ohne Charakter')}</strong>
-                  <span className="muted small">{m.displayName}</span>
+                  <span className="muted small">{m.displayName}{m.characterLevel ? ` · ${m.characterLevel}` : ''}</span>
                 </span>
               </button>
               {m.recordingConsentAt
@@ -144,7 +144,7 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry, counter
         <Avatar campaignId={campaign.id} member={m} size={96} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
           <h3 style={{ margin: 0 }}>{m.characterName ?? t('Noch ohne Charakter')}{m.characterNickname ? ` „${m.characterNickname}“` : ''}</h3>
-          <span className="muted small">{t('gespielt von {name}', { name: m.displayName })}{m.characterStatus && STATUS[m.characterStatus] ? ' · ' + t(STATUS[m.characterStatus]) : ''}</span>
+          <span className="muted small">{t('gespielt von {name}', { name: m.displayName })}{m.characterLevel ? ` · ${m.characterLevel}` : ''}{m.characterStatus && STATUS[m.characterStatus] ? ' · ' + t(STATUS[m.characterStatus]) : ''}</span>
           <span>
             {m.recordingConsentAt
               ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
