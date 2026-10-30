@@ -129,11 +129,11 @@ export function newId(): string {
   return crypto.randomUUID();
 }
 
-export function createCharacter(data: { name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
+export function createCharacter(data: { name: string; nickname?: string | null; summary?: string | null; backstory?: string | null; system?: string | null; pronouns?: string | null; portrait?: string | null; portraitMeta?: PortraitMeta | null }): StoredCharacter {
   const now = new Date().toISOString();
   const c: StoredCharacter = {
     id: newId(), version: 1, name: data.name.trim(), nickname: data.nickname ?? null, summary: data.summary ?? null,
-    backstory: data.backstory ?? null, system: data.system ?? null, status: 'active', statusChangedAt: null,
+    backstory: data.backstory ?? null, system: data.system ?? null, pronouns: data.pronouns ?? null, status: 'active', statusChangedAt: null,
     owners: myAccountKeys(), notes: '', portrait: data.portrait ?? null, portraitMeta: data.portraitMeta ?? null, portraitChangedAt: data.portrait ? now : null, world: [], links: [], chronicles: {}, createdAt: now, updatedAt: now
   };
   persist([...load(), c]);
@@ -141,7 +141,7 @@ export function createCharacter(data: { name: string; nickname?: string | null; 
 }
 
 /** Stammdaten, die auf Server gehen – ändern sie sich, steigt die Version */
-const SHARED: (keyof Character)[] = ['name', 'nickname', 'summary', 'backstory', 'system', 'status'];
+const SHARED: (keyof Character)[] = ['name', 'nickname', 'summary', 'backstory', 'system', 'pronouns', 'status'];
 
 export function updateCharacter(id: string, change: Partial<Omit<StoredCharacter, 'id' | 'version' | 'createdAt'>>): StoredCharacter {
   const list = load();
@@ -149,7 +149,7 @@ export function updateCharacter(id: string, change: Partial<Omit<StoredCharacter
   if (i < 0) throw new Error(t('Charakter nicht gefunden.'));
   const old = list[i];
   const next: StoredCharacter = { ...old, ...change, updatedAt: new Date().toISOString() };
-  if (SHARED.some((k) => k in change && (change as Record<string, unknown>)[k] !== old[k])) next.version = old.version + 1;
+  if (SHARED.some((k) => k in change && ((change as Record<string, unknown>)[k] ?? null) !== (old[k] ?? null))) next.version = old.version + 1;
   if (change.status && change.status !== old.status) next.statusChangedAt = new Date().toISOString();
   if ('portrait' in change && change.portrait !== old.portrait) next.portraitChangedAt = new Date().toISOString();
   list[i] = next;
@@ -217,7 +217,9 @@ export function characterForCampaign(connId: string, campaignId: string): Stored
 export function toServerCharacter(c: StoredCharacter): Character {
   return {
     id: c.id, version: c.version, name: c.name, nickname: c.nickname || null, summary: c.summary || null,
-    backstory: c.backstory || null, system: c.system || null, status: c.status, statusChangedAt: c.statusChangedAt ?? null
+    backstory: c.backstory || null, system: c.system || null, status: c.status, statusChangedAt: c.statusChangedAt ?? null,
+    // Ab 0.4.28; ältere Server lassen das Feld liegen
+    ...(c.pronouns ? { pronouns: c.pronouns } : {})
   };
 }
 

@@ -1,4 +1,6 @@
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
+import { LiveBookmark } from '../components/Bookmarks';
+import { CounterKindsRow } from '../characters/Counters';
 import { Tour } from '../tour/Tour';
 import { cloudUse, providerLabel, useServerInfo } from '../components/CloudNotice';
 import { AnalysisPendingCard, AnalysisSwitch } from '../components/CharacterAnalysis';
@@ -115,6 +117,8 @@ export function Overview() {
           )}
           <div className="split">
           <div className="a">
+          {/* Runde läuft: Anwesende merken sich Stellen (ab 0.4.28, nur Spielende) */}
+          {!gm && campaign.liveSessionId && apiAtLeast('0.4.28') && <LiveBookmark sessionId={campaign.liveSessionId} />}
           {/* Zuerst, was jetzt zu tun ist: Zustimmung (nur wenn sie fehlt), Charakter, offenes Kapitel, Termin, neuer Recap */}
           {gm && imported && (
             <div className="notice" role="status" style={{ flexDirection: 'column', gap: 4 }}>
@@ -734,6 +738,18 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
                 busy={busy || !!settings.lock('allowCharacterAnalysis')} note={<LockNote lock={settings.lock('allowCharacterAnalysis')} />}
                 onChange={(value) => run(() => settings.change('allowCharacterAnalysis', value), () => undefined)} />
             )}
+            {/* 0.4.28: Spielende tragen bei – Vorschläge (Standard an) und Zähler (Standard aus) */}
+            {!muster && apiAtLeast('0.4.28') && settings.raw && settings.raw.playerProposals !== undefined && (
+              <label className="list-row check-row">
+                <input type="checkbox" checked={settings.raw.playerProposals} disabled={busy}
+                  onChange={(e) => run(() => settings.patch({ playerProposals: e.target.checked }), () => undefined)} />
+                <span className="lr-text">{t('Spielende dürfen Einträge vorschlagen')}<span className="lr-sub">{t('Du entscheidest, was in die Bibel kommt.')}</span></span>
+              </label>
+            )}
+            {!muster && apiAtLeast('0.4.28') && settings.raw && settings.raw.counterKinds !== undefined && (
+              <CounterKindsRow campaign={campaign} kinds={settings.raw.counterKinds} busy={busy}
+                onSave={(counterKinds) => settings.patch({ counterKinds })} />
+            )}
             {settings.hasLog && <SettingsLog campaign={campaign} />}
           </div>
         </>
@@ -834,6 +850,13 @@ function nowItems(campaign: Campaign, me: Member | undefined, gm: boolean, needM
         label: t('Kapitel {n}', { n: s.number }) + ' · ' + (PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state),
         // Fertig geschrieben: gleich zur Prüfung, nicht erst über den Fortschritt
         to: p(s.state === 'awaiting_review' ? `/s/${s.id}/freigabe` : `/s/${s.id}`)
+      });
+    }
+    if (campaign.openPlayerProposals) {
+      items.push({
+        key: 'player-proposals',
+        label: tn(campaign.openPlayerProposals, '{n} Vorschlag von Spielenden', '{n} Vorschläge von Spielenden', { n: campaign.openPlayerProposals }),
+        to: p(`/k/${campaign.id}/bibel?vorschlaege=1`)
       });
     }
     if (campaign.openCharacterProposals) {

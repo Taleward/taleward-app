@@ -2328,3 +2328,20 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .pdf-pages { display: flex; flex-direction: column; gap: var(--space-2); }
 .pdf-page { width: 100%; background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .pdf-page canvas { width: 100%; height: 100%; display: block; }
+
+/* Zähler am Charakter (ab Schnittstelle 0.4.28) */
+.counter-row { gap: 6px; }
+.counter-row .lr-text { flex: 1; min-width: 3em; }
+.counter-row .lr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
+.counter-value.low { color: var(--siegel-text); }
+.counter-max { display: flex; align-items: center; gap: 4px; color: var(--ink-muted); font-size: calc(13px * var(--ts)); }
+.counter-max input { width: 3.6em; min-height: 48px; text-align: center; padding: 4px; }
+.counters-line { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: calc(14px * var(--ts)); font-variant-numeric: tabular-nums; }
+.counters-line strong { font-weight: 700; }
+
+/* Merkstellen (ab Schnittstelle 0.4.28): Lesezeichen am Absatz */
+.recap p.marked { border-left: 3px solid var(--siegel); padding-left: 10px; margin-left: -13px; }
+.recap p:focus { outline: none; }
+.recap p:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
+.live-bookmark { gap: 10px; }

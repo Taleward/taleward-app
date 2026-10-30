@@ -2,7 +2,9 @@ import { t } from '../i18n';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Campaign, Recap } from '../api/types';
+import type { Bookmark, Campaign, Recap } from '../api/types';
+import { apiAtLeast } from '../api/connections';
+import { MyBookmarks } from '../components/Bookmarks';
 import { Comments } from '../components/Comments';
 import { OpenThreads, RecapView } from '../components/RecapView';
 import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
@@ -13,6 +15,15 @@ export function RecapPage() {
   const [recap, setRecap] = useState<Recap | null>(null);
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [error, setError] = useState<unknown>(null);
+  // Eigene Merkstellen (ab 0.4.28) – nur Spielende, nur die eigenen
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const loadBookmarks = () => { if (apiAtLeast('0.4.28')) api.bookmarks(sessionId).then(setBookmarks).catch(() => setBookmarks([])); };
+  useEffect(loadBookmarks, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const jump = (i: number) => {
+    const el = document.getElementById(`absatz-${i}`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el?.focus({ preventScroll: true });
+  };
 
   useEffect(() => {
     (async () => {
@@ -42,8 +53,13 @@ export function RecapPage() {
       <ErrorBox error={error} />
       {recap && (
         <>
-          <RecapView recap={recap} playedAt={playedAt} />
+          <RecapView recap={recap} playedAt={playedAt}
+            marked={new Set(bookmarks.map((b) => b.recapParagraph).filter((n): n is number => n != null))} />
           <OpenThreads threads={recap.openThreads} />
+          {campaign?.myRole !== 'gm' && (
+            <MyBookmarks list={bookmarks} onJump={jump}
+              onDelete={(id) => api.deleteBookmark(id).then(loadBookmarks).catch(setError)} />
+          )}
         </>
       )}
       {recap && campaign && (

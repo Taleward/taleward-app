@@ -22,6 +22,10 @@ export interface SettingsState {
   conflict: boolean;
   /** Protokoll vorhanden (ab 0.4.25) */
   hasLog: boolean;
+  /** Ganzer Stand vom Server (ab 0.4.25), z. B. für playerProposals und counterKinds (ab 0.4.28) */
+  raw: CampaignSettings | null;
+  /** Weitere Felder ändern (ab 0.4.25), mit Fassungsnummer wie change */
+  patch: (change: CampaignSettingsIn) => Promise<void>;
 }
 
 export function useCampaignSettings(campaign: Campaign, onChanged: () => void): SettingsState {
@@ -44,15 +48,15 @@ export function useCampaignSettings(campaign: Campaign, onChanged: () => void): 
     return l.reason === 'unavailable' ? 'unavailable' : 'operator';
   };
 
-  const change = useCallback(async (field: SettingField, value: boolean) => {
+  const patch = useCallback(async (change: CampaignSettingsIn) => {
     setConflict(false);
     if (!modern || !settings) {
-      await api.updateCampaign(campaign.id, { [field]: value });
+      await api.updateCampaign(campaign.id, change as Partial<Record<SettingField, boolean>>);
       onChanged();
       return;
     }
     try {
-      setSettings(await api.updateCampaignSettings(campaign.id, settings.version, { [field]: value }));
+      setSettings(await api.updateCampaignSettings(campaign.id, settings.version, change));
       onChanged();
     } catch (e) {
       if (isApiError(e, 'settings_conflict')) {
@@ -66,8 +70,9 @@ export function useCampaignSettings(campaign: Campaign, onChanged: () => void): 
       throw e;
     }
   }, [campaign.id, modern, settings, onChanged]);
+  const change = useCallback((field: SettingField, value: boolean) => patch({ [field]: value }), [patch]);
 
-  return { values, lock, change, conflict, hasLog: modern && !!settings };
+  return { values, lock, change, conflict, hasLog: modern && !!settings, raw: settings, patch };
 }
 
 const FIELDS: Record<string, string> = {

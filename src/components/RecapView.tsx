@@ -14,7 +14,7 @@ function formatDate(iso: string | null) {
 const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
 /** playedAt: Spieltag – wichtiger als der Tag der Veröffentlichung */
-export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; collapsible?: boolean; playedAt?: string | null }) {
+export function RecapView({ recap, collapsible, playedAt, marked }: { recap: Recap; collapsible?: boolean; playedAt?: string | null; marked?: Set<number> }) {
   const paragraphs = recap.text.split(/\n\s*\n/);
   const titles = partTitles(recap.parts, paragraphs.length, recap.title);
   const [open, setOpen] = useState(!collapsible);
@@ -52,7 +52,7 @@ export function RecapView({ recap, collapsible, playedAt }: { recap: Recap; coll
         {shown.map((p, i) => (
           <Fragment key={i}>
             {titles.has(i) && <PartHeading title={titles.get(i)!} />}
-            <p>{p}</p>
+            <p id={`absatz-${i}`} tabIndex={-1} className={marked?.has(i) ? 'marked' : undefined}>{p}</p>
           </Fragment>
         ))}
       </div>

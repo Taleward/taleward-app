@@ -11,11 +11,13 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { fuzzyFilter, matchScore } from '../search/fuzzy';
 import { api } from '../api/client';
-import type { Campaign, Entry, EntryType, Member } from '../api/types';
+import type { Campaign, Entry, EntryType, Member, PlayerProposal } from '../api/types';
+import { GmPlayerProposals, MyProposals, ProposeForm } from '../bible/PlayerProposals';
 import { Dialog } from '../components/Dialog';
 import { AssignFigureDialog } from '../components/Seats';
 import { ENTRY_KIND } from '../components/ProposalCard';
 import { HolderSelect, NOBODY, figureName } from '../bible/HolderSelect';
+import { PronounField } from '../components/PronounField';
 import { IconEye, IconLock, IconPlus } from '../components/Icons';
 import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSet } from '../components/Screen';
 
@@ -83,6 +85,17 @@ export function Bible() {
   const [error, setError] = useState<unknown>(null);
   const [adding, setAdding] = useState(false);
   const [menu, setMenu] = useState(false);
+  // Vorschläge von Spielenden (ab 0.4.28): Spielende sehen nur ihre eigenen, die SL alle
+  const withPlayerProposals = apiAtLeast('0.4.28');
+  const [proposalsOn, setProposalsOn] = useState(false);
+  const [pps, setPps] = useState<PlayerProposal[]>([]);
+  const [proposing, setProposing] = useState(false);
+  const loadPps = () => { if (withPlayerProposals) api.playerProposals(campaignId).then(setPps).catch(() => undefined); };
+  useEffect(() => {
+    loadPps();
+    if (withPlayerProposals) api.campaignSettings(campaignId).then((x) => setProposalsOn(x.playerProposals !== false)).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -140,6 +153,18 @@ export function Bible() {
     }
   }, [urlQuery]);
 
+  const ppView = params.get('vorschlaege') === '1';
+  if (gm && ppView && campaign) {
+    return (
+      <Screen overline={campaign.title} title={t('Vorschläge von Spielenden')} hero={{ campaign }}
+        backTo={{ to: `?${withParam('vorschlaege', null).toString()}`, label: t('Kampagnenbibel') }}>
+        <span className="muted small">{t('Was Spielende für die Bibel vorschlagen. Übernommen wird nur, was du bestätigst.')}</span>
+        <GmPlayerProposals campaign={campaign} list={pps} entries={all ?? []} players={players}
+          onChanged={() => { loadPps(); setReload((n) => n + 1); }} />
+      </Screen>
+    );
+  }
+
   if (openId) {
     const entry = all?.find((x) => x.id === openId);
     return (
@@ -149,6 +174,7 @@ export function Bible() {
         {all && !entry && <div className="empty">{t('Diesen Eintrag gibt es nicht mehr.')}</div>}
         {entry && (
           <EntryDetail key={entry.id} entry={entry} gm={gm} holder={holder(entry.holderMemberId)} campaign={campaign} players={players}
+            canPropose={!gm && proposalsOn} onProposed={loadPps}
             onChanged={(u) => {
               setAll((list) => (u ? list?.map((x) => (x.id === u.id ? u : x)) : list?.filter((x) => x.id !== entry.id)) ?? null);
               if (!u) setParam('e', null);
@@ -164,6 +190,7 @@ export function Bible() {
     ? fuzzyFilter(sorted, query, (e) => [e.name, ...(e.aliases ?? []), e.summary, e.gmNotes ?? '', ...holderNames(e)])
     : null;
   const shown = sorted && (tab === 'all' ? sorted : sorted.filter((e) => e.type === tab));
+  const openPps = pps.filter((x) => x.state === 'open').length;
   const count = (type: Tab) => (type === 'all' ? all?.length : all?.filter((e) => e.type === type).length) ?? 0;
 
   return (
@@ -172,6 +199,12 @@ export function Bible() {
       <div className="bible-bar">
         <input type="search" aria-label={t('In der ganzen Bibel suchen')} placeholder={t('Wer war das? Alles durchsuchen …')}
           value={query} onChange={(e) => setQuery(e.target.value)} />
+        {!gm && proposalsOn && (
+          <button type="button" className="btn outline square" aria-label={t('Eintrag vorschlagen')} aria-expanded={proposing}
+            onClick={() => setProposing((v) => !v)}>
+            <IconPlus />
+          </button>
+        )}
         {gm && (
           <button type="button" className="btn outline square" aria-label={t('Etwas hinzufügen')} aria-expanded={menu || adding}
             onClick={() => { if (adding) setAdding(false); else setMenu((v) => !v); }}>
@@ -179,6 +212,20 @@ export function Bible() {
           </button>
         )}
       </div>
+
+      {!gm && proposing && (
+        <ProposeForm campaignId={campaignId} initialType={tab === 'all' || tab === 'pc' ? 'npc' : tab}
+          onDone={(created) => { setProposing(false); if (created) loadPps(); }} />
+      )}
+
+      {gm && !!openPps && (
+        <div className="list-box">
+          <Link className="list-row nav" to={`?${withParam('vorschlaege', '1').toString()}`}>
+            <span className="lr-text">{tn(openPps, '{n} Vorschlag von Spielenden', '{n} Vorschläge von Spielenden', { n: openPps })}
+              <span className="lr-sub">{t('Ansehen und übernehmen')}</span></span>
+          </Link>
+        </div>
+      )}
 
       {gm && menu && (
         <div className="list-box">
@@ -232,6 +279,8 @@ export function Bible() {
           )}
         </>
       )}
+
+      {!gm && !hits && <MyProposals list={pps} href={href} onChanged={loadPps} />}
 
       {/* In der leeren Bibel hilft der Weg über die Unterlagen am meisten; sonst steht er unter „+“ */}
       {gm && all?.length === 0 && !adding && (
@@ -324,6 +373,7 @@ function SearchResults({ hits, query, gm, href, holder, holderNames }: {
 function AddEntry({ campaignId, type: initialType, players, onDone }: { campaignId: string; type: EntryType; players: Member[]; onDone: (saved: boolean) => void }) {
   const [type, setType] = useState<EntryType>(initialType);
   const [holder, setHolder] = useState(NOBODY);
+  const [pronouns, setPronouns] = useState('');
   const [name, setName] = useState('');
   const [summary, setSummary] = useState('');
   const [secret, setSecret] = useState(false);
@@ -339,7 +389,8 @@ function AddEntry({ campaignId, type: initialType, players, onDone }: { campaign
         visibility: secret ? 'gm_only' : 'public',
         gmNotes: gmNotes.trim() || null,
         status: type === 'quest' ? 'active' : null,
-        ...(type === 'item' ? { holderMemberId: holder === NOBODY ? null : holder } : {})
+        ...(type === 'item' ? { holderMemberId: holder === NOBODY ? null : holder } : {}),
+        ...(type === 'npc' && pronouns.trim() && apiAtLeast('0.4.28') ? { pronouns: pronouns.trim() } : {})
       });
       onDone(true);
     } catch (e) {
@@ -365,6 +416,7 @@ function AddEntry({ campaignId, type: initialType, players, onDone }: { campaign
         <textarea id="e-sum" value={summary} onChange={(e) => setSummary(e.target.value)} />
       </div>
       {type === 'item' && players.length > 0 && <HolderSelect id="e-holder" players={players} value={holder} onChange={setHolder} />}
+      {type === 'npc' && apiAtLeast('0.4.28') && <PronounField id="e-pronouns" value={pronouns} onChange={setPronouns} />}
       <div className="field">
         <label htmlFor="e-gm" className="row" style={{ gap: 6 }}><IconLock size={14} /> {t('Nur SL (geheimer Teil)')}</label>
         <textarea id="e-gm" value={gmNotes} onChange={(e) => setGmNotes(e.target.value)} />
@@ -383,14 +435,18 @@ function AddEntry({ campaignId, type: initialType, players, onDone }: { campaign
 }
 
 /** Ein Bibeleintrag, ganz geöffnet; die SL kann bearbeiten, Sichtbarkeit ändern, freigeben, löschen */
-function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
+function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged, canPropose, onProposed }: {
   entry: Entry;
   gm: boolean;
   holder: string | null;
   campaign: Campaign | null;
   players: Member[];
   onChanged: (updated: Entry | null) => void;
+  canPropose?: boolean;
+  onProposed?: () => void;
 }) {
+  const [proposing, setProposing] = useState(false);
+  const [proposed, setProposed] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [pickingHolder, setPickingHolder] = useState(false);
   const [assigning, setAssigning] = useState(false);
@@ -405,6 +461,8 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
   const [aliases, setAliases] = useState(aliasesText(e.aliases));
   const [secret, setSecret] = useState(e.visibility === 'gm_only');
   const [holderId, setHolderId] = useState(e.holderMemberId ?? NOBODY);
+  const withPronouns = e.type === 'npc' && apiAtLeast('0.4.28');
+  const [pronouns, setPronouns] = useState(e.pronouns ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -476,6 +534,7 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
   const save = () => run(() => api.updateEntry(e.id, {
     name: name.trim(), summary: summary.trim(), gmNotes: gmNotes.trim() || null, visibility: secret ? 'gm_only' : 'public',
     ...(withAliases ? { aliases: parseAliases(aliases, name) } : {}),
+    ...(withPronouns ? { pronouns: pronouns.trim() || null } : {}),
     ...(e.type === 'item' ? { holderMemberId: holderId === NOBODY ? null : holderId } : {})
   }));
 
@@ -507,6 +566,7 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
         {e.type === 'item' && players.length > 0 && (
           <HolderSelect id={`eh-${e.id}`} players={players} value={holderId} onChange={setHolderId} />
         )}
+        {withPronouns && <PronounField id={`ep-${e.id}`} value={pronouns} onChange={setPronouns} />}
         <div className="field">
           <label htmlFor={`eg-${e.id}`} className="row" style={{ gap: 6 }}><IconLock size={16} /> {t('Nur SL')}</label>
           <textarea id={`eg-${e.id}`} value={gmNotes} onChange={(ev) => setGmNotes(ev.target.value)} />
@@ -524,7 +584,7 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
     );
   }
 
-  const kind = [t(ENTRY_KIND[e.type] ?? ''),
+  const kind = [t(ENTRY_KIND[e.type] ?? ''), e.pronouns ?? '',
     e.firstSessionNumber ? t('seit Kapitel {n}', { n: e.firstSessionNumber }) : '',
     e.type === 'quest' && e.status === 'active' ? t('aktiv') : '',
     e.type === 'quest' && e.status === 'done' ? t('erledigt') : ''].filter(Boolean).join(' · ');
@@ -592,6 +652,16 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged }: {
             <span key={i} className="small"><span className="muted">{t('Kapitel {n}', { n: m.sessionNumber })}:</span> {m.note}</span>
           ))}
         </>
+      )}
+
+      {canPropose && e.type !== 'pc' && !proposing && (
+        proposed
+          ? <span className="muted small" role="status">{t('Vorschlag ist bei der Spielleitung.')}</span>
+          : <button type="button" className="quiet-link" onClick={() => setProposing(true)}>{t('Ergänzung vorschlagen')}</button>
+      )}
+      {proposing && campaign && (
+        <ProposeForm campaignId={campaign.id} target={e}
+          onDone={(created) => { setProposing(false); if (created) { setProposed(true); onProposed?.(); } }} />
       )}
 
       {gm && (

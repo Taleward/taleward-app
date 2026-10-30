@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PronounField } from '../components/PronounField';
 import { ImageCropper } from '../components/ImageCropper';
 import { IconLock } from '../components/Icons';
 import { ErrorBox } from '../components/Screen';
@@ -20,6 +21,7 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
   const [name, setName] = useState(character?.name ?? initialName ?? '');
   const [nickname, setNickname] = useState(character?.nickname ?? '');
   const [system, setSystem] = useState(character?.system ?? '');
+  const [pronouns, setPronouns] = useState(character?.pronouns ?? '');
   const [summary, setSummary] = useState(character?.summary ?? '');
   const [backstory, setBackstory] = useState(character?.backstory ?? '');
   const [portrait, setPortrait] = useState<{ portrait: string | null; portraitMeta: PortraitMeta | null }>({
@@ -33,7 +35,7 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
     setError(null);
     try {
       const data = {
-        name: name.trim(), nickname: nickname.trim() || null, system: system.trim() || null,
+        name: name.trim(), nickname: nickname.trim() || null, system: system.trim() || null, pronouns: pronouns.trim() || null,
         summary: summary.trim() || null, backstory: backstory.trim() || null, ...portrait
       };
       onSaved(character ? updateCharacter(character.id, data) : createCharacter(data));
@@ -75,6 +77,7 @@ export function CharacterEditor({ character, submitLabel, onSaved, secondary, in
             placeholder={t('z. B. DSA 5')} />
         </div>
       </div>
+      <PronounField id="ch-pronouns" value={pronouns} onChange={setPronouns} />
       <div className="field">
         <label htmlFor="ch-summary">{t('Kurzbeschreibung (sehen alle am Tisch)')}</label>
         <textarea id="ch-summary" rows={3} maxLength={2000} value={summary} onChange={(e) => setSummary(e.target.value)}

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { CountersLine } from '../characters/Counters';
+import type { CounterKind } from '../api/types';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { apiAtLeast, p } from '../api/connections';
@@ -26,6 +28,11 @@ export function GroupPanel({ campaign, onEntry, compact }: {
   const [open, setOpen] = useState<string | null>(null);
   const [detail, setDetail] = useState<Member | null>(null);
   const closeDetail = useCallback(() => setDetail(null), []);
+  // Zähler (ab 0.4.28): die SL sieht die Stände, ändert sie aber nicht
+  const [counterKinds, setCounterKinds] = useState<CounterKind[]>([]);
+  useEffect(() => {
+    if (apiAtLeast('0.4.28')) api.campaignSettings(campaign.id).then((x) => setCounterKinds(x.counterKinds ?? [])).catch(() => undefined);
+  }, [campaign.id, campaign.settingsVersion]);
 
   useEffect(() => {
     if (!apiAtLeast('0.4.7')) return;
@@ -42,7 +49,7 @@ export function GroupPanel({ campaign, onEntry, compact }: {
 
   const popup = detail && (
     <Popup title={detail.characterName ?? detail.displayName} onClose={closeDetail}>
-      <CharacterInfo campaign={campaign} member={detail} entries={entries} brought={brought}
+      <CharacterInfo campaign={campaign} member={detail} entries={entries} brought={brought} counterKinds={counterKinds}
         onEntry={(id) => { setDetail(null); onEntry(id); }} />
     </Popup>
   );
@@ -88,6 +95,7 @@ export function GroupPanel({ campaign, onEntry, compact }: {
                 ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
                 : <span className="pill">{t('Ohne Zustimmung')}</span>}
             </div>
+            {counterKinds.length > 0 && <CountersLine kinds={counterKinds} values={m.counters} />}
             {m.characterSummary && <p className="small" style={{ margin: 0 }}>{m.characterSummary}</p>}
             {m.characterBackstory && (
               isOpen
@@ -116,11 +124,12 @@ export function GroupPanel({ campaign, onEntry, compact }: {
 }
 
 /** Alles zu einem Charakter auf einen Blick (nur SL): Beschreibung, Hintergrund, Erwähnungen, mitgebrachte Welt */
-function CharacterInfo({ campaign, member: m, entries, brought, onEntry }: {
+function CharacterInfo({ campaign, member: m, entries, brought, onEntry, counterKinds }: {
   campaign: Campaign;
   member: Member;
   entries: Entry[];
   brought: Proposal[];
+  counterKinds: CounterKind[];
   onEntry: (entryId: string) => void;
 }) {
   const pc = entries.find((e) => e.type === 'pc' && e.holderMemberId === m.id);
@@ -143,6 +152,7 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry }: {
           </span>
         </div>
       </div>
+      {counterKinds.length > 0 && <CountersLine kinds={counterKinds} values={m.counters} />}
       {m.characterSummary && <p style={{ margin: 0 }}>{m.characterSummary}</p>}
       {m.characterBackstory && <SecretBox><span style={{ whiteSpace: 'pre-wrap' }}>{m.characterBackstory}</span></SecretBox>}
       {pc && (pc.mentions?.length ?? 0) > 0 && (

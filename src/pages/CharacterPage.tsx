@@ -4,7 +4,8 @@ import { currentConnection, currentConnectionId, p } from '../api/connections';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Campaign, Entry, Member } from '../api/types';
+import type { Campaign, CounterKind, Entry, Member } from '../api/types';
+import { CountersLine, MyCounters } from '../characters/Counters';
 import { blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
 import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
 import { useAuth } from '../auth/AuthContext';
@@ -36,6 +37,12 @@ export function CharacterPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
+
+  // Zähler (ab 0.4.28): Arten aus den Einstellungen der Kampagne
+  const [counterKinds, setCounterKinds] = useState<CounterKind[]>([]);
+  useEffect(() => {
+    if (apiAtLeast('0.4.28')) api.campaignSettings(campaignId).then((x) => setCounterKinds(x.counterKinds ?? [])).catch(() => undefined);
   }, [campaignId]);
 
   const [busy, setBusy] = useState(false);
@@ -111,6 +118,7 @@ export function CharacterPage() {
             <Avatar campaignId={campaign.id} member={member} size={160} />
             <div className="muted">
               {member.role === 'gm' ? t('Spielleitung') : t('gespielt von {name}', { name: member.displayName })}
+              {member.role !== 'gm' && member.characterPronouns && <> · {member.characterPronouns}</>}
             </div>
           </div>
           {member.role !== 'gm' && (
@@ -118,6 +126,14 @@ export function CharacterPage() {
               ? <div className="card recap"><p>{member.characterSummary}</p></div>
               : <div className="muted small" style={{ textAlign: 'center' }}>{own ? t('Noch keine Kurzbeschreibung.') : t('Noch keine Beschreibung.')}</div>
           )}
+          {member.role === 'player' && counterKinds.length > 0 && (own
+            ? <MyCounters key={campaign.id} campaignId={campaign.id} kinds={counterKinds} initial={member.counters} />
+            : member.counters && (
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <h2 className="list-head">{t('Zähler')}</h2>
+                <CountersLine kinds={counterKinds} values={member.counters} />
+              </section>
+            ))}
           {member.role === 'player' && <CarriedItems campaignId={campaign.id} memberId={member.id} />}
           {member.characterBackstory && (
             <section className="card secret">
