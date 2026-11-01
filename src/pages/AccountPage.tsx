@@ -11,10 +11,13 @@ import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } 
 import { apiFor } from '../api/client';
 import { APP_VERSION, apiAtLeast, getConnection, hasValidToken, isOutdated, removeConnection, type Connection } from '../api/connections';
 import { useAuth } from '../auth/AuthContext';
-import { IconBell, IconDownload, IconGlobe, IconInfo, IconLogOut, IconMic, IconMoon, IconPlus, IconRoute, IconServer, IconTrash, IconWallet } from '../components/Icons';
+import { IconBell, IconDownload, IconExternal, IconGlobe, IconInfo, IconLogOut, IconMic, IconMoon, IconPlus, IconRoute, IconSend, IconServer, IconTrash, IconWallet } from '../components/Icons';
+import { DIST, PLAY_STORE_URL } from '../update/updater';
+import { shareInvite } from '../invite';
+import { Capacitor } from '@capacitor/core';
 import { ErrorBox, Screen } from '../components/Screen';
 import { formatDateFull } from '../components/format';
-import { LanguageRow, t, tn } from '../i18n';
+import { LanguageRow, getLang, t, tn } from '../i18n';
 import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
 import { ServerLegal } from '../components/Terms';
 import { gmState, type GmState } from '../auth/serverAccess';
@@ -68,6 +71,13 @@ export function AccountPage() {
         <ThemeRow icon={<IconMoon />} />
         <NotifySettingsSection icon={<IconBell />} />
         <TourAgain />
+        <Recommend />
+        {DIST === 'store' && (
+          <a className="list-row" href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+            <IconExternal />
+            <span className="lr-text">{t('Taleward bewerten')}</span>
+          </a>
+        )}
       </div>
       <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
         {t('Taleward {v}', { v: APP_VERSION })} · <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">{t('Quellcode (AGPL-3.0)')}</a>
@@ -270,6 +280,26 @@ function ServerDetails({ conn }: { conn: Connection }) {
         </button>
       </div>
     </>
+  );
+}
+
+/** Weiterempfehlen über das Teilen-Menü; im Browser ohne Teilen wird der Text kopiert */
+function Recommend() {
+  const [copied, setCopied] = useState(false);
+  const url = getLang() === 'en' ? 'https://taleward.org/en/' : 'https://taleward.org/';
+  const share = async () => {
+    const canShare = Capacitor.isNativePlatform() || typeof navigator.share === 'function';
+    await shareInvite('Taleward', t('Taleward hält eure Rollenspielrunden als Kapitel zum Nachlesen fest.'), url);
+    setCopied(!canShare);
+  };
+  return (
+    <button type="button" className="list-row" onClick={() => { share().catch(() => undefined); }}>
+      <IconSend size={22} />
+      <span className="lr-text">
+        {t('Taleward weiterempfehlen')}
+        {copied && <span className="lr-sub" role="status">{t('Text mit Link kopiert.')}</span>}
+      </span>
+    </button>
   );
 }
 

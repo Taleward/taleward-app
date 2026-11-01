@@ -1747,4 +1747,8 @@ export const en: Record<string, string> = {
   "Weitere Klasse": "Another class",
   "Stufe": "Level",
   "Klasse entfernen": "Remove class",
+  "Taleward bewerten": "Rate Taleward",
+  "Taleward weiterempfehlen": "Recommend Taleward",
+  "Taleward hält eure Rollenspielrunden als Kapitel zum Nachlesen fest.": "Taleward keeps your roleplaying sessions as chapters to read back.",
+  "Text mit Link kopiert.": "Text and link copied.",
 };
