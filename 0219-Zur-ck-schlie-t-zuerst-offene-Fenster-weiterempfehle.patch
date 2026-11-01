@@ -1,0 +1,104 @@
+From 82cdc4df2ee93256edf3d10807af8202277b9a02 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sun, 1 Nov 2026 13:39:05 +0100
+Subject: [PATCH] =?UTF-8?q?Zur=C3=BCck=20schlie=C3=9Ft=20zuerst=20offene?=
+ =?UTF-8?q?=20Fenster,=20weiterempfehlen=20und=20bewerten?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/BackButton.tsx |  7 ++++++-
+ src/i18n/en.ts                |  4 ++++
+ src/pages/AccountPage.tsx     | 34 ++++++++++++++++++++++++++++++++--
+ 3 files changed, 42 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/BackButton.tsx b/src/components/BackButton.tsx
+index 22c791c..0e8b7f6 100644
+--- a/src/components/BackButton.tsx
++++ b/src/components/BackButton.tsx
+@@ -6,5 +6,5 @@ import { confirmDialog } from './confirm';
+ 
+ /**
+- * Android-Zurück-Taste: eine Seite zurück; auf der Startseite App schließen.
++ * Android-Zurück-Taste: offenes Fenster schließen, sonst eine Seite zurück; auf der Startseite App schließen.
+  * Während einer Aufnahme erst nachfragen – die Aufnahme läuft im Hintergrund weiter, aber man soll nicht
+  * versehentlich den Aufnahme-Bildschirm verlieren.
+@@ -17,4 +17,9 @@ export function BackButton() {
+       const { App } = await import('@capacitor/app');
+       const sub = await App.addListener('backButton', async ({ canGoBack }) => {
++        // Offenes Fenster (Rückfrage, Auswahl) zuerst schließen, sonst wäre Eingetipptes mit der Seite weg
++        if (document.querySelector('[aria-modal="true"]')) {
++          window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
++          return;
++        }
+         if (isRecordingActive()) {
+           const leave = await confirmDialog(t('Die Aufnahme läuft. Zum Beenden „Beenden und hochladen“ tippen. Trotzdem diesen Bildschirm verlassen?'), {
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index d565694..745404c 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1748,3 +1748,7 @@ export const en: Record<string, string> = {
+   "Stufe": "Level",
+   "Klasse entfernen": "Remove class",
++  "Taleward bewerten": "Rate Taleward",
++  "Taleward weiterempfehlen": "Recommend Taleward",
++  "Taleward hält eure Rollenspielrunden als Kapitel zum Nachlesen fest.": "Taleward keeps your roleplaying sessions as chapters to read back.",
++  "Text mit Link kopiert.": "Text and link copied.",
+ };
+diff --git a/src/pages/AccountPage.tsx b/src/pages/AccountPage.tsx
+index 94f122a..7a87a5c 100644
+--- a/src/pages/AccountPage.tsx
++++ b/src/pages/AccountPage.tsx
+@@ -12,8 +12,11 @@ import { apiFor } from '../api/client';
+ import { APP_VERSION, apiAtLeast, getConnection, hasValidToken, isOutdated, removeConnection, type Connection } from '../api/connections';
+ import { useAuth } from '../auth/AuthContext';
+-import { IconBell, IconDownload, IconGlobe, IconInfo, IconLogOut, IconMic, IconMoon, IconPlus, IconRoute, IconServer, IconTrash, IconWallet } from '../components/Icons';
++import { IconBell, IconDownload, IconExternal, IconGlobe, IconInfo, IconLogOut, IconMic, IconMoon, IconPlus, IconRoute, IconSend, IconServer, IconTrash, IconWallet } from '../components/Icons';
++import { DIST, PLAY_STORE_URL } from '../update/updater';
++import { shareInvite } from '../invite';
++import { Capacitor } from '@capacitor/core';
+ import { ErrorBox, Screen } from '../components/Screen';
+ import { formatDateFull } from '../components/format';
+-import { LanguageRow, t, tn } from '../i18n';
++import { LanguageRow, getLang, t, tn } from '../i18n';
+ import { recordingsOf, removeRecordingsOf } from '../recorder/webStore';
+ import { ServerLegal } from '../components/Terms';
+@@ -69,4 +72,11 @@ export function AccountPage() {
+         <NotifySettingsSection icon={<IconBell />} />
+         <TourAgain />
++        <Recommend />
++        {DIST === 'store' && (
++          <a className="list-row" href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
++            <IconExternal />
++            <span className="lr-text">{t('Taleward bewerten')}</span>
++          </a>
++        )}
+       </div>
+       <p className="muted small" style={{ margin: 0, textAlign: 'center' }}>
+@@ -274,4 +284,24 @@ function ServerDetails({ conn }: { conn: Connection }) {
+ }
+ 
++/** Weiterempfehlen über das Teilen-Menü; im Browser ohne Teilen wird der Text kopiert */
++function Recommend() {
++  const [copied, setCopied] = useState(false);
++  const url = getLang() === 'en' ? 'https://taleward.org/en/' : 'https://taleward.org/';
++  const share = async () => {
++    const canShare = Capacitor.isNativePlatform() || typeof navigator.share === 'function';
++    await shareInvite('Taleward', t('Taleward hält eure Rollenspielrunden als Kapitel zum Nachlesen fest.'), url);
++    setCopied(!canShare);
++  };
++  return (
++    <button type="button" className="list-row" onClick={() => { share().catch(() => undefined); }}>
++      <IconSend size={22} />
++      <span className="lr-text">
++        {t('Taleward weiterempfehlen')}
++        {copied && <span className="lr-sub" role="status">{t('Text mit Link kopiert.')}</span>}
++      </span>
++    </button>
++  );
++}
++
+ /** Die kurze Tour startet beim nächsten Öffnen einer Kampagne wieder */
+ function TourAgain() {
