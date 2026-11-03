@@ -1,0 +1,494 @@
+From be1be98e42df4415d3647fb387590ac4c16e54db Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Tue, 3 Nov 2026 20:47:52 +0100
+Subject: [PATCH] =?UTF-8?q?Aufnahme:=20keine=20leeren=20Runden,=20Zustimmu?=
+ =?UTF-8?q?ng=20am=20Tisch=20bleibt,=20eigene=20Zustimmung,=20Datei=20blei?=
+ =?UTF-8?q?bt=20gew=C3=A4hlt;=20G=C3=A4ste=20benennen;=20SL-Schirm=20start?=
+ =?UTF-8?q?et=20Aufnahme;=20Unterlagen=20verlinkt?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/table-consent.test.mjs | 17 ++++++
+ src/components/ConsentHandover.tsx   | 16 ++++--
+ src/components/InviteBox.tsx         | 10 ++++
+ src/i18n/en.ts                       | 10 ++++
+ src/pages/Overview.tsx               | 24 +++++---
+ src/pages/Recording.tsx              | 85 ++++++++++++++++++++++------
+ src/pages/Speakers.tsx               | 28 ++++++++-
+ src/pages/TablePage.tsx              | 11 +++-
+ src/recorder/tableConsent.ts         | 36 ++++++++++++
+ 9 files changed, 203 insertions(+), 34 deletions(-)
+ create mode 100644 scripts/tests/table-consent.test.mjs
+ create mode 100644 src/recorder/tableConsent.ts
+
+diff --git a/scripts/tests/table-consent.test.mjs b/scripts/tests/table-consent.test.mjs
+new file mode 100644
+index 0000000..e62d414
+--- /dev/null
++++ b/scripts/tests/table-consent.test.mjs
+@@ -0,0 +1,17 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++
++const store = new Map();
++globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
++const { loadTableConsent, saveTableConsent, clearTableConsent } = await import('../../src/recorder/tableConsent.ts');
++
++test('Zustimmung am Tisch übersteht den Seitenwechsel, verfällt nach 12 Stunden', () => {
++  const now = Date.parse('2026-11-03T19:00:00Z');
++  saveTableConsent('verein', 'c1', { onSite: { m1: '2026-11-03T18:55:00Z' }, guests: [{ name: 'Kim', consentAt: '2026-11-03T18:56:00Z' }] }, now);
++  assert.deepEqual(loadTableConsent('verein', 'c1', now + 60_000).onSite, { m1: '2026-11-03T18:55:00Z' });
++  assert.equal(loadTableConsent('verein', 'c1', now).guests[0].name, 'Kim');
++  assert.deepEqual(loadTableConsent('verein', 'c2', now).onSite, {}, 'andere Kampagne');
++  assert.deepEqual(loadTableConsent('verein', 'c1', now + 13 * 3600_000).onSite, {}, 'nach 12 h vergessen');
++  clearTableConsent('verein', 'c1');
++  assert.deepEqual(loadTableConsent('verein', 'c1', now).guests, []);
++});
+diff --git a/src/components/ConsentHandover.tsx b/src/components/ConsentHandover.tsx
+index 0ac2831..da17cc3 100644
+--- a/src/components/ConsentHandover.tsx
++++ b/src/components/ConsentHandover.tsx
+@@ -7,6 +7,8 @@ import { Divider } from './Screen';
+  * Die SL klickt hier nicht für andere – deshalb die eigene Bestätigung mit Namen.
+  */
+-export function ConsentHandover({ name, text, onConsent, onCancel }: {
++export function ConsentHandover({ name, text, onConsent, onCancel, self }: {
+   name: string;
++  /** Die SL stimmt für sich selbst zu: kein „Handy weitergeben“ */
++  self?: boolean;
+   text: string;
+   onConsent: () => void;
+@@ -25,5 +27,5 @@ export function ConsentHandover({ name, text, onConsent, onCancel }: {
+     >
+       <div className="screen-main" style={{ maxWidth: 640, margin: '0 auto', gap: 18, paddingTop: 28 }}>
+-        <div className="overline">{t('Bitte das Handy weitergeben an')}</div>
++        {!self && <div className="overline">{t('Bitte das Handy weitergeben an')}</div>}
+         <h1 id="handover-title" style={{ fontSize: 'calc(30px * var(--ts))' }}>{name}</h1>
+         <Divider />
+@@ -31,11 +33,13 @@ export function ConsentHandover({ name, text, onConsent, onCancel }: {
+         <label className="check card" style={{ flexDirection: 'row' }}>
+           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+-          <span>{t('Ich bin {name} und stimme zu.', { name })}</span>
++          <span>{self ? t('Ich stimme zu.') : t('Ich bin {name} und stimme zu.', { name })}</span>
+         </label>
+         <button type="button" className="btn" disabled={!checked} onClick={onConsent}>{t('Zustimmen')}</button>
+         <button type="button" className="btn outline" onClick={onCancel}>{t('Nicht zustimmen')}</button>
+-        <p className="muted small" style={{ margin: 0 }}>
+-          {t('Tipp: In der Vorstellungsrunde kurz „Ich bin einverstanden“ sagen.')}
+-        </p>
++        {!self && (
++          <p className="muted small" style={{ margin: 0 }}>
++            {t('Tipp: In der Vorstellungsrunde kurz „Ich bin einverstanden“ sagen.')}
++          </p>
++        )}
+       </div>
+     </div>
+diff --git a/src/components/InviteBox.tsx b/src/components/InviteBox.tsx
+index a576d56..1e15215 100644
+--- a/src/components/InviteBox.tsx
++++ b/src/components/InviteBox.tsx
+@@ -12,4 +12,6 @@ import { ErrorBox } from './Screen';
+ /** Mitspielende einladen: fertiger Link zum Teilen, Kopieren oder als QR-Code am Tisch */
+ /** row: als letzte Zeile in „Am Tisch“ (Übersicht); sonst als eigener Knopf (z. B. beim Übergeben der Spielleitung) */
++export const OPEN_INVITE = 'taleward:open-invite';
++
+ export function InviteBox({ campaignId, campaignTitle, row }: { campaignId: string; campaignTitle?: string; row?: boolean }) {
+   const [invite, setInvite] = useState<{ code: string; expiresAt: string; link: string } | null>(null);
+@@ -30,4 +32,12 @@ export function InviteBox({ campaignId, campaignTitle, row }: { campaignId: stri
+   };
+ 
++  // „Los: Mitspielende einladen“ aus „So fängst du an“ öffnet die Einladung gleich
++  useEffect(() => {
++    if (!row) return;
++    const open = () => { if (!invite) create(); };
++    window.addEventListener(OPEN_INVITE, open);
++    return () => window.removeEventListener(OPEN_INVITE, open);
++  });
++
+   useEffect(() => {
+     if (!invite) return;
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index cdfa83a..6a71f0e 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1754,3 +1754,13 @@ export const en: Record<string, string> = {
+   "„{name}“ gehört auf diesem Gerät einem anderen Konto. Holst du ihn, siehst du auch dessen private Notizen und Unterlagen, und sein Stand geht an „{server}“.": "On this device, “{name}” belongs to another account. If you bring it over, you will also see its private notes and documents, and its details go to “{server}”.",
+   "Trotzdem holen": "Bring it over anyway",
++  "Du wirst mit aufgenommen, darum stimmst auch du zu. Sonst kann nicht aufgenommen werden.": "You are recorded too, so you agree as well. Otherwise nothing can be recorded.",
++  "Ich stimme zu.": "I agree.",
++  "Warte auf die Freigabe des Mikrofons …": "Waiting for microphone access …",
++  "Andere Datei": "Other file",
++  "Datei wählen": "Choose file",
++  "Eine Audiodatei, zum Beispiel MP3, M4A, OGG oder WAV.": "One audio file, for example MP3, M4A, OGG or WAV.",
++  "Hochladen": "Upload",
++  "Neuer Gast …": "New guest …",
++  "Unterlagen der SL": "GM documents",
++  "Abenteuer, Notizen, Karten": "Adventures, notes, maps",
+ };
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index d72f8a2..09ffeea 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -13,5 +13,5 @@ import { isDeletedMember } from '../api/types';
+ import { LockNote, SettingsLog, useCampaignSettings } from '../components/CampaignSettings';
+ import { PayerSection } from '../billing/PayerSection';
+-import { InviteBox } from '../components/InviteBox';
++import { InviteBox, OPEN_INVITE } from '../components/InviteBox';
+ import { confirmDialog } from '../components/confirm';
+ import { PENDING_LABEL } from './Chronicle';
+@@ -81,5 +81,8 @@ export function Overview() {
+   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
+   const needMe = pending.filter((s) => needsMe(s.state));
+-  const working = pending.filter((s) => !needsMe(s.state));
++  // Noch keine Runde mit Aufnahme (leere Runden ohne Aufnahme zählen nicht): „So fängst du an“ bleibt stehen
++  const fresh = !!sessions && !sessions.some((s) => s.state !== 'created');
++  // Runden ohne Aufnahme (state created) sind keine Arbeit des Servers
++  const working = pending.filter((s) => !needsMe(s.state) && s.state !== 'created');
+   // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht
+   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
+@@ -128,6 +131,6 @@ export function Overview() {
+           )}
+           {/* Frische Kampagne der SL: „So fängst du an“ trägt den Hauptknopf, die eigene Zustimmung steht ruhiger daneben */}
+-          {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} quiet={gm && sessions?.length === 0} />}
+-          {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
++          {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} quiet={gm && fresh} />}
++          {gm && fresh && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
+           {prep === 'today' && prepCard}
+           <NowList items={[
+@@ -181,5 +184,5 @@ export function Overview() {
+           )}
+           {/* Die SL hat dafür „So fängst du an“ */}
+-          {sessions?.length === 0 && !gm && (
++          {fresh && !gm && (
+             <div className="notice">
+               <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
+@@ -203,5 +206,5 @@ export function Overview() {
+           <Divider />
+           {/* Stimmprofil ist freiwillig: erst wenn die Zustimmung steht und (bei der SL) die erste Runde aufgenommen ist */}
+-          <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && sessions?.length === 0)} />
++          <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && fresh)} />
+ 
+           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} onPickCover={() => {
+@@ -234,5 +237,5 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () =>
+   const steps = [
+     { label: t('Mitspielende einladen'), detail: t('Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.'), done: players > 0,
+-      go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
++      go: () => { document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); window.dispatchEvent(new Event(OPEN_INVITE)); } },
+     { label: t('Die Welt beschreiben'), detail: t('Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.'), done: !!campaign.worldInfo?.trim(),
+       go: () => window.dispatchEvent(new Event(EDIT_WORLD)) },
+@@ -347,5 +350,7 @@ export function RecordingConsent({ campaign, onChanged, quiet, row }: { campaign
+           <button type="button" className={quiet ? 'btn outline' : 'btn'} disabled={busy} onClick={() => change(true)}>{t('Ich stimme zu')}</button>
+           <p className="muted small" style={{ margin: 0 }}>
+-            {t('Ohne Zustimmung wird nicht aufgenommen, solange du am Tisch sitzt.')}
++            {campaign.myRole === 'gm'
++              ? t('Du wirst mit aufgenommen, darum stimmst auch du zu. Sonst kann nicht aufgenommen werden.')
++              : t('Ohne Zustimmung wird nicht aufgenommen, solange du am Tisch sitzt.')}
+           </p>
+         </>
+@@ -767,4 +772,7 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
+               <span className="lr-text">{hasCover(campaign) ? t('Titelbild ändern') : t('Titelbild wählen')}</span>
+             </button>
++            <Link className="list-row nav" to={p(`/k/${campaign.id}/unterlagen`)}>
++              <span className="lr-text">{t('Unterlagen der SL')}<span className="lr-sub">{t('Abenteuer, Notizen, Karten')}</span></span>
++            </Link>
+             {!muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
+             <UsageRow campaignId={campaign.id} />
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index a642ad5..73f00b7 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -17,5 +17,7 @@ import { clearSpans, spanClose, spanOpen, spansFor } from '../recorder/spans';
+ import { ConsentHandover } from '../components/ConsentHandover';
+ import { IconCheck, IconMic, IconPlus } from '../components/Icons';
+-import { CONSENT_ON_SITE } from '../consent';
++import { CONSENT_ON_SITE, CONSENT_STANDING } from '../consent';
++import { useAuth } from '../auth/AuthContext';
++import { clearTableConsent, loadTableConsent, saveTableConsent } from '../recorder/tableConsent';
+ import { MicDenied } from '../components/MicDenied';
+ import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+@@ -60,10 +62,16 @@ export function Recording() {
+   const [present, setPresent] = useState<Record<string, boolean>>({});
+   // Vor Ort selbst bestätigte Zustimmungen (Mitglied ohne App-Zustimmung) und Gäste ohne Konto
+-  const [onSite, setOnSite] = useState<Record<string, string>>({});
+-  const [guests, setGuests] = useState<{ name: string; consentAt: string }[]>([]);
++  // Am selben Abend gemerkt: ein Seitenwechsel (z. B. zur Chronik) nimmt keine Zustimmung mehr weg
++  const [onSite, setOnSite] = useState<Record<string, string>>(() => loadTableConsent(currentConnection().id, campaignId).onSite);
++  const [guests, setGuests] = useState<{ name: string; consentAt: string }[]>(() => loadTableConsent(currentConnection().id, campaignId).guests);
++  useEffect(() => { saveTableConsent(currentConnection().id, campaignId, { onSite, guests }); }, [onSite, guests, campaignId]);
++  const { user } = useAuth();
++  // Gewählte Datei bleibt, auch wenn das Hochladen scheitert (z. B. fehlende Zustimmung)
++  const [tableFile, setTableFile] = useState<File | null>(null);
++  const [starting, setStarting] = useState(false);
+   const [guestName, setGuestName] = useState('');
+   const serverInfo = useServerInfo();
+   const [addingGuest, setAddingGuest] = useState(false);
+-  const [handover, setHandover] = useState<{ memberId?: string; name: string } | null>(null);
++  const [handover, setHandover] = useState<{ memberId?: string; name: string; self?: boolean } | null>(null);
+   const [phase, setPhase] = useState<Phase>('prepare');
+   const [showTip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
+@@ -195,4 +203,6 @@ export function Recording() {
+     const at = new Date().toISOString();
+     if (handover.memberId) setOnSite({ ...onSite, [handover.memberId]: at });
++    // Die eigene Zustimmung gilt gleich für die ganze Kampagne (wie „Ich stimme zu“ auf der Übersicht)
++    if (handover.self) api.setRecordingConsent(campaignId, true).catch(() => undefined);
+     else setGuests([...guests, { name: handover.name, consentAt: at }]);
+     setGuestName('');
+@@ -208,4 +218,12 @@ export function Recording() {
+   };
+ 
++  /** Eine gerade erst angelegte Runde ohne Aufnahme wieder entfernen, damit kein leeres Kapitel stehen bleibt */
++  const dropEmptySession = async (id: string | null) => {
++    if (!id) return;
++    sessionId.current = null;
++    clearSpans(id);
++    await api.deleteSession(id).catch(() => undefined);
++  };
++
+   /** storedId: Aufnahme im Zwischenspeicher des Browsers – nach erfolgreichem Hochladen löschen, sonst wieder anbieten */
+   const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null, elapsedMs?: number) => {
+@@ -213,6 +231,10 @@ export function Recording() {
+     setProgress(0);
+     setError(null);
++    // Nur bei gewählten Dateien: Die Runde entsteht erst hier und darf beim Scheitern nicht leer stehen bleiben
++    const fileOnly = !existingSessionId && !storedId && elapsedMs == null && !sessionId.current;
++    let created: string | null = null;
+     try {
+       const id = existingSessionId ?? (await ensureSession());
++      if (fileOnly) created = id;
+       // Aufnahmezeiten nur zu einer Aufnahme dieses Geräts; bei hochgeladenen Dateien gibt es keine
+       const spans = source === 'table' && (existingSessionId || storedId || elapsedMs != null) ? spansFor(id, elapsedMs) : undefined;
+@@ -221,4 +243,6 @@ export function Recording() {
+       if (native && existingSessionId) await BackgroundRecorder.discard({ sessionId: id }).catch(() => undefined);
+       if (storedId) await removeRecording(storedId).catch(() => undefined);
++      clearTableConsent(currentConnection().id, campaignId);
++      setTableFile(null);
+       navigate(p(`/s/${id}`), { replace: true });
+     } catch (e) {
+@@ -236,4 +260,5 @@ export function Recording() {
+       }
+       if (kept) setWebLeftover(kept);
++      if (created) await dropEmptySession(created);
+       setPhase('prepare');
+     }
+@@ -275,5 +300,12 @@ export function Recording() {
+     setError(null);
+     setMicDenied(false);
++    setStarting(true);
++    const hadSession = !!sessionId.current;
+     try {
++      // Browser: erst das Mikrofon freigeben lassen, dann die Runde anlegen – sonst bliebe bei „Nein“ ein leeres Kapitel
++      if (!native && navigator.mediaDevices?.getUserMedia) {
++        const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
++        probe.getTracks().forEach((tr) => tr.stop());
++      }
+       const id = await ensureSession();
+       if (native) {
+@@ -297,6 +329,9 @@ export function Recording() {
+       withTransition(() => setPhase('recording'));
+     } catch (e) {
++      if (!hadSession) await dropEmptySession(sessionId.current);
+       if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
+       else setError(e);
++    } finally {
++      setStarting(false);
+     }
+   };
+@@ -317,7 +352,5 @@ export function Recording() {
+       }
+       // Die angelegte, leere Runde auf dem Server wieder entfernen (ältere Server: bleibt liegen, schadet nicht)
+-      if (id) await api.deleteSession(id).catch(() => undefined);
+-      if (id) clearSpans(id);
+-      sessionId.current = null;
++      await dropEmptySession(id);
+       setElapsed(0);
+       setPaused(false);
+@@ -366,6 +399,6 @@ export function Recording() {
+   };
+ 
+-  const pickFile = (file: File | undefined) => {
+-    if (file) upload('table', [blobFile(file, file.name)]);
++  const sendTableFile = () => {
++    if (tableFile) upload('table', [blobFile(tableFile, tableFile.name)]);
+   };
+ 
+@@ -441,7 +474,11 @@ export function Recording() {
+                 {present[m.id] && (hasConsent(m)
+                   ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
+-                  : <button type="button" className="btn small outline" onClick={() => setHandover({ memberId: m.id, name: m.displayName })}>
+-                      {t('Zustimmen lassen')}
+-                    </button>)}
++                  : m.userId === user?.id
++                    ? <button type="button" className="btn small outline" onClick={() => setHandover({ memberId: m.id, name: m.displayName, self: true })}>
++                        {t('Zustimmen')}
++                      </button>
++                    : <button type="button" className="btn small outline" onClick={() => setHandover({ memberId: m.id, name: m.displayName })}>
++                        {t('Zustimmen lassen')}
++                      </button>)}
+               </div>
+             ))}
+@@ -462,4 +499,5 @@ export function Recording() {
+                     {t('Weiter')}
+                   </button>
++                  <button type="button" className="btn small ghost" onClick={() => { setAddingGuest(false); setGuestName(''); }}>{t('Abbrechen')}</button>
+                 </div>
+               ) : (
+@@ -486,9 +524,9 @@ export function Recording() {
+           {/* Am Handy steht der Knopf über „Am Tisch“ (rec-start, siehe theme.css) */}
+           <div className="rec-start" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+-            <button type="button" className="rec-button rec-morph" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
++            <button type="button" className="rec-button rec-morph" disabled={!allConsented || starting} onClick={start} aria-label={t('Aufnahme starten')}>
+               <IconMic size={48} />
+             </button>
+             <div className="muted small" style={{ textAlign: 'center' }}>
+-              {allConsented ? t('Aufnahme starten') : t('Wartet auf alle Zustimmungen')}
++              {starting ? t('Warte auf die Freigabe des Mikrofons …') : allConsented ? t('Aufnahme starten') : t('Wartet auf alle Zustimmungen')}
+             </div>
+             {showTip && <div className="muted small" style={{ textAlign: 'center' }}>{t('Tipp: Zu Beginn sagt jede Person Name und Charakter.')}</div>}
+@@ -503,6 +541,18 @@ export function Recording() {
+             <summary style={{ fontWeight: 700 }}>{t('Vorhandene Aufnahme hochladen')}</summary>
+             <div className="field" style={{ marginTop: 8 }}>
+-              <label htmlFor="file-table">{t('Tischaufnahme (eine Datei)')}</label>
+-              <input id="file-table" type="file" accept="audio/*" disabled={!allConsented} onChange={(e) => pickFile(e.target.files?.[0])} />
++              <span className="label">{t('Tischaufnahme (eine Datei)')}</span>
++              <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
++                <label className="btn small outline" style={{ position: 'relative' }}>
++                  {tableFile ? t('Andere Datei') : t('Datei wählen')}
++                  <input id="file-table" type="file" accept="audio/*"
++                    onChange={(e) => { setTableFile(e.target.files?.[0] ?? tableFile); e.target.value = ''; }}
++                    style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }} />
++                </label>
++                {tableFile && <span className="small" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{tableFile.name}</span>}
++              </div>
++              <span className="muted small">{t('Eine Audiodatei, zum Beispiel MP3, M4A, OGG oder WAV.')}</span>
++              {tableFile && (
++                <button type="button" className="btn small" style={{ alignSelf: 'flex-start' }} disabled={!allConsented} onClick={sendTableFile}>{t('Hochladen')}</button>
++              )}
+             </div>
+             <div className="field" style={{ marginTop: 8 }}>
+@@ -609,5 +659,6 @@ export function Recording() {
+         <ConsentHandover
+           name={handover.name}
+-          text={CONSENT_ON_SITE(campaign.title, { retention: serverInfo?.audioRetention, cloudProvider: cloud.transcription?.provider ?? null, summaryProvider: cloud.summary?.provider ?? null })}
++          self={handover.self}
++          text={(handover.self ? CONSENT_STANDING : CONSENT_ON_SITE)(campaign.title, { retention: serverInfo?.audioRetention, cloudProvider: cloud.transcription?.provider ?? null, summaryProvider: cloud.summary?.provider ?? null })}
+           onConsent={confirmHandover}
+           onCancel={() => setHandover(null)}
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index d6b2872..6edf1c7 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -12,4 +12,5 @@ import { swapAssignment } from '../voice/swap';
+ 
+ const IGNORE = '__ignore';
++const NEW_GUEST = '__new_guest';
+ const GUEST = 'guest:';
+ 
+@@ -29,4 +30,7 @@ export function Speakers() {
+   const [guests, setGuests] = useState<string[]>([]);
+   const [mapping, setMapping] = useState<Record<string, string>>({});
++  // Stimme, für die gerade ein neuer Gast benannt wird, und der eingetippte Name
++  const [naming, setNaming] = useState<{ speakerId: string; name: string } | null>(null);
++  const canName = serverHasCharacters(currentConnection());
+   // Ab Schnittstelle 0.4.10: Zuordnung nach der Bestätigung ansehen und – solange das Kapitel auf Prüfung wartet – ändern
+   const [session, setSession] = useState<Session | null>(null);
+@@ -184,5 +188,10 @@ export function Speakers() {
+             <div className="field">
+               <label htmlFor={`sp-${s.id}`}>{t('Person')}</label>
+-              <select id={`sp-${s.id}`} disabled={!editable} value={mapping[s.id] ?? ''} onChange={(e) => setMapping({ ...mapping, [s.id]: e.target.value })}>
++              <select id={`sp-${s.id}`} disabled={!editable} value={naming?.speakerId === s.id ? NEW_GUEST : mapping[s.id] ?? ''}
++                onChange={(e) => {
++                  if (e.target.value === NEW_GUEST) { setNaming({ speakerId: s.id, name: '' }); return; }
++                  if (naming?.speakerId === s.id) setNaming(null);
++                  setMapping({ ...mapping, [s.id]: e.target.value });
++                }}>
+                 <option value="">{t('Bitte wählen …')}</option>
+                 {campaign?.members.map((m) => (
+@@ -192,7 +201,22 @@ export function Speakers() {
+                 ))}
+                 {guests.map((g) => <option key={g} value={GUEST + g}>{g} · {t('Gast')}</option>)}
+-                <option value={IGNORE}>{guests.length ? t('Ignorieren') : t('Gast / ignorieren')}</option>
++                {canName && <option value={NEW_GUEST}>{t('Neuer Gast …')}</option>}
++                <option value={IGNORE}>{canName ? t('Ignorieren') : t('Gast / ignorieren')}</option>
+               </select>
+             </div>
++            {naming?.speakerId === s.id && (
++              <div className="row" style={{ gap: 8 }}>
++                <input type="text" maxLength={80} autoFocus aria-label={t('Name des Gasts')} placeholder={t('Name des Gasts')} value={naming.name}
++                  onChange={(e) => setNaming({ speakerId: s.id, name: e.target.value })}
++                  onKeyDown={(e) => { if (e.key === 'Escape') setNaming(null); }} />
++                <button type="button" className="btn small" disabled={!naming.name.trim()} onClick={() => {
++                  const name = naming.name.trim();
++                  if (!guests.includes(name)) setGuests([...guests, name]);
++                  setMapping({ ...mapping, [s.id]: GUEST + name });
++                  setNaming(null);
++                }}>{t('Übernehmen')}</button>
++                <button type="button" className="btn small ghost" onClick={() => setNaming(null)}>{t('Abbrechen')}</button>
++              </div>
++            )}
+             {unsure && <strong style={{ color: 'var(--seal)', fontSize: 'calc(15px * var(--ts))' }}>{t('Nicht automatisch erkannt – bitte auswählen.')}</strong>}
+           </div>
+diff --git a/src/pages/TablePage.tsx b/src/pages/TablePage.tsx
+index 67af5fd..4bf4068 100644
+--- a/src/pages/TablePage.tsx
++++ b/src/pages/TablePage.tsx
+@@ -73,5 +73,14 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
+   }, []);
+   const web = !native && live && live.connId === currentConnectionId() && live.recorder.state !== 'idle' ? live : null;
+-  if (!web && (!st || (st.state !== 'recording' && st.state !== 'paused'))) return null;
++  // Noch keine Aufnahme: leise Zeile mit dem Weg zur Aufnahme (dort stimmen alle zu, dann startet sie)
++  if (!web && (!st || (st.state !== 'recording' && st.state !== 'paused'))) {
++    return (
++      <div className="table-rec idle">
++        <span className="table-rec-dot paused" aria-hidden />
++        <span style={{ flex: 1 }}>{t('Noch keine Aufnahme')}</span>
++        <Link className="btn small outline" to={p(`/k/${campaignId}/aufnahme`)}>{t('Aufnahme starten')}</Link>
++      </div>
++    );
++  }
+   const paused = web ? web.recorder.state === 'paused' : st!.state === 'paused';
+   const elapsedMs = web ? web.recorder.elapsedMs() : st!.elapsedMs;
+diff --git a/src/recorder/tableConsent.ts b/src/recorder/tableConsent.ts
+new file mode 100644
+index 0000000..c87231a
+--- /dev/null
++++ b/src/recorder/tableConsent.ts
+@@ -0,0 +1,36 @@
++/*
++ * Zustimmungen am Tisch (vor Ort, für diese Runde) und Gäste überstehen einen Seitenwechsel am selben Abend: gemerkt je
++ * Verbindung und Kampagne, höchstens 12 Stunden. Ohne Laufzeit-Importe (Test: scripts/tests/table-consent.test.mjs).
++ */
++export interface TableConsent { onSite: Record<string, string>; guests: { name: string; consentAt: string }[] }
++const MAX_MS = 12 * 3600_000;
++const key = (connId: string, campaignId: string) => `taleward.tableConsent.${connId}.${campaignId}`;
++
++export function loadTableConsent(connId: string, campaignId: string, now = Date.now()): TableConsent {
++  const empty: TableConsent = { onSite: {}, guests: [] };
++  try {
++    const raw = JSON.parse(localStorage.getItem(key(connId, campaignId)) ?? 'null');
++    if (!raw || typeof raw !== 'object' || typeof raw.savedAt !== 'number' || now - raw.savedAt > MAX_MS) return empty;
++    const fresh = (at: unknown) => typeof at === 'string' && now - Date.parse(at) <= MAX_MS;
++    const onSite = Object.fromEntries(Object.entries(raw.onSite ?? {}).filter(([, at]) => fresh(at))) as Record<string, string>;
++    const guests = Array.isArray(raw.guests)
++      ? raw.guests.filter((g: unknown): g is { name: string; consentAt: string } =>
++        !!g && typeof (g as { name?: unknown }).name === 'string' && fresh((g as { consentAt?: unknown }).consentAt))
++      : [];
++    return { onSite, guests };
++  } catch {
++    return empty;
++  }
++}
++
++export function saveTableConsent(connId: string, campaignId: string, c: TableConsent, now = Date.now()): void {
++  try {
++    if (!Object.keys(c.onSite).length && !c.guests.length) localStorage.removeItem(key(connId, campaignId));
++    else localStorage.setItem(key(connId, campaignId), JSON.stringify({ savedAt: now, ...c }));
++  } catch { /* dann eben nur bis zum Seitenwechsel */ }
++}
++
++/** Nach dem Hochladen oder Verwerfen: die Runde ist vorbei */
++export function clearTableConsent(connId: string, campaignId: string): void {
++  try { localStorage.removeItem(key(connId, campaignId)); } catch { /* egal */ }
++}
