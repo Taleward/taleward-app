@@ -1751,4 +1751,6 @@ export const en: Record<string, string> = {
   "Taleward weiterempfehlen": "Recommend Taleward",
   "Taleward hält eure Rollenspielrunden als Kapitel zum Nachlesen fest.": "Taleward keeps your roleplaying sessions as chapters to read back.",
   "Text mit Link kopiert.": "Text and link copied.",
+  "„{name}“ gehört auf diesem Gerät einem anderen Konto. Holst du ihn, siehst du auch dessen private Notizen und Unterlagen, und sein Stand geht an „{server}“.": "On this device, “{name}” belongs to another account. If you bring it over, you will also see its private notes and documents, and its details go to “{server}”.",
+  "Trotzdem holen": "Bring it over anyway",
 };

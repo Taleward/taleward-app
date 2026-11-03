@@ -18,6 +18,8 @@ export function FileViewer() {
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
+    // Nur Unterlagen eigener Charaktere (ein anderes Konto auf dem Gerät sieht sie nicht)
+    if (!getCharacter(characterId)) { setFile(null); return; }
     getFile(fileId).then((f) => setFile(f && f.characterId === characterId ? f : null)).catch((e) => { setError(e); setFile(null); });
   }, [fileId, characterId]);
 

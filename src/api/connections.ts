@@ -1,4 +1,6 @@
 import { removeCopiesOf } from './readCopy';
+import { forgetDeviceId } from './deviceId';
+import { dropQueueOf } from '../components/bookmarkQueue';
 import type { User } from './types';
 
 /**
@@ -159,8 +161,12 @@ export function updateConnection(id: string, change: Partial<Connection>): void 
 }
 
 export function removeConnection(id: string): void {
+  const gone = connections.find((c) => c.id === id);
   connections = connections.filter((c) => c.id !== id);
   persist();
+  // Gerätekennung dieses Servers nur löschen, wenn keine andere Verbindung zu ihm bleibt
+  if (gone && !connections.some((c) => c.baseUrl === gone.baseUrl)) forgetDeviceId(gone.baseUrl);
+  dropQueueOf(id);
   // Lesekopie dieses Servers mit entfernen (Abmelden, Konto gelöscht, Musterkampagne beendet)
   removeCopiesOf(id).catch(() => undefined);
 }

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { api, ApiRequestError } from '../api/client';
+import { api, apiFor, ApiRequestError } from '../api/client';
+import { currentConnection } from '../api/connections';
+import { accountKey } from '../characters/store';
+import { loadQueue, queueFor, saveQueue, type QueuedBookmark } from './bookmarkQueue';
 import type { Bookmark } from '../api/types';
 import { locale, t, tn } from '../i18n';
 import { ErrorBox } from './Screen';
@@ -9,34 +12,23 @@ import { ErrorBox } from './Screen';
  * die Person selbst, nie für die SL, nie im Kapitel. Ohne Netz merkt sich die App die Uhrzeit und schickt sie später.
  */
 
-interface Queued { sessionId: string; at: string; note: string | null }
-const QUEUE = 'taleward.bookmarkQueue';
-
-function loadQueue(): Queued[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(QUEUE) ?? '[]');
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
-function saveQueue(q: Queued[]): void {
-  try { localStorage.setItem(QUEUE, JSON.stringify(q.slice(-200))); } catch { /* dann geht es eben verloren */ }
-}
-
-/** Liegengebliebene Merkstellen senden; was der Server ablehnt (z. B. schon veröffentlicht), fällt weg */
+/** Liegengebliebene Merkstellen der aktiven Verbindung senden; was der Server ablehnt (z. B. schon veröffentlicht), fällt weg */
 async function flushQueue(): Promise<void> {
-  const q = loadQueue();
-  if (!q.length) return;
-  const rest: Queued[] = [];
-  for (const b of q) {
+  const conn = currentConnection();
+  const account = accountKey(conn);
+  const mine = queueFor(loadQueue(), conn.id, account);
+  if (!mine.length) return;
+  const client = apiFor(conn);
+  const keep: QueuedBookmark[] = [];
+  for (const b of mine) {
     try {
-      await api.addBookmark(b.sessionId, b.note, b.at);
+      await client.addBookmark(b.sessionId, b.note, b.at);
     } catch (e) {
-      if (e instanceof ApiRequestError && e.status === 0) rest.push(b);
+      if (e instanceof ApiRequestError && e.status === 0) keep.push(b);
     }
   }
-  saveQueue(rest);
+  const sent = (b: QueuedBookmark) => b.connId === conn.id && b.account === account && mine.some((m) => m.at === b.at && m.sessionId === b.sessionId);
+  saveQueue([...loadQueue().filter((b) => !sent(b)), ...keep]);
 }
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
@@ -66,7 +58,11 @@ export function LiveBookmark({ sessionId }: { sessionId: string }) {
     try {
       await api.addBookmark(sessionId, withNote?.trim() || null, at);
     } catch (e) {
-      if (e instanceof ApiRequestError && e.status === 0) saveQueue([...loadQueue(), { sessionId, at, note: withNote?.trim() || null }]);
+      if (e instanceof ApiRequestError && e.status === 0) {
+        const conn = currentConnection();
+        const account = accountKey(conn);
+        if (account) saveQueue([...loadQueue(), { connId: conn.id, account, sessionId, at, note: withNote?.trim() || null }]);
+      }
       else { setError(e); setCount((n) => n - 1); setLast(null); }
     }
   };

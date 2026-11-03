@@ -7,7 +7,7 @@ import { APP_VERSION, listConnections } from '../api/connections';
 import { t } from '../i18n';
 import { mergeCharacter } from './merge';
 import { sanitizeCharacter } from './sanitize';
-import { allStoredCharacters, listCharacters, myAccountKeys, putCharacters, type StoredCharacter } from './store';
+import { allStoredCharacters, getCharacter, listCharacters, myAccountKeys, putCharacters, type StoredCharacter } from './store';
 import { exportFiles, importFiles, type ExportedCharacterFile } from './files';
 
 export const BACKUP_FORMAT = 'taleward-charaktere/1';
@@ -106,8 +106,9 @@ export async function restoreBackup(text: string): Promise<RestoreResult> {
     take.push({ ...merged, owners: [...new Set([...(old?.owners ?? []), ...mine])] });
   }
   if (take.length) putCharacters(take);
-  // Unterlagen nur zu Charakteren, die jetzt (auch) diesem Konto gehören
-  const ids = new Set(incoming.map(sanitizeCharacter).filter((x): x is StoredCharacter => !!x).map((c) => c.id));
+  // Unterlagen nur zu Charakteren, die jetzt diesem Konto gehören (nie an Charaktere anderer Konten auf dem Gerät)
+  const ids = new Set(incoming.map(sanitizeCharacter).filter((x): x is StoredCharacter => !!x).map((c) => c.id)
+    .filter((id) => !!getCharacter(id)));
   if (data.format === CHARACTER_FORMAT) {
     const id = [...ids][0];
     if (id) await importFiles(id, data.files).catch(() => 0);

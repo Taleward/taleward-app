@@ -7,7 +7,8 @@ import { api } from '../api/client';
 import type { Campaign, CounterKind, Entry, Member } from '../api/types';
 import { CountersLine, MyCounters } from '../characters/Counters';
 import { levelText } from '../characters/levelField';
-import { accountKey, addOwners, allStoredCharacters, blobToPortrait, characterForCampaign, createCharacter, updateCharacter } from '../characters/store';
+import { accountKey, addOwners, allStoredCharacters, blobToPortrait, characterForCampaign, createCharacter, myAccountKeys, updateCharacter } from '../characters/store';
+import { adoptTarget } from '../characters/adopt';
 import { linkOutdated, pushToCampaign, serverHasCharacters } from '../characters/sync';
 import { useAuth } from '../auth/AuthContext';
 import { Avatar } from '../components/Avatar';
@@ -219,9 +220,12 @@ function CollectionActions({ campaign, member, onChanged, onEdit, children }: { 
 
   const adopt = () => run(async () => {
     // Steht schon eine Kennung am Platz, wird der Charakter mit derselben Kennung geholt (sonst lehnt der Server ab).
-    // Liegt er im Gerät nur unter einem anderen Konto, genügt es, dieses Konto als Besitzer einzutragen.
-    const known = member.characterId ? allStoredCharacters().find((x) => x.id === member.characterId) : undefined;
+    // Gehört er auf dem Gerät schon diesem Konto, wird er nur verknüpft. Gehört er einem anderen Konto, erst nachfragen:
+    // Mit dem Holen sähe dieses Konto dessen Notizen und Unterlagen, und der Stand ginge an diesen Server.
+    const target = adoptTarget(member.characterId, allStoredCharacters(), myAccountKeys());
+    const known = target === 'new' ? undefined : allStoredCharacters().find((x) => x.id === member.characterId);
     if (known) {
+      if (target === 'foreign' && !(await confirmDialog(t('„{name}“ gehört auf diesem Gerät einem anderen Konto. Holst du ihn, siehst du auch dessen private Notizen und Unterlagen, und sein Stand geht an „{server}“.', { name: known.name, server: currentConnection().name }), { confirmLabel: t('Trotzdem holen') }))) return;
       const key = accountKey(currentConnection());
       if (key) addOwners(known.id, [key]);
       await pushToCampaign(known.id, { connId, campaignId: campaign.id, campaignTitle: campaign.title, memberId: member.id });
