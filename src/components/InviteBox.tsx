@@ -11,6 +11,8 @@ import { ErrorBox } from './Screen';
 
 /** Mitspielende einladen: fertiger Link zum Teilen, Kopieren oder als QR-Code am Tisch */
 /** row: als letzte Zeile in „Am Tisch“ (Übersicht); sonst als eigener Knopf (z. B. beim Übergeben der Spielleitung) */
+export const OPEN_INVITE = 'taleward:open-invite';
+
 export function InviteBox({ campaignId, campaignTitle, row }: { campaignId: string; campaignTitle?: string; row?: boolean }) {
   const [invite, setInvite] = useState<{ code: string; expiresAt: string; link: string } | null>(null);
   const [qr, setQr] = useState<string | null>(null);
@@ -28,6 +30,14 @@ export function InviteBox({ campaignId, campaignTitle, row }: { campaignId: stri
       setError(e);
     }
   };
+
+  // „Los: Mitspielende einladen“ aus „So fängst du an“ öffnet die Einladung gleich
+  useEffect(() => {
+    if (!row) return;
+    const open = () => { if (!invite) create(); };
+    window.addEventListener(OPEN_INVITE, open);
+    return () => window.removeEventListener(OPEN_INVITE, open);
+  });
 
   useEffect(() => {
     if (!invite) return;

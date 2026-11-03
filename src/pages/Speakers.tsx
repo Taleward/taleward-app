@@ -11,6 +11,7 @@ import { ErrorBox, Screen } from '../components/Screen';
 import { swapAssignment } from '../voice/swap';
 
 const IGNORE = '__ignore';
+const NEW_GUEST = '__new_guest';
 const GUEST = 'guest:';
 
 /** Vorschlag des Servers als Wert der Auswahl: Mitglied oder (ab 0.4.24) Gast der Runde, sonst leer */
@@ -28,6 +29,9 @@ export function Speakers() {
   // Gäste der Runde (aus der Anwesenheit); benennbar ab Schnittstelle 0.4.7
   const [guests, setGuests] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  // Stimme, für die gerade ein neuer Gast benannt wird, und der eingetippte Name
+  const [naming, setNaming] = useState<{ speakerId: string; name: string } | null>(null);
+  const canName = serverHasCharacters(currentConnection());
   // Ab Schnittstelle 0.4.10: Zuordnung nach der Bestätigung ansehen und – solange das Kapitel auf Prüfung wartet – ändern
   const [session, setSession] = useState<Session | null>(null);
   const [initial, setInitial] = useState<Record<string, string>>({});
@@ -183,7 +187,12 @@ export function Speakers() {
             )}
             <div className="field">
               <label htmlFor={`sp-${s.id}`}>{t('Person')}</label>
-              <select id={`sp-${s.id}`} disabled={!editable} value={mapping[s.id] ?? ''} onChange={(e) => setMapping({ ...mapping, [s.id]: e.target.value })}>
+              <select id={`sp-${s.id}`} disabled={!editable} value={naming?.speakerId === s.id ? NEW_GUEST : mapping[s.id] ?? ''}
+                onChange={(e) => {
+                  if (e.target.value === NEW_GUEST) { setNaming({ speakerId: s.id, name: '' }); return; }
+                  if (naming?.speakerId === s.id) setNaming(null);
+                  setMapping({ ...mapping, [s.id]: e.target.value });
+                }}>
                 <option value="">{t('Bitte wählen …')}</option>
                 {campaign?.members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -191,9 +200,24 @@ export function Speakers() {
                   </option>
                 ))}
                 {guests.map((g) => <option key={g} value={GUEST + g}>{g} · {t('Gast')}</option>)}
-                <option value={IGNORE}>{guests.length ? t('Ignorieren') : t('Gast / ignorieren')}</option>
+                {canName && <option value={NEW_GUEST}>{t('Neuer Gast …')}</option>}
+                <option value={IGNORE}>{canName ? t('Ignorieren') : t('Gast / ignorieren')}</option>
               </select>
             </div>
+            {naming?.speakerId === s.id && (
+              <div className="row" style={{ gap: 8 }}>
+                <input type="text" maxLength={80} autoFocus aria-label={t('Name des Gasts')} placeholder={t('Name des Gasts')} value={naming.name}
+                  onChange={(e) => setNaming({ speakerId: s.id, name: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setNaming(null); }} />
+                <button type="button" className="btn small" disabled={!naming.name.trim()} onClick={() => {
+                  const name = naming.name.trim();
+                  if (!guests.includes(name)) setGuests([...guests, name]);
+                  setMapping({ ...mapping, [s.id]: GUEST + name });
+                  setNaming(null);
+                }}>{t('Übernehmen')}</button>
+                <button type="button" className="btn small ghost" onClick={() => setNaming(null)}>{t('Abbrechen')}</button>
+              </div>
+            )}
             {unsure && <strong style={{ color: 'var(--seal)', fontSize: 'calc(15px * var(--ts))' }}>{t('Nicht automatisch erkannt – bitte auswählen.')}</strong>}
           </div>
         );

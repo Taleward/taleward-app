@@ -72,7 +72,16 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
     return () => window.clearInterval(id);
   }, []);
   const web = !native && live && live.connId === currentConnectionId() && live.recorder.state !== 'idle' ? live : null;
-  if (!web && (!st || (st.state !== 'recording' && st.state !== 'paused'))) return null;
+  // Noch keine Aufnahme: leise Zeile mit dem Weg zur Aufnahme (dort stimmen alle zu, dann startet sie)
+  if (!web && (!st || (st.state !== 'recording' && st.state !== 'paused'))) {
+    return (
+      <div className="table-rec idle">
+        <span className="table-rec-dot paused" aria-hidden />
+        <span style={{ flex: 1 }}>{t('Noch keine Aufnahme')}</span>
+        <Link className="btn small outline" to={p(`/k/${campaignId}/aufnahme`)}>{t('Aufnahme starten')}</Link>
+      </div>
+    );
+  }
   const paused = web ? web.recorder.state === 'paused' : st!.state === 'paused';
   const elapsedMs = web ? web.recorder.elapsedMs() : st!.elapsedMs;
   const toggle = async () => {

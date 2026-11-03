@@ -16,7 +16,9 @@ import { blobFile, isRejectedRecording, uploadSessionAudio, type UploadFile } fr
 import { clearSpans, spanClose, spanOpen, spansFor } from '../recorder/spans';
 import { ConsentHandover } from '../components/ConsentHandover';
 import { IconCheck, IconMic, IconPlus } from '../components/Icons';
-import { CONSENT_ON_SITE } from '../consent';
+import { CONSENT_ON_SITE, CONSENT_STANDING } from '../consent';
+import { useAuth } from '../auth/AuthContext';
+import { clearTableConsent, loadTableConsent, saveTableConsent } from '../recorder/tableConsent';
 import { MicDenied } from '../components/MicDenied';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { useAsync } from '../components/useAsync';
@@ -59,12 +61,18 @@ export function Recording() {
 
   const [present, setPresent] = useState<Record<string, boolean>>({});
   // Vor Ort selbst bestätigte Zustimmungen (Mitglied ohne App-Zustimmung) und Gäste ohne Konto
-  const [onSite, setOnSite] = useState<Record<string, string>>({});
-  const [guests, setGuests] = useState<{ name: string; consentAt: string }[]>([]);
+  // Am selben Abend gemerkt: ein Seitenwechsel (z. B. zur Chronik) nimmt keine Zustimmung mehr weg
+  const [onSite, setOnSite] = useState<Record<string, string>>(() => loadTableConsent(currentConnection().id, campaignId).onSite);
+  const [guests, setGuests] = useState<{ name: string; consentAt: string }[]>(() => loadTableConsent(currentConnection().id, campaignId).guests);
+  useEffect(() => { saveTableConsent(currentConnection().id, campaignId, { onSite, guests }); }, [onSite, guests, campaignId]);
+  const { user } = useAuth();
+  // Gewählte Datei bleibt, auch wenn das Hochladen scheitert (z. B. fehlende Zustimmung)
+  const [tableFile, setTableFile] = useState<File | null>(null);
+  const [starting, setStarting] = useState(false);
   const [guestName, setGuestName] = useState('');
   const serverInfo = useServerInfo();
   const [addingGuest, setAddingGuest] = useState(false);
-  const [handover, setHandover] = useState<{ memberId?: string; name: string } | null>(null);
+  const [handover, setHandover] = useState<{ memberId?: string; name: string; self?: boolean } | null>(null);
   const [phase, setPhase] = useState<Phase>('prepare');
   const [showTip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
   // Zurück-Taste warnt, solange aufgenommen wird
@@ -194,6 +202,8 @@ export function Recording() {
     if (!handover) return;
     const at = new Date().toISOString();
     if (handover.memberId) setOnSite({ ...onSite, [handover.memberId]: at });
+    // Die eigene Zustimmung gilt gleich für die ganze Kampagne (wie „Ich stimme zu“ auf der Übersicht)
+    if (handover.self) api.setRecordingConsent(campaignId, true).catch(() => undefined);
     else setGuests([...guests, { name: handover.name, consentAt: at }]);
     setGuestName('');
     setAddingGuest(false);
@@ -207,19 +217,33 @@ export function Recording() {
     return s.id;
   };
 
+  /** Eine gerade erst angelegte Runde ohne Aufnahme wieder entfernen, damit kein leeres Kapitel stehen bleibt */
+  const dropEmptySession = async (id: string | null) => {
+    if (!id) return;
+    sessionId.current = null;
+    clearSpans(id);
+    await api.deleteSession(id).catch(() => undefined);
+  };
+
   /** storedId: Aufnahme im Zwischenspeicher des Browsers – nach erfolgreichem Hochladen löschen, sonst wieder anbieten */
   const upload = async (source: 'table' | 'discord', files: UploadFile[], existingSessionId?: string, storedId?: string | null, elapsedMs?: number) => {
     setPhase('uploading');
     setProgress(0);
     setError(null);
+    // Nur bei gewählten Dateien: Die Runde entsteht erst hier und darf beim Scheitern nicht leer stehen bleiben
+    const fileOnly = !existingSessionId && !storedId && elapsedMs == null && !sessionId.current;
+    let created: string | null = null;
     try {
       const id = existingSessionId ?? (await ensureSession());
+      if (fileOnly) created = id;
       // Aufnahmezeiten nur zu einer Aufnahme dieses Geräts; bei hochgeladenen Dateien gibt es keine
       const spans = source === 'table' && (existingSessionId || storedId || elapsedMs != null) ? spansFor(id, elapsedMs) : undefined;
       await uploadSessionAudio(id, source, files, setProgress, spans);
       clearSpans(id);
       if (native && existingSessionId) await BackgroundRecorder.discard({ sessionId: id }).catch(() => undefined);
       if (storedId) await removeRecording(storedId).catch(() => undefined);
+      clearTableConsent(currentConnection().id, campaignId);
+      setTableFile(null);
       navigate(p(`/s/${id}`), { replace: true });
     } catch (e) {
       const kept = storedId ? (await leftoverRecordings(currentConnection().id).catch(() => [])).find((r) => r.id === storedId) : undefined;
@@ -235,6 +259,7 @@ export function Recording() {
         if (st.state === 'stopped') setLeftover(st);
       }
       if (kept) setWebLeftover(kept);
+      if (created) await dropEmptySession(created);
       setPhase('prepare');
     }
   };
@@ -274,7 +299,14 @@ export function Recording() {
   const start = async () => {
     setError(null);
     setMicDenied(false);
+    setStarting(true);
+    const hadSession = !!sessionId.current;
     try {
+      // Browser: erst das Mikrofon freigeben lassen, dann die Runde anlegen – sonst bliebe bei „Nein“ ein leeres Kapitel
+      if (!native && navigator.mediaDevices?.getUserMedia) {
+        const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+        probe.getTracks().forEach((tr) => tr.stop());
+      }
       const id = await ensureSession();
       if (native) {
         await BackgroundRecorder.start({
@@ -296,8 +328,11 @@ export function Recording() {
       // Der Knopf wandert in die Mitte und wächst, „Am Tisch“ klappt weg (ohne Unterstützung: einfach umschalten)
       withTransition(() => setPhase('recording'));
     } catch (e) {
+      if (!hadSession) await dropEmptySession(sessionId.current);
       if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
       else setError(e);
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -316,9 +351,7 @@ export function Recording() {
         if (storedId) await removeRecording(storedId).catch(() => undefined);
       }
       // Die angelegte, leere Runde auf dem Server wieder entfernen (ältere Server: bleibt liegen, schadet nicht)
-      if (id) await api.deleteSession(id).catch(() => undefined);
-      if (id) clearSpans(id);
-      sessionId.current = null;
+      await dropEmptySession(id);
       setElapsed(0);
       setPaused(false);
       withTransition(() => setPhase('prepare'));
@@ -365,8 +398,8 @@ export function Recording() {
     await upload('table', [blobFile(blob, `aufnahme.${fileExtension(blob.type)}`)], undefined, storedId, elapsedMs);
   };
 
-  const pickFile = (file: File | undefined) => {
-    if (file) upload('table', [blobFile(file, file.name)]);
+  const sendTableFile = () => {
+    if (tableFile) upload('table', [blobFile(tableFile, tableFile.name)]);
   };
 
   const pickDiscord = (files: FileList | null) => {
@@ -440,9 +473,13 @@ export function Recording() {
                 </label>
                 {present[m.id] && (hasConsent(m)
                   ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
-                  : <button type="button" className="btn small outline" onClick={() => setHandover({ memberId: m.id, name: m.displayName })}>
-                      {t('Zustimmen lassen')}
-                    </button>)}
+                  : m.userId === user?.id
+                    ? <button type="button" className="btn small outline" onClick={() => setHandover({ memberId: m.id, name: m.displayName, self: true })}>
+                        {t('Zustimmen')}
+                      </button>
+                    : <button type="button" className="btn small outline" onClick={() => setHandover({ memberId: m.id, name: m.displayName })}>
+                        {t('Zustimmen lassen')}
+                      </button>)}
               </div>
             ))}
             {guests.map((g) => (
@@ -461,6 +498,7 @@ export function Recording() {
                     onClick={() => setHandover({ name: guestName.trim() })}>
                     {t('Weiter')}
                   </button>
+                  <button type="button" className="btn small ghost" onClick={() => { setAddingGuest(false); setGuestName(''); }}>{t('Abbrechen')}</button>
                 </div>
               ) : (
                 // Wie „Mitspielende einladen“ auf der Übersicht: eine leise Zeile statt eines Knopfs
@@ -485,11 +523,11 @@ export function Recording() {
       <div className="b">
           {/* Am Handy steht der Knopf über „Am Tisch“ (rec-start, siehe theme.css) */}
           <div className="rec-start" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '8px 0' }}>
-            <button type="button" className="rec-button rec-morph" disabled={!allConsented} onClick={start} aria-label={t('Aufnahme starten')}>
+            <button type="button" className="rec-button rec-morph" disabled={!allConsented || starting} onClick={start} aria-label={t('Aufnahme starten')}>
               <IconMic size={48} />
             </button>
             <div className="muted small" style={{ textAlign: 'center' }}>
-              {allConsented ? t('Aufnahme starten') : t('Wartet auf alle Zustimmungen')}
+              {starting ? t('Warte auf die Freigabe des Mikrofons …') : allConsented ? t('Aufnahme starten') : t('Wartet auf alle Zustimmungen')}
             </div>
             {showTip && <div className="muted small" style={{ textAlign: 'center' }}>{t('Tipp: Zu Beginn sagt jede Person Name und Charakter.')}</div>}
             {cloud.transcription?.primary && (
@@ -502,8 +540,20 @@ export function Recording() {
           <details className="card">
             <summary style={{ fontWeight: 700 }}>{t('Vorhandene Aufnahme hochladen')}</summary>
             <div className="field" style={{ marginTop: 8 }}>
-              <label htmlFor="file-table">{t('Tischaufnahme (eine Datei)')}</label>
-              <input id="file-table" type="file" accept="audio/*" disabled={!allConsented} onChange={(e) => pickFile(e.target.files?.[0])} />
+              <span className="label">{t('Tischaufnahme (eine Datei)')}</span>
+              <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+                <label className="btn small outline" style={{ position: 'relative' }}>
+                  {tableFile ? t('Andere Datei') : t('Datei wählen')}
+                  <input id="file-table" type="file" accept="audio/*"
+                    onChange={(e) => { setTableFile(e.target.files?.[0] ?? tableFile); e.target.value = ''; }}
+                    style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }} />
+                </label>
+                {tableFile && <span className="small" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{tableFile.name}</span>}
+              </div>
+              <span className="muted small">{t('Eine Audiodatei, zum Beispiel MP3, M4A, OGG oder WAV.')}</span>
+              {tableFile && (
+                <button type="button" className="btn small" style={{ alignSelf: 'flex-start' }} disabled={!allConsented} onClick={sendTableFile}>{t('Hochladen')}</button>
+              )}
             </div>
             <div className="field" style={{ marginTop: 8 }}>
               <label htmlFor="file-discord">{t('Discord-Spuren (eine Datei pro Person)')}</label>
@@ -608,7 +658,8 @@ export function Recording() {
       {handover && (
         <ConsentHandover
           name={handover.name}
-          text={CONSENT_ON_SITE(campaign.title, { retention: serverInfo?.audioRetention, cloudProvider: cloud.transcription?.provider ?? null, summaryProvider: cloud.summary?.provider ?? null })}
+          self={handover.self}
+          text={(handover.self ? CONSENT_STANDING : CONSENT_ON_SITE)(campaign.title, { retention: serverInfo?.audioRetention, cloudProvider: cloud.transcription?.provider ?? null, summaryProvider: cloud.summary?.provider ?? null })}
           onConsent={confirmHandover}
           onCancel={() => setHandover(null)}
         />

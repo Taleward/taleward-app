@@ -12,7 +12,7 @@ import { prepWhen } from '../prep/prep';
 import { isDeletedMember } from '../api/types';
 import { LockNote, SettingsLog, useCampaignSettings } from '../components/CampaignSettings';
 import { PayerSection } from '../billing/PayerSection';
-import { InviteBox } from '../components/InviteBox';
+import { InviteBox, OPEN_INVITE } from '../components/InviteBox';
 import { confirmDialog } from '../components/confirm';
 import { PENDING_LABEL } from './Chronicle';
 import { GameSystemFields, systemLabel } from '../components/GameSystemFields';
@@ -80,7 +80,10 @@ export function Overview() {
   const serverInfo = useServerInfo();
   const pending = sessions?.filter((s) => s.state !== 'published') ?? [];
   const needMe = pending.filter((s) => needsMe(s.state));
-  const working = pending.filter((s) => !needsMe(s.state));
+  // Noch keine Runde mit Aufnahme (leere Runden ohne Aufnahme zählen nicht): „So fängst du an“ bleibt stehen
+  const fresh = !!sessions && !sessions.some((s) => s.state !== 'created');
+  // Runden ohne Aufnahme (state created) sind keine Arbeit des Servers
+  const working = pending.filter((s) => !needsMe(s.state) && s.state !== 'created');
   // Gerade aus einer Umzugsdatei übernommen: einmal sagen, wie es hier weitergeht
   const imported = !!(useLocation().state as { imported?: boolean } | null)?.imported;
   const latest = sessions?.find((s) => s.state === 'published');
@@ -127,8 +130,8 @@ export function Overview() {
             </div>
           )}
           {/* Frische Kampagne der SL: „So fängst du an“ trägt den Hauptknopf, die eigene Zustimmung steht ruhiger daneben */}
-          {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} quiet={gm && sessions?.length === 0} />}
-          {gm && sessions?.length === 0 && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
+          {me && !me.recordingConsentAt && <RecordingConsent campaign={campaign} onChanged={load} quiet={gm && fresh} />}
+          {gm && fresh && <FirstSteps campaign={campaign} onCover={() => { setPickingCover(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />}
           {prep === 'today' && prepCard}
           <NowList items={[
             ...(termsNotice ? [{ key: 'terms', label: t('Neue Nutzungsbedingungen bei „{name}“', { name: currentConnection().name }), detail: termsNotice, hideDetailTitle: true }] : []),
@@ -180,7 +183,7 @@ export function Overview() {
             </Link>
           )}
           {/* Die SL hat dafür „So fängst du an“ */}
-          {sessions?.length === 0 && !gm && (
+          {fresh && !gm && (
             <div className="notice">
               <span style={{ flexShrink: 0, color: 'var(--ink-faint)' }}><IconInfo /></span>
               <span>{t('Noch kein Kapitel veröffentlicht.')}</span>
@@ -202,7 +205,7 @@ export function Overview() {
           <div className="b">
           <Divider />
           {/* Stimmprofil ist freiwillig: erst wenn die Zustimmung steht und (bei der SL) die erste Runde aufgenommen ist */}
-          <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && sessions?.length === 0)} />
+          <Members campaign={campaign} onChanged={load} voiceHint={!!me?.recordingConsentAt && !(gm && fresh)} />
 
           {me && <CampaignManage campaign={campaign} me={me} info={serverInfo} onChanged={load} onPickCover={() => {
             setPickingCover(true);
@@ -233,7 +236,7 @@ function FirstSteps({ campaign, onCover }: { campaign: Campaign; onCover: () => 
   const players = campaign.members.filter((m) => m.role === 'player' && !isDeletedMember(m) && m.userId).length;
   const steps = [
     { label: t('Mitspielende einladen'), detail: t('Per Link oder QR-Code. Wer kein Konto hat, kommt am Abend als Gast dazu.'), done: players > 0,
-      go: () => document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }) },
+      go: () => { document.getElementById('invite')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); window.dispatchEvent(new Event(OPEN_INVITE)); } },
     { label: t('Die Welt beschreiben'), detail: t('Freiwillig, ein paar Sätze reichen. Hilft beim Schreiben der Kapitel.'), done: !!campaign.worldInfo?.trim(),
       go: () => window.dispatchEvent(new Event(EDIT_WORLD)) },
     { label: t('Erste Runde aufnehmen'), detail: t('Am Spielabend unter „Aufnahme“. Jede Person am Tisch stimmt dort selbst zu, danach schreibt der Server das Kapitel.'), done: false,
@@ -346,7 +349,9 @@ export function RecordingConsent({ campaign, onChanged, quiet, row }: { campaign
         <>
           <button type="button" className={quiet ? 'btn outline' : 'btn'} disabled={busy} onClick={() => change(true)}>{t('Ich stimme zu')}</button>
           <p className="muted small" style={{ margin: 0 }}>
-            {t('Ohne Zustimmung wird nicht aufgenommen, solange du am Tisch sitzt.')}
+            {campaign.myRole === 'gm'
+              ? t('Du wirst mit aufgenommen, darum stimmst auch du zu. Sonst kann nicht aufgenommen werden.')
+              : t('Ohne Zustimmung wird nicht aufgenommen, solange du am Tisch sitzt.')}
           </p>
         </>
       )}
@@ -766,6 +771,9 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
             <button type="button" className="list-row nav" onClick={onPickCover}>
               <span className="lr-text">{hasCover(campaign) ? t('Titelbild ändern') : t('Titelbild wählen')}</span>
             </button>
+            <Link className="list-row nav" to={p(`/k/${campaign.id}/unterlagen`)}>
+              <span className="lr-text">{t('Unterlagen der SL')}<span className="lr-sub">{t('Abenteuer, Notizen, Karten')}</span></span>
+            </Link>
             {!muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
             <UsageRow campaignId={campaign.id} />
           </div>
