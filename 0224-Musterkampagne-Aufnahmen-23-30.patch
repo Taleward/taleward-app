@@ -1,0 +1,468 @@
+From d09ad78df76a6a41bfb78b91853c6aa41a05c9c1 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Wed, 4 Nov 2026 13:28:54 +0100
+Subject: [PATCH] =?UTF-8?q?Musterkampagne:=20Z=C3=A4hler,=20Pronomen,=20St?=
+ =?UTF-8?q?ufe,=20Vorschl=C3=A4ge=20von=20Spielenden,=20Merkstellen,=20Cha?=
+ =?UTF-8?q?rakterbogen;=20Z=C3=A4hler-Erkl=C3=A4rung=20ganz=20lesbar;=20Au?=
+ =?UTF-8?q?fnahmen=2023-30?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/screenshots.mjs       | 96 +++++++++++++++++++++++++++++++++--
+ src/api/musterRuntime.ts      |  2 +-
+ src/mocks/handlers.ts         |  2 +-
+ src/mocks/installMockFetch.ts |  4 +-
+ src/mocks/minipdf.ts          | 54 ++++++++++++++++++++
+ src/mocks/muster/de-b.ts      | 32 ++++++++++++
+ src/mocks/muster/en-b.ts      | 32 ++++++++++++
+ src/mocks/muster/seed.ts      | 34 ++++++++++++-
+ src/mocks/muster/types.ts     | 16 ++++++
+ src/mocks/players.ts          |  6 +++
+ src/theme.css                 |  4 +-
+ 11 files changed, 270 insertions(+), 12 deletions(-)
+
+diff --git a/scripts/screenshots.mjs b/scripts/screenshots.mjs
+index 5129dd4..144569a 100644
+--- a/scripts/screenshots.mjs
++++ b/scripts/screenshots.mjs
+@@ -31,10 +31,12 @@ const L = {
+     all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701',
+     played: 'Gespielt', search: 'Sefa Mor', note: 'Ohm Tessel kennt Maras Mutter. Erst sagen, wenn sie fragt.\nPause nach der Brücke.', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.',
+-    analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund' },
++    analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund',
++    mark: 'Stelle merken', mine: 'Deine Vorschläge', files: 'Unterlagen', marks: 'Deine Merkstellen', bigger: 'Größer' },
+   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
+     accept: 'Accept', publish: 'Publish chapter', invite: 'Invite players', qr: 'Show QR code',
+     all: 'All (', world: 'Character lore', mara: '00000000-0000-4000-8000-000000000801',
+     played: 'Played', search: 'Sefa Mor', note: 'Ohm Tessel knew Mara\'s mother. Only say so if she asks.\nBreak after the bridge.', hint: 'She did not flee. She left before they could come for her.',
+-    analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory' }
++    analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory',
++    mark: 'Mark this moment', mine: 'Your suggestions', files: 'Documents', marks: 'Your marks', bigger: 'Larger' }
+ };
+ 
+@@ -50,6 +52,10 @@ const GM = [16, 17, 18];
+ // „Jetzt dran“ der SL mit aufgeklappter Bitte, „Mitgebrachte Welt“ mit Herkunft, „Was mit deinen Daten passiert“
+ const ANALYSIS = [19, 20, 21, 22];
++// 23–30: Spielende tragen bei (Schnittstelle 0.4.28/0.4.29) – laufende Runde mit „Stelle merken“, Kapitel mit Merkstellen,
++// Bibel der Spielerin mit eigenen Vorschlägen, Vorschläge von Spielenden bei der SL, Charakterseite mit Zählern, Pronomen
++// und Stufe, Unterlagen in der Sammlung, PDF-Leser mit erfundenem Bogen, Beute mit „Bei wem?“
++const PLAYERS = [23, 24, 25, 26, 27, 28, 29, 30];
+ // Website (Wunsch 27.10.): jede Aufnahme in beiden Sprachen und beiden Themen
+-const WEB = [1, 2, 4, 5, 6, 7, 8, 9, 10, 12, ...START, 16, 17, 18, 19, 21, 22];
++const WEB = [1, 2, 4, 5, 6, 7, 8, 9, 10, 12, ...START, 16, 17, 18, 19, 21, 22, ...PLAYERS];
+ const RUNS = [
+   { lang: 'de', theme: 'pergament', shots: [...WEB, 11, 13, 14, 20] },
+@@ -66,4 +72,14 @@ for (const run of RUNS) {
+   const t = L[run.lang];
+   const page = await browser.newPage();
++  // Spielabend: die Uhr der Seite auf heute 20:40 stellen (Uhr am SL-Schirm, „Gemerkt um“); Abstände bleiben echt
++  await page.evaluateOnNewDocument(() => {
++    const Real = Date, t = new Real(); t.setHours(20, 40, 0, 0);
++    const shift = t.getTime() - Real.now();
++    class Abend extends Real {
++      constructor(...a) { if (a.length) super(...a); else super(Real.now() + shift); }
++      static now() { return Real.now() + shift; }
++    }
++    window.Date = Abend;
++  });
+   const errors = [];
+   page.on('pageerror', (e) => errors.push(e.message));
+@@ -188,4 +204,8 @@ for (const run of RUNS) {
+       }));
+     }, t.cid);
++    // Die leise Zeile „Noch keine Aufnahme“ ausblenden (die Uhr zeigt den Spielabend, nicht die Aufnahme)
++    await page.evaluateOnNewDocument(() => document.addEventListener('DOMContentLoaded', () => {
++      const st = document.createElement('style'); st.textContent = '.table-rec.idle{display:none!important}'; document.head.append(st);
++    }));
+     await page.setViewport({ width: 1600, height: 1000, deviceScaleFactor: 1.6, hasTouch: true });
+     await go(`${k}/tisch`); await wait(800);
+@@ -214,6 +234,6 @@ for (const run of RUNS) {
+   await page.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => /^(Veröffentlichen|Publish)$/.test(b.textContent.trim()))?.click()); await wait(1500);
+   await go(`${k}/bibel`);
+-  await page.evaluate(() => [...document.querySelectorAll('.card-title')].find((c) => c.textContent.trim() === 'Oren Silt')?.closest('.card')?.scrollIntoView({ block: 'start' }));
+-  await page.evaluate(() => document.querySelector('.screen-main').scrollBy(0, -12));
++  // Liste mit Reitern, Reiter NSCs: dort steht ein Eintrag „Nur SL“ (Edmar Quell) ohne Blättern im Bild
++  await go(`${k}/bibel?art=npc`);
+   await shot(7);
+ 
+@@ -298,4 +318,70 @@ for (const run of RUNS) {
+   }
+ 
++  if (run.shots.some((n) => PLAYERS.includes(n))) {
++    const top = (sel, text) => page.evaluate((sl, txt) => {
++      const el = [...document.querySelectorAll(sl)].find((x) => !txt || x.textContent.trim().startsWith(txt));
++      el?.scrollIntoView({ block: 'start' });
++      document.querySelector('.screen-main')?.scrollBy(0, -12);
++      return !!el;
++    }, sel, text);
++    const memberOf = (who) => page.evaluate(async (base, cid, w) => {
++      const c = await fetch(`${base}/api/v1/campaigns/${cid}`, { headers: { Authorization: `Bearer mock-token:u-${w}` } }).then((r) => r.json());
++      return c.members.find((m) => m.userId === `u-${w}`).id;
++    }, SERVER, t.cid, who);
++
++    // 30: Beute mit „Bei wem?“ (SL)
++    await login('anja');
++    await go(`${k}/bibel?art=item&e=e-${t.cid}-abschrift`); await shot(30);
++    // 26: Vorschläge von Spielenden bei der SL
++    await go(`${k}/bibel?vorschlaege=1`); await shot(26);
++
++    await login('lea');
++    const lea = await memberOf('lea');
++    // 27: Charakterseite der Spielerin mit Pronomen, Stufe und Zählern
++    await go(`${k}/charakter/${lea}`); await shot(27);
++    // 25: Bibel aus Spielersicht mit eigenen Vorschlägen
++    await go(`${k}/bibel`); await top('h2', t.mine); await shot(25);
++    // 24: Kapitel 7 mit Merkstellen
++    await go(`/v/${conn}/s/s-${t.cid}-7/recap`);
++    await top('h2', t.marks); await page.evaluate(() => document.querySelector('.screen-main')?.scrollBy(0, -520));
++    await shot(24);
++
++    if (run.shots.some((n) => n === 28 || n === 29)) {
++      // Erfundener Charakterbogen als PDF in die Sammlung (nur auf diesem Gerät)
++      await page.evaluate((lang) => {
++        const c = JSON.parse(localStorage.getItem('session-chronik.connections')).find((x) => x.user?.username === 'lea');
++        localStorage.setItem('taleward.characters', JSON.stringify(window.__talewardDemo.musterCollection(lang, 'lea', c.id, c.name, `${c.baseUrl}|${c.user.id}`)));
++      }, run.lang);
++      await go(`/charaktere/${t.mara}`);
++      // Die Unterlagen bleiben im Browser über die Läufe hinweg: nur einmal anhängen
++      await page.evaluate((lang) => {
++        if (document.querySelector('.file-row')) return;
++        const input = document.querySelector('section input[type=file][multiple]');
++        const dt = new DataTransfer();
++        dt.items.add(window.__talewardDemo.musterSheet(lang));
++        input.files = dt.files;
++        input.dispatchEvent(new Event('change', { bubbles: true }));
++      }, run.lang);
++      await wait(1500);
++      await top('h2', t.files); await shot(28);
++      await page.evaluate(() => document.querySelector('.file-row a.list-row')?.click()); await wait(3000);
++      await wait(1500);
++      await shot(29);
++    }
++
++    // 23: Übersicht der Spielerin während einer laufenden Runde; einmal gemerkt
++    await page.evaluate(async (base, cid, ids) => {
++      await fetch(`${base}/api/v1/campaigns/${cid}/sessions`, {
++        method: 'POST', headers: { Authorization: 'Bearer mock-token:u-anja', 'Content-Type': 'application/json' },
++        body: JSON.stringify({ playedAt: new Date(Date.now() - 70 * 60000).toISOString(),
++          attendees: ids.map((memberId) => ({ memberId, consent: true, consentSource: 'app' })) })
++      });
++    }, SERVER, t.cid, [await memberOf('anja'), lea, await memberOf('tom')]);
++    await go('/'); await go(k);
++    await page.evaluate((txt) => [...document.querySelectorAll('.live-bookmark button')].find((b) => b.textContent.trim() === txt)?.click(), t.mark);
++    await wait(600);
++    await shot(23);
++  }
++
+   if (errors.length) console.log('   Fehler in der Seite:', errors);
+   await page.close();
+diff --git a/src/api/musterRuntime.ts b/src/api/musterRuntime.ts
+index 43a00d8..0818cae 100644
+--- a/src/api/musterRuntime.ts
++++ b/src/api/musterRuntime.ts
+@@ -49,5 +49,5 @@ export async function startMuster(role: MusterRole): Promise<Connection> {
+   try { localStorage.setItem(KEY, JSON.stringify({ lang })); } catch { /* egal */ }
+   await install(lang);
+-  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.21', token: null, expiresAt: null, user: null });
++  const probe = saveConnection({ baseUrl: MUSTER_BASE_URL, name: t('Musterkampagne'), operator: null, apiVersion: '0.4.29', token: null, expiresAt: null, user: null });
+   const res = await apiFor(probe).login(role, 'muster');
+   const conn = saveConnection({ ...probe, name: t('Musterkampagne'), token: res.accessToken, expiresAt: res.expiresAt, user: res.user });
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 8ff889b..c5dba0c 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -646,5 +646,5 @@ export const handlers = [
+     if (hostKey(request) === DEMO_HOST) {
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.21', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.29', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
+diff --git a/src/mocks/installMockFetch.ts b/src/mocks/installMockFetch.ts
+index 45869e7..472dce8 100644
+--- a/src/mocks/installMockFetch.ts
++++ b/src/mocks/installMockFetch.ts
+@@ -2,5 +2,5 @@ import { getResponse } from 'msw';
+ import { handlers } from './handlers';
+ import { ME } from './db';
+-import { DEMO_USERS, musterCollection, seedMuster } from './muster/seed';
++import { DEMO_USERS, musterCollection, musterSheet, seedMuster } from './muster/seed';
+ 
+ const DEFAULT_ME = { ...ME };
+@@ -19,5 +19,5 @@ export function installMockFetch(options: { lang: 'de' | 'en'; onlyHost?: string
+   if (!options.onlyHost) {
+     // Für die Aufnahmen (scripts/screenshots.mjs): Sammlung „Meine Charaktere“ der Musterkampagne
+-    (window as unknown as { __talewardDemo: unknown }).__talewardDemo = { musterCollection };
++    (window as unknown as { __talewardDemo: unknown }).__talewardDemo = { musterCollection, musterSheet };
+   }
+   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+diff --git a/src/mocks/minipdf.ts b/src/mocks/minipdf.ts
+index a2d72ba..ec9dfc3 100644
+--- a/src/mocks/minipdf.ts
++++ b/src/mocks/minipdf.ts
+@@ -76,4 +76,8 @@ export function textToPdf(pages: string[], title = ''): Uint8Array {
+     kids.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${content} 0 R >>`));
+   });
++  return finish(objects, catalog, pagesObj, kids, title, add);
++}
++
++function finish(objects: string[], catalog: number, pagesObj: number, kids: number[], title: string, add: (b: string) => number): Uint8Array {
+   objects[catalog - 1] = `<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
+   objects[pagesObj - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;
+@@ -93,2 +97,52 @@ export function textToPdf(pages: string[], title = ''): Uint8Array {
+   return new Uint8Array(encode(out));
+ }
++
++export interface SheetData {
++  title: string;
++  subtitle: string;
++  /** Werte in Kästen, z. B. [„Kraft“, „10“] */
++  stats: [string, string][];
++  /** Abschnitte mit Überschrift und Zeilen */
++  sections: [string, string[]][];
++}
++
++/** Gestalteter Bogen auf einer A4-Seite: Titel, Werte in Kästen, Abschnitte mit Linien (nur für Musterdaten) */
++export function sheetToPdf(d: SheetData, title = ''): Uint8Array {
++  const objects: string[] = [];
++  const add = (body: string) => { objects.push(body); return objects.length; };
++  const catalog = add('');
++  const pagesObj = add('');
++  const font = add('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>');
++  const bold = add('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold /Encoding /WinAnsiEncoding >>');
++  const ink = '0.09 0.19 0.23';
++  const ops: string[] = [
++    // Rahmen
++    `${ink} RG 1.6 w 36 36 523 770 re S`, '0.5 w 42 42 511 758 re S',
++    `BT ${ink} rg /F2 26 Tf 60 760 Td ${pdfString(d.title)} Tj ET`,
++    `BT 0.3 0.3 0.3 rg /F1 13 Tf 60 738 Td ${pdfString(d.subtitle)} Tj ET`,
++    `${ink} RG 1 w 60 726 m 535 726 l S`
++  ];
++  // Werte
++  const bw = 110, gap = 12;
++  d.stats.forEach(([label, value], i) => {
++    const x = 60 + i * (bw + gap);
++    ops.push(`${ink} RG 1.2 w ${x} 630 ${bw} 78 re S`,
++      `BT 0.3 0.3 0.3 rg /F1 12 Tf ${x + 10} 690 Td ${pdfString(label)} Tj ET`,
++      `BT ${ink} rg /F2 34 Tf ${x + 10} 645 Td ${pdfString(value)} Tj ET`);
++  });
++  let y = 598;
++  for (const [head, lines] of d.sections) {
++    ops.push(`BT ${ink} rg /F2 15 Tf 60 ${y} Td ${pdfString(head)} Tj ET`);
++    y -= 8;
++    ops.push(`0.6 0.6 0.6 RG 0.5 w 60 ${y} m 535 ${y} l S`);
++    for (const line of lines.flatMap((l) => wrap(l, 66))) {
++      y -= 22;
++      ops.push(`BT 0.1 0.1 0.1 rg /F1 14 Tf 66 ${y + 6} Td ${pdfString(line)} Tj ET`, `0.8 0.8 0.8 RG 0.4 w 60 ${y} m 535 ${y} l S`);
++    }
++    y -= 30;
++  }
++  const stream = ops.join('\n');
++  const content = add(`<< /Length ${encode(stream).length} >>\nstream\n${stream}\nendstream`);
++  const kids = [add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${content} 0 R >>`)];
++  return finish(objects, catalog, pagesObj, kids, title, add);
++}
+diff --git a/src/mocks/muster/de-b.ts b/src/mocks/muster/de-b.ts
+index d1339a6..5cd8ec1 100644
+--- a/src/mocks/muster/de-b.ts
++++ b/src/mocks/muster/de-b.ts
+@@ -297,3 +297,35 @@ Im Moorkrug nicht neben dem Ofen schlafen, da knarren die Dielen.`,
+     ],
+   },
++  players: {
++    counterKinds: [
++      { id: 'kraft', label: `Kraft`, hint: `Was die Figur noch aushält` },
++      { id: 'mut', label: `Mut`, hint: `Einsatz für den entscheidenden Moment` }
++    ],
++    counters: {
++      lea: [{ kindId: 'kraft', value: 7, max: 10 }, { kindId: 'mut', value: 2, max: 3 }],
++      tom: [{ kindId: 'kraft', value: 4, max: 8 }, { kindId: 'mut', value: 3, max: 3 }],
++      sina: [{ kindId: 'kraft', value: 9, max: 9 }, { kindId: 'mut', value: 1, max: 3 }]
++    },
++    pronouns: { lea: `sie`, tom: `er`, sina: `sie` },
++    levels: { lea: `Rang 2`, tom: `Rang 2`, sina: `Rang 1` },
++    proposals: [
++      { key: 'laterne', who: 'lea', type: 'npc', title: `Die Frau mit der Laterne`, state: 'open', daysAgo: 2,
++        detail: `Stand am Grauwehrer Ufer, als wir ablegten, und hob die Laterne erst, als Oren sie löschte. Mara meint, sie schon einmal vor dem Archiv gesehen zu haben.` },
++      { key: 'rueckseite', who: 'tom', type: 'item', target: 'abschrift', title: `Tavins Abschrift`, state: 'open', daysAgo: 1,
++        detail: `Auf der Rückseite stehen Zahlen in Dreiergruppen. Tavin hält sie für Zollmarken der Brücke.` },
++      { key: 'knoten', who: 'lea', type: 'faction', target: 'schilfgaenger', title: `Knotenzeichen der Schilfgänger`, state: 'accepted', result: 'schilfgaenger', daysAgo: 30,
++        detail: `Ein Halm mit zwei Knoten heißt: Weg trägt. Drei Knoten: nur bei Tag.` }
++    ],
++    bookmarks: { who: 'lea', ch: 7, marks: [[52, `Laterne aus – warum?`, 1], [161, null, 2]] },
++    sheet: { who: 'lea', fileName: `Mara Venn – Bogen.pdf`, title: `Mara Venn`,
++      subtitle: `Charakterbogen · Nebelpfad (Hausregeln) · Rang 2 · sie`,
++      stats: [[`Kraft`, `10`], [`Mut`, `3`], [`Rang`, `2`]],
++      sections: [
++        [`Herkunft`, [`Kundschafterin aus Grauwehr, aufgewachsen in Hohenwacht. Lebt bei Onkel Brann.`]],
++        [`Stärken`, [`Spuren lesen`, `Still sein`, `Wege durchs Schilf finden`]],
++        [`Schwächen`, [`Misstraut dem Archiv`, `Redet ungern über ihre Mutter`]],
++        [`Ausrüstung`, [`Kurzbogen, 14 Pfeile`, `Schilfmesser`, `Seil (15 Schritt), Wachstuch`, `Brot für drei Tage`, `Kompass der Mutter`]],
++        [`Notizen`, [`Der Kompass zeigt nicht nach Norden.`, `Knotenzeichen: zwei Knoten trägt, drei Knoten nur bei Tag.`]]
++      ] }
++  },
+ };
+diff --git a/src/mocks/muster/en-b.ts b/src/mocks/muster/en-b.ts
+index 11e0f77..47beac9 100644
+--- a/src/mocks/muster/en-b.ts
++++ b/src/mocks/muster/en-b.ts
+@@ -297,3 +297,35 @@ At the Moor Inn, don't sleep by the stove, the floorboards creak there.`,
+     ],
+   },
++  players: {
++    counterKinds: [
++      { id: 'kraft', label: `Strength`, hint: `How much the character can still take` },
++      { id: 'mut', label: `Nerve`, hint: `Spend it when it matters` }
++    ],
++    counters: {
++      lea: [{ kindId: 'kraft', value: 7, max: 10 }, { kindId: 'mut', value: 2, max: 3 }],
++      tom: [{ kindId: 'kraft', value: 4, max: 8 }, { kindId: 'mut', value: 3, max: 3 }],
++      sina: [{ kindId: 'kraft', value: 9, max: 9 }, { kindId: 'mut', value: 1, max: 3 }]
++    },
++    pronouns: { lea: `she`, tom: `he`, sina: `she` },
++    levels: { lea: `Rank 2`, tom: `Rank 2`, sina: `Rank 1` },
++    proposals: [
++      { key: 'laterne', who: 'lea', type: 'npc', title: `The woman with the lantern`, state: 'open', daysAgo: 2,
++        detail: `She stood on the Grauwehr bank when we cast off and only raised her lantern once Oren put his out. Mara thinks she has seen her outside the archive before.` },
++      { key: 'rueckseite', who: 'tom', type: 'item', target: 'abschrift', title: `Tavin's copy`, state: 'open', daysAgo: 1,
++        detail: `There are numbers in groups of three on the back. Tavin thinks they are toll marks from the bridge.` },
++      { key: 'knoten', who: 'lea', type: 'faction', target: 'schilfgaenger', title: `Knot signs of the Reedwalkers`, state: 'accepted', result: 'schilfgaenger', daysAgo: 30,
++        detail: `A stalk with two knots means: the path holds. Three knots: daylight only.` }
++    ],
++    bookmarks: { who: 'lea', ch: 7, marks: [[52, `Lantern out – why?`, 1], [161, null, 2]] },
++    sheet: { who: 'lea', fileName: `Mara Venn – sheet.pdf`, title: `Mara Venn`,
++      subtitle: `Character sheet · Nebelpfad (house rules) · Rank 2 · she`,
++      stats: [[`Strength`, `10`], [`Nerve`, `3`], [`Rank`, `2`]],
++      sections: [
++        [`Origin`, [`Scout from Grauwehr, grew up in Hohenwacht. Lives with Uncle Brann.`]],
++        [`Strengths`, [`Reading tracks`, `Keeping quiet`, `Finding paths through the reeds`]],
++        [`Weaknesses`, [`Distrusts the archive`, `Does not like talking about her mother`]],
++        [`Gear`, [`Short bow, 14 arrows`, `Reed knife`, `Rope (15 paces), oilcloth`, `Bread for three days`, `Her mother's compass`]],
++        [`Notes`, [`The compass does not point north.`, `Knot signs: two knots holds, three knots daylight only.`]]
++      ] }
++  },
+ };
+diff --git a/src/mocks/muster/seed.ts b/src/mocks/muster/seed.ts
+index 7102ec6..961eb11 100644
+--- a/src/mocks/muster/seed.ts
++++ b/src/mocks/muster/seed.ts
+@@ -12,4 +12,6 @@ import {
+ } from '../db';
+ import { emblemBuffer, emblemDataUrl } from './emblems';
++import { sheetToPdf } from '../minipdf';
++import { addPlayerData, playerProposals } from '../players';
+ import { musterText } from './index';
+ import type { MusterProposal, Player, Who } from './types';
+@@ -68,5 +70,5 @@ export function seedMuster(lang: Lang): void {
+     id: cid, host: MUSTER_HOST, title: x.title, description: x.description, worldInfo: x.worldInfo, language: lang,
+     system: 'other', systemName: x.systemName, allowCloudSummary: false, allowExternalTranscription: false, hotwords: x.hotwords,
+-    coverPreset: 'swamp', inviteCode: 'NEBEL-2026', nextSessionAt: null,
++    coverPreset: 'swamp', inviteCode: 'NEBEL-2026', nextSessionAt: null, counterKinds: x.players.counterKinds,
+     links: x.links.map((l) => ({ id: `link-${cid}-${l.key}`, label: l.label, url: l.url, shared: l.shared })),
+     members: [
+@@ -78,5 +80,6 @@ export function seedMuster(lang: Lang): void {
+           recordingConsentAt: at(`${JOINED[who]}T18:00:00Z`), characterName: c.name, characterSummary: x.members[who].summary,
+           characterBackstory: x.members[who].backstory, characterId: chr(c.key), characterVersion: 2, characterStatus: c.status,
+-          characterNickname: c.nickname ?? null, portraitUpdatedAt: at(`${JOINED[who]}T18:30:00Z`), moveConsentAt: null
++          characterNickname: c.nickname ?? null, portraitUpdatedAt: at(`${JOINED[who]}T18:30:00Z`), moveConsentAt: null,
++          characterPronouns: x.players.pronouns[who], characterLevel: x.players.levels[who], characterClasses: []
+         };
+       })
+@@ -242,4 +245,24 @@ export function seedMuster(lang: Lang): void {
+   }
+ 
++  // ---- Spielende tragen bei (0.4.28/0.4.29): Zähler, Vorschläge von Spielenden, Merkstellen
++  const pl = x.players;
++  const bmSession = musterSessionId(lang, pl.bookmarks.ch);
++  const bmPlayed = sessions.find((s) => s.id === bmSession)!.playedAt;
++  addPlayerData({
++    counters: Object.fromEntries(PLAYERS.map((who) => [m(who), pl.counters[who]])),
++    bookmarks: pl.bookmarks.marks.map(([minute, note, paragraph], i) => {
++      const t = new Date(Date.parse(bmPlayed) + minute * 60000).toISOString();
++      return { id: `bm-${cid}-${i + 1}`, memberId: m(pl.bookmarks.who), sessionId: bmSession, at: t, note, offsetMs: minute * 60000,
++        recapParagraph: paragraph, createdAt: t };
++    })
++  });
++  for (const p of pl.proposals) {
++    playerProposals.push({
++      id: `pp-${cid}-${p.key}`, campaignId: cid, authorMemberId: m(p.who), entryType: p.type, title: p.title, detail: p.detail,
++      targetEntryId: p.target ? e(p.target) : null, state: p.state, createdAt: at('2026-10-06T18:00:00Z', -p.daysAgo),
++      ...(p.state === 'accepted' ? { decidedAt: at('2026-10-06T18:00:00Z', 2 - p.daysAgo), resultEntryId: p.result ? e(p.result) : null } : {})
++    });
++  }
++
+   // ---- Hinweis an die SL: Sina ist neu und sieht das Turmzeichen nicht
+   (gmNotices[cid] ??= []).push({
+@@ -265,4 +288,5 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
+       id: chr(c.key), version: 2, name: c.name, nickname: c.nickname ?? null, summary: c.summary, backstory: c.backstory || null,
+       system: c.system ?? null, status: c.status, statusChangedAt: c.status === 'active' ? null : created, notes: c.notes,
++      pronouns: c.inCampaign ? x.players.pronouns[who] : null, level: c.inCampaign ? x.players.levels[who] : null, classes: [],
+       portrait: emblemDataUrl(c.emblem), portraitMeta: null, portraitChangedAt: created,
+       world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret, relation: w.relation ?? null })),
+@@ -280,4 +304,10 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
+ }
+ 
++/** Erfundener Charakterbogen als PDF (nur für die Aufnahmen: Unterlagen in der Sammlung) */
++export function musterSheet(lang: Lang): File {
++  const sh = musterText[lang].players.sheet;
++  return new File([sheetToPdf(sh, sh.fileName.replace(/\.pdf$/, '')) as Uint8Array<ArrayBuffer>], sh.fileName, { type: 'application/pdf' });
++}
++
+ /** Neue Runde in der Musterkampagne (Probeaufnahme): kein Inhalt aus anderen Testdaten, nur ein ehrlicher Platzhalter */
+ export function musterProbe(campaignId: string, sessionId: string): { recap: string; threads: string[]; speakers: Speaker[] } | null {
+diff --git a/src/mocks/muster/types.ts b/src/mocks/muster/types.ts
+index d58b8eb..a7a491c 100644
+--- a/src/mocks/muster/types.ts
++++ b/src/mocks/muster/types.ts
+@@ -172,4 +172,20 @@ export interface MusterText {
+   links: { key: string; label: string; url: string; shared: boolean }[];
+   collections: Record<Player, MusterCharacter[]>;
++  /** Spielende tragen bei (ab Schnittstelle 0.4.28/0.4.29): Zähler, Pronomen, Stufe, Vorschläge, Merkstellen, Bogen */
++  players: MusterPlayers;
++}
++
++export interface MusterPlayers {
++  counterKinds: { id: string; label: string; hint: string }[];
++  counters: Record<Player, { kindId: string; value: number; max: number | null }[]>;
++  pronouns: Record<Player, string>;
++  /** Freier Text, das Hausregelsystem kennt keine Klassen */
++  levels: Record<Player, string>;
++  proposals: { key: string; who: Player; type: Exclude<EntryType, 'pc'>; title: string; detail: string; target?: string;
++    state: 'open' | 'accepted'; result?: string; daysAgo: number }[];
++  /** Merkstellen in einem veröffentlichten Kapitel: [Minute der Runde, Notiz, Absatz des Kapitels] */
++  bookmarks: { who: Player; ch: number; marks: [number, string | null, number | null][] };
++  /** Erfundener Charakterbogen für die Sammlung (wird als PDF erzeugt) */
++  sheet: { who: Player; fileName: string; title: string; subtitle: string; stats: [string, string][]; sections: [string, string[]][] };
+ }
+ 
+diff --git a/src/mocks/players.ts b/src/mocks/players.ts
+index 02832a2..6fa1858 100644
+--- a/src/mocks/players.ts
++++ b/src/mocks/players.ts
+@@ -45,4 +45,10 @@ const bookmarks: (Bookmark & { memberId: string })[] = [
+ ];
+ 
++/** Für die Musterkampagne: Zählerstände und Merkstellen dazulegen */
++export function addPlayerData(data: { counters?: Record<string, CounterValue[]>; bookmarks?: (Bookmark & { memberId: string })[] }): void {
++  Object.assign(counters, data.counters ?? {});
++  bookmarks.push(...(data.bookmarks ?? []));
++}
++
+ // Laufende Runde zum Ausprobieren von „Merken“
+ if (setting('live') === '1' && !sessions.some((s) => s.id === 's-c-drache-live')) {
+diff --git a/src/theme.css b/src/theme.css
+index 1fe8629..38138ba 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2348,5 +2348,7 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ .counter-row { gap: 6px; }
+ .counter-row .lr-text { flex: 1; min-width: 3em; }
+-.counter-row .lr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
++/* Mit Erklärung: Name und Erklärung ganz lesbar in der ersten Zeile, die Knöpfe darunter */
++.counter-row:has(.lr-sub) { flex-wrap: wrap; }
++.counter-row:has(.lr-sub) .lr-text { flex: 1 1 100%; }
+ .counter-row .counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
+ .counter-row .counter-value.low { color: var(--siegel-text); }
