@@ -296,4 +296,36 @@ Im Moorkrug nicht neben dem Ofen schlafen, da knarren die Dielen.`,
         ] },
     ],
   },
+  players: {
+    counterKinds: [
+      { id: 'kraft', label: `Kraft`, hint: `Was die Figur noch aushält` },
+      { id: 'mut', label: `Mut`, hint: `Einsatz für den entscheidenden Moment` }
+    ],
+    counters: {
+      lea: [{ kindId: 'kraft', value: 7, max: 10 }, { kindId: 'mut', value: 2, max: 3 }],
+      tom: [{ kindId: 'kraft', value: 4, max: 8 }, { kindId: 'mut', value: 3, max: 3 }],
+      sina: [{ kindId: 'kraft', value: 9, max: 9 }, { kindId: 'mut', value: 1, max: 3 }]
+    },
+    pronouns: { lea: `sie`, tom: `er`, sina: `sie` },
+    levels: { lea: `Rang 2`, tom: `Rang 2`, sina: `Rang 1` },
+    proposals: [
+      { key: 'laterne', who: 'lea', type: 'npc', title: `Die Frau mit der Laterne`, state: 'open', daysAgo: 2,
+        detail: `Stand am Grauwehrer Ufer, als wir ablegten, und hob die Laterne erst, als Oren sie löschte. Mara meint, sie schon einmal vor dem Archiv gesehen zu haben.` },
+      { key: 'rueckseite', who: 'tom', type: 'item', target: 'abschrift', title: `Tavins Abschrift`, state: 'open', daysAgo: 1,
+        detail: `Auf der Rückseite stehen Zahlen in Dreiergruppen. Tavin hält sie für Zollmarken der Brücke.` },
+      { key: 'knoten', who: 'lea', type: 'faction', target: 'schilfgaenger', title: `Knotenzeichen der Schilfgänger`, state: 'accepted', result: 'schilfgaenger', daysAgo: 30,
+        detail: `Ein Halm mit zwei Knoten heißt: Weg trägt. Drei Knoten: nur bei Tag.` }
+    ],
+    bookmarks: { who: 'lea', ch: 7, marks: [[52, `Laterne aus – warum?`, 1], [161, null, 2]] },
+    sheet: { who: 'lea', fileName: `Mara Venn – Bogen.pdf`, title: `Mara Venn`,
+      subtitle: `Charakterbogen · Nebelpfad (Hausregeln) · Rang 2 · sie`,
+      stats: [[`Kraft`, `10`], [`Mut`, `3`], [`Rang`, `2`]],
+      sections: [
+        [`Herkunft`, [`Kundschafterin aus Grauwehr, aufgewachsen in Hohenwacht. Lebt bei Onkel Brann.`]],
+        [`Stärken`, [`Spuren lesen`, `Still sein`, `Wege durchs Schilf finden`]],
+        [`Schwächen`, [`Misstraut dem Archiv`, `Redet ungern über ihre Mutter`]],
+        [`Ausrüstung`, [`Kurzbogen, 14 Pfeile`, `Schilfmesser`, `Seil (15 Schritt), Wachstuch`, `Brot für drei Tage`, `Kompass der Mutter`]],
+        [`Notizen`, [`Der Kompass zeigt nicht nach Norden.`, `Knotenzeichen: zwei Knoten trägt, drei Knoten nur bei Tag.`]]
+      ] }
+  },
 };

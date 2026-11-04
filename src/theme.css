@@ -2347,7 +2347,9 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 /* Zähler am Charakter (ab Schnittstelle 0.4.28) */
 .counter-row { gap: 6px; }
 .counter-row .lr-text { flex: 1; min-width: 3em; }
-.counter-row .lr-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Mit Erklärung: Name und Erklärung ganz lesbar in der ersten Zeile, die Knöpfe darunter */
+.counter-row:has(.lr-sub) { flex-wrap: wrap; }
+.counter-row:has(.lr-sub) .lr-text { flex: 1 1 100%; }
 .counter-row .counter-value { width: 4.2em; min-height: 48px; text-align: center; font: 700 calc(20px * var(--ts))/1 var(--font-sans); padding: 4px; }
 .counter-row .counter-value.low { color: var(--siegel-text); }
 .counter-max { display: flex; align-items: center; gap: 4px; color: var(--ink-muted); font-size: calc(13px * var(--ts)); }

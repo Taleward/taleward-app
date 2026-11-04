@@ -11,6 +11,8 @@ import {
   transcripts, uncertainTerms, world, type MockSession
 } from '../db';
 import { emblemBuffer, emblemDataUrl } from './emblems';
+import { sheetToPdf } from '../minipdf';
+import { addPlayerData, playerProposals } from '../players';
 import { musterText } from './index';
 import type { MusterProposal, Player, Who } from './types';
 
@@ -67,7 +69,7 @@ export function seedMuster(lang: Lang): void {
   campaigns.push({
     id: cid, host: MUSTER_HOST, title: x.title, description: x.description, worldInfo: x.worldInfo, language: lang,
     system: 'other', systemName: x.systemName, allowCloudSummary: false, allowExternalTranscription: false, hotwords: x.hotwords,
-    coverPreset: 'swamp', inviteCode: 'NEBEL-2026', nextSessionAt: null,
+    coverPreset: 'swamp', inviteCode: 'NEBEL-2026', nextSessionAt: null, counterKinds: x.players.counterKinds,
     links: x.links.map((l) => ({ id: `link-${cid}-${l.key}`, label: l.label, url: l.url, shared: l.shared })),
     members: [
       { id: m('anja'), userId: DEMO_USERS.anja.id, displayName: 'Anja', characterName: null, role: 'gm', recordingConsentAt: at(`${JOINED.anja}T18:00:00Z`) },
@@ -77,7 +79,8 @@ export function seedMuster(lang: Lang): void {
           id: m(who), userId: DEMO_USERS[who].id, displayName: DEMO_USERS[who].displayName, role: 'player' as const,
           recordingConsentAt: at(`${JOINED[who]}T18:00:00Z`), characterName: c.name, characterSummary: x.members[who].summary,
           characterBackstory: x.members[who].backstory, characterId: chr(c.key), characterVersion: 2, characterStatus: c.status,
-          characterNickname: c.nickname ?? null, portraitUpdatedAt: at(`${JOINED[who]}T18:30:00Z`), moveConsentAt: null
+          characterNickname: c.nickname ?? null, portraitUpdatedAt: at(`${JOINED[who]}T18:30:00Z`), moveConsentAt: null,
+          characterPronouns: x.players.pronouns[who], characterLevel: x.players.levels[who], characterClasses: []
         };
       })
     ]
@@ -241,6 +244,26 @@ export function seedMuster(lang: Lang): void {
     }
   }
 
+  // ---- Spielende tragen bei (0.4.28/0.4.29): Zähler, Vorschläge von Spielenden, Merkstellen
+  const pl = x.players;
+  const bmSession = musterSessionId(lang, pl.bookmarks.ch);
+  const bmPlayed = sessions.find((s) => s.id === bmSession)!.playedAt;
+  addPlayerData({
+    counters: Object.fromEntries(PLAYERS.map((who) => [m(who), pl.counters[who]])),
+    bookmarks: pl.bookmarks.marks.map(([minute, note, paragraph], i) => {
+      const t = new Date(Date.parse(bmPlayed) + minute * 60000).toISOString();
+      return { id: `bm-${cid}-${i + 1}`, memberId: m(pl.bookmarks.who), sessionId: bmSession, at: t, note, offsetMs: minute * 60000,
+        recapParagraph: paragraph, createdAt: t };
+    })
+  });
+  for (const p of pl.proposals) {
+    playerProposals.push({
+      id: `pp-${cid}-${p.key}`, campaignId: cid, authorMemberId: m(p.who), entryType: p.type, title: p.title, detail: p.detail,
+      targetEntryId: p.target ? e(p.target) : null, state: p.state, createdAt: at('2026-10-06T18:00:00Z', -p.daysAgo),
+      ...(p.state === 'accepted' ? { decidedAt: at('2026-10-06T18:00:00Z', 2 - p.daysAgo), resultEntryId: p.result ? e(p.result) : null } : {})
+    });
+  }
+
   // ---- Hinweis an die SL: Sina ist neu und sieht das Turmzeichen nicht
   (gmNotices[cid] ??= []).push({
     id: `gn-${cid}-sina`, code: 'hidden_entries_for_newcomer', memberId: m('sina'), entryIds: [e('turmzeichen')], createdAt: at('2026-07-25T21:00:00Z')
@@ -264,6 +287,7 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
     return {
       id: chr(c.key), version: 2, name: c.name, nickname: c.nickname ?? null, summary: c.summary, backstory: c.backstory || null,
       system: c.system ?? null, status: c.status, statusChangedAt: c.status === 'active' ? null : created, notes: c.notes,
+      pronouns: c.inCampaign ? x.players.pronouns[who] : null, level: c.inCampaign ? x.players.levels[who] : null, classes: [],
       portrait: emblemDataUrl(c.emblem), portraitMeta: null, portraitChangedAt: created,
       world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret, relation: w.relation ?? null })),
       links: c.inCampaign ? [{
@@ -277,6 +301,12 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
       chronicles: {}, createdAt: created, updatedAt: at('2026-10-04T10:00:00Z'), ...(owner ? { owners: [owner] } : {})
     };
   });
+}
+
+/** Erfundener Charakterbogen als PDF (nur für die Aufnahmen: Unterlagen in der Sammlung) */
+export function musterSheet(lang: Lang): File {
+  const sh = musterText[lang].players.sheet;
+  return new File([sheetToPdf(sh, sh.fileName.replace(/\.pdf$/, '')) as Uint8Array<ArrayBuffer>], sh.fileName, { type: 'application/pdf' });
 }
 
 /** Neue Runde in der Musterkampagne (Probeaufnahme): kein Inhalt aus anderen Testdaten, nur ein ehrlicher Platzhalter */

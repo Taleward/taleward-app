@@ -30,12 +30,14 @@ const L = {
     accept: 'Übernehmen', publish: 'Kapitel veröffentlichen', invite: 'Mitspielende einladen', qr: 'QR-Code zeigen',
     all: 'Alle (', world: 'Mitgebrachte Welt', mara: '00000000-0000-4000-8000-000000000701',
     played: 'Gespielt', search: 'Sefa Mor', note: 'Ohm Tessel kennt Maras Mutter. Erst sagen, wenn sie fragt.\nPause nach der Brücke.', hint: 'Geflohen stimmt nicht. Sie ist gegangen, bevor man sie holen konnte.',
-    analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund' },
+    analyse: 'Für die Spielleitung auswerten', sheet: 'Mara Venn – Charakterbogen.pdf', fromBackstory: 'Aus dem Hintergrund',
+    mark: 'Stelle merken', mine: 'Deine Vorschläge', files: 'Unterlagen', marks: 'Deine Merkstellen', bigger: 'Größer' },
   en: { cid: 'c-waters', next: 'Continue', askConsent: 'Ask to agree', agree: 'Agree',
     accept: 'Accept', publish: 'Publish chapter', invite: 'Invite players', qr: 'Show QR code',
     all: 'All (', world: 'Character lore', mara: '00000000-0000-4000-8000-000000000801',
     played: 'Played', search: 'Sefa Mor', note: 'Ohm Tessel knew Mara\'s mother. Only say so if she asks.\nBreak after the bridge.', hint: 'She did not flee. She left before they could come for her.',
-    analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory' }
+    analyse: 'Have it analysed for the game master', sheet: 'Mara Venn – character sheet.pdf', fromBackstory: 'From the backstory',
+    mark: 'Mark this moment', mine: 'Your suggestions', files: 'Documents', marks: 'Your marks', bigger: 'Larger' }
 };
 
 // Welche Aufnahmen in welchem Thema (Stern in der Anfrage = zusätzlich Spielabend)
@@ -49,8 +51,12 @@ const GM = [16, 17, 18];
 // 19–22: Auswertung von Charakterbögen und Hintergründen (Schnittstelle 0.4.18) – Charakterseite der Spielerin mit Stand,
 // „Jetzt dran“ der SL mit aufgeklappter Bitte, „Mitgebrachte Welt“ mit Herkunft, „Was mit deinen Daten passiert“
 const ANALYSIS = [19, 20, 21, 22];
+// 23–30: Spielende tragen bei (Schnittstelle 0.4.28/0.4.29) – laufende Runde mit „Stelle merken“, Kapitel mit Merkstellen,
+// Bibel der Spielerin mit eigenen Vorschlägen, Vorschläge von Spielenden bei der SL, Charakterseite mit Zählern, Pronomen
+// und Stufe, Unterlagen in der Sammlung, PDF-Leser mit erfundenem Bogen, Beute mit „Bei wem?“
+const PLAYERS = [23, 24, 25, 26, 27, 28, 29, 30];
 // Website (Wunsch 27.10.): jede Aufnahme in beiden Sprachen und beiden Themen
-const WEB = [1, 2, 4, 5, 6, 7, 8, 9, 10, 12, ...START, 16, 17, 18, 19, 21, 22];
+const WEB = [1, 2, 4, 5, 6, 7, 8, 9, 10, 12, ...START, 16, 17, 18, 19, 21, 22, ...PLAYERS];
 const RUNS = [
   { lang: 'de', theme: 'pergament', shots: [...WEB, 11, 13, 14, 20] },
   { lang: 'en', theme: 'pergament', shots: [...WEB, 11, 13, 14, 20] },
@@ -65,6 +71,16 @@ const browser = await puppeteer.launch({ executablePath: CHROME, headless: true,
 for (const run of RUNS) {
   const t = L[run.lang];
   const page = await browser.newPage();
+  // Spielabend: die Uhr der Seite auf heute 20:40 stellen (Uhr am SL-Schirm, „Gemerkt um“); Abstände bleiben echt
+  await page.evaluateOnNewDocument(() => {
+    const Real = Date, t = new Real(); t.setHours(20, 40, 0, 0);
+    const shift = t.getTime() - Real.now();
+    class Abend extends Real {
+      constructor(...a) { if (a.length) super(...a); else super(Real.now() + shift); }
+      static now() { return Real.now() + shift; }
+    }
+    window.Date = Abend;
+  });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewport({ width: W, height: Math.ceil(H), deviceScaleFactor: DPR, isMobile: true, hasTouch: true });
@@ -187,6 +203,10 @@ for (const run of RUNS) {
         date: new Date().toLocaleDateString('sv'), start: new Date(now - 96 * 60000).toISOString(), end: `${pad(end.getHours())}:${pad(end.getMinutes())}`
       }));
     }, t.cid);
+    // Die leise Zeile „Noch keine Aufnahme“ ausblenden (die Uhr zeigt den Spielabend, nicht die Aufnahme)
+    await page.evaluateOnNewDocument(() => document.addEventListener('DOMContentLoaded', () => {
+      const st = document.createElement('style'); st.textContent = '.table-rec.idle{display:none!important}'; document.head.append(st);
+    }));
     await page.setViewport({ width: 1600, height: 1000, deviceScaleFactor: 1.6, hasTouch: true });
     await go(`${k}/tisch`); await wait(800);
     const notes = await page.$('.table-notes');
@@ -213,8 +233,8 @@ for (const run of RUNS) {
   // Offene Vorschläge: Rückfrage bestätigen
   await page.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => /^(Veröffentlichen|Publish)$/.test(b.textContent.trim()))?.click()); await wait(1500);
   await go(`${k}/bibel`);
-  await page.evaluate(() => [...document.querySelectorAll('.card-title')].find((c) => c.textContent.trim() === 'Oren Silt')?.closest('.card')?.scrollIntoView({ block: 'start' }));
-  await page.evaluate(() => document.querySelector('.screen-main').scrollBy(0, -12));
+  // Liste mit Reitern, Reiter NSCs: dort steht ein Eintrag „Nur SL“ (Edmar Quell) ohne Blättern im Bild
+  await go(`${k}/bibel?art=npc`);
   await shot(7);
 
   await login('lea');
@@ -295,6 +315,72 @@ for (const run of RUNS) {
       document.querySelector('.screen-main').scrollBy(0, -12);
     }, t.fromBackstory);
     await shot(21);
+  }
+
+  if (run.shots.some((n) => PLAYERS.includes(n))) {
+    const top = (sel, text) => page.evaluate((sl, txt) => {
+      const el = [...document.querySelectorAll(sl)].find((x) => !txt || x.textContent.trim().startsWith(txt));
+      el?.scrollIntoView({ block: 'start' });
+      document.querySelector('.screen-main')?.scrollBy(0, -12);
+      return !!el;
+    }, sel, text);
+    const memberOf = (who) => page.evaluate(async (base, cid, w) => {
+      const c = await fetch(`${base}/api/v1/campaigns/${cid}`, { headers: { Authorization: `Bearer mock-token:u-${w}` } }).then((r) => r.json());
+      return c.members.find((m) => m.userId === `u-${w}`).id;
+    }, SERVER, t.cid, who);
+
+    // 30: Beute mit „Bei wem?“ (SL)
+    await login('anja');
+    await go(`${k}/bibel?art=item&e=e-${t.cid}-abschrift`); await shot(30);
+    // 26: Vorschläge von Spielenden bei der SL
+    await go(`${k}/bibel?vorschlaege=1`); await shot(26);
+
+    await login('lea');
+    const lea = await memberOf('lea');
+    // 27: Charakterseite der Spielerin mit Pronomen, Stufe und Zählern
+    await go(`${k}/charakter/${lea}`); await shot(27);
+    // 25: Bibel aus Spielersicht mit eigenen Vorschlägen
+    await go(`${k}/bibel`); await top('h2', t.mine); await shot(25);
+    // 24: Kapitel 7 mit Merkstellen
+    await go(`/v/${conn}/s/s-${t.cid}-7/recap`);
+    await top('h2', t.marks); await page.evaluate(() => document.querySelector('.screen-main')?.scrollBy(0, -520));
+    await shot(24);
+
+    if (run.shots.some((n) => n === 28 || n === 29)) {
+      // Erfundener Charakterbogen als PDF in die Sammlung (nur auf diesem Gerät)
+      await page.evaluate((lang) => {
+        const c = JSON.parse(localStorage.getItem('session-chronik.connections')).find((x) => x.user?.username === 'lea');
+        localStorage.setItem('taleward.characters', JSON.stringify(window.__talewardDemo.musterCollection(lang, 'lea', c.id, c.name, `${c.baseUrl}|${c.user.id}`)));
+      }, run.lang);
+      await go(`/charaktere/${t.mara}`);
+      // Die Unterlagen bleiben im Browser über die Läufe hinweg: nur einmal anhängen
+      await page.evaluate((lang) => {
+        if (document.querySelector('.file-row')) return;
+        const input = document.querySelector('section input[type=file][multiple]');
+        const dt = new DataTransfer();
+        dt.items.add(window.__talewardDemo.musterSheet(lang));
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }, run.lang);
+      await wait(1500);
+      await top('h2', t.files); await shot(28);
+      await page.evaluate(() => document.querySelector('.file-row a.list-row')?.click()); await wait(3000);
+      await wait(1500);
+      await shot(29);
+    }
+
+    // 23: Übersicht der Spielerin während einer laufenden Runde; einmal gemerkt
+    await page.evaluate(async (base, cid, ids) => {
+      await fetch(`${base}/api/v1/campaigns/${cid}/sessions`, {
+        method: 'POST', headers: { Authorization: 'Bearer mock-token:u-anja', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playedAt: new Date(Date.now() - 70 * 60000).toISOString(),
+          attendees: ids.map((memberId) => ({ memberId, consent: true, consentSource: 'app' })) })
+      });
+    }, SERVER, t.cid, [await memberOf('anja'), lea, await memberOf('tom')]);
+    await go('/'); await go(k);
+    await page.evaluate((txt) => [...document.querySelectorAll('.live-bookmark button')].find((b) => b.textContent.trim() === txt)?.click(), t.mark);
+    await wait(600);
+    await shot(23);
   }
 
   if (errors.length) console.log('   Fehler in der Seite:', errors);

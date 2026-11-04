@@ -171,6 +171,22 @@ export interface MusterText {
   /** Links der Kampagne (ab Schnittstelle 0.4.13); erfundene Adressen unter .example */
   links: { key: string; label: string; url: string; shared: boolean }[];
   collections: Record<Player, MusterCharacter[]>;
+  /** Spielende tragen bei (ab Schnittstelle 0.4.28/0.4.29): Zähler, Pronomen, Stufe, Vorschläge, Merkstellen, Bogen */
+  players: MusterPlayers;
+}
+
+export interface MusterPlayers {
+  counterKinds: { id: string; label: string; hint: string }[];
+  counters: Record<Player, { kindId: string; value: number; max: number | null }[]>;
+  pronouns: Record<Player, string>;
+  /** Freier Text, das Hausregelsystem kennt keine Klassen */
+  levels: Record<Player, string>;
+  proposals: { key: string; who: Player; type: Exclude<EntryType, 'pc'>; title: string; detail: string; target?: string;
+    state: 'open' | 'accepted'; result?: string; daysAgo: number }[];
+  /** Merkstellen in einem veröffentlichten Kapitel: [Minute der Runde, Notiz, Absatz des Kapitels] */
+  bookmarks: { who: Player; ch: number; marks: [number, string | null, number | null][] };
+  /** Erfundener Charakterbogen für die Sammlung (wird als PDF erzeugt) */
+  sheet: { who: Player; fileName: string; title: string; subtitle: string; stats: [string, string][]; sections: [string, string[]][] };
 }
 
 /** Teil 1: Kampagne, Mitglieder, Kapitel 1–7, Bibel */

@@ -1,7 +1,7 @@
 import { getResponse } from 'msw';
 import { handlers } from './handlers';
 import { ME } from './db';
-import { DEMO_USERS, musterCollection, seedMuster } from './muster/seed';
+import { DEMO_USERS, musterCollection, musterSheet, seedMuster } from './muster/seed';
 
 const DEFAULT_ME = { ...ME };
 
@@ -18,7 +18,7 @@ export function installMockFetch(options: { lang: 'de' | 'en'; onlyHost?: string
   const realFetch = window.fetch.bind(window);
   if (!options.onlyHost) {
     // Für die Aufnahmen (scripts/screenshots.mjs): Sammlung „Meine Charaktere“ der Musterkampagne
-    (window as unknown as { __talewardDemo: unknown }).__talewardDemo = { musterCollection };
+    (window as unknown as { __talewardDemo: unknown }).__talewardDemo = { musterCollection, musterSheet };
   }
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init);

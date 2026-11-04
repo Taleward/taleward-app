@@ -44,6 +44,12 @@ const bookmarks: (Bookmark & { memberId: string })[] = [
   { id: 'bm2', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T18:40:00Z', note: null, offsetMs: null, recapParagraph: null, createdAt: '2026-09-14T18:40:00Z' }
 ];
 
+/** Für die Musterkampagne: Zählerstände und Merkstellen dazulegen */
+export function addPlayerData(data: { counters?: Record<string, CounterValue[]>; bookmarks?: (Bookmark & { memberId: string })[] }): void {
+  Object.assign(counters, data.counters ?? {});
+  bookmarks.push(...(data.bookmarks ?? []));
+}
+
 // Laufende Runde zum Ausprobieren von „Merken“
 if (setting('live') === '1' && !sessions.some((s) => s.id === 's-c-drache-live')) {
   sessions.push({

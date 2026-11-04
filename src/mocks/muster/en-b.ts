@@ -296,4 +296,36 @@ At the Moor Inn, don't sleep by the stove, the floorboards creak there.`,
         ] },
     ],
   },
+  players: {
+    counterKinds: [
+      { id: 'kraft', label: `Strength`, hint: `How much the character can still take` },
+      { id: 'mut', label: `Nerve`, hint: `Spend it when it matters` }
+    ],
+    counters: {
+      lea: [{ kindId: 'kraft', value: 7, max: 10 }, { kindId: 'mut', value: 2, max: 3 }],
+      tom: [{ kindId: 'kraft', value: 4, max: 8 }, { kindId: 'mut', value: 3, max: 3 }],
+      sina: [{ kindId: 'kraft', value: 9, max: 9 }, { kindId: 'mut', value: 1, max: 3 }]
+    },
+    pronouns: { lea: `she`, tom: `he`, sina: `she` },
+    levels: { lea: `Rank 2`, tom: `Rank 2`, sina: `Rank 1` },
+    proposals: [
+      { key: 'laterne', who: 'lea', type: 'npc', title: `The woman with the lantern`, state: 'open', daysAgo: 2,
+        detail: `She stood on the Grauwehr bank when we cast off and only raised her lantern once Oren put his out. Mara thinks she has seen her outside the archive before.` },
+      { key: 'rueckseite', who: 'tom', type: 'item', target: 'abschrift', title: `Tavin's copy`, state: 'open', daysAgo: 1,
+        detail: `There are numbers in groups of three on the back. Tavin thinks they are toll marks from the bridge.` },
+      { key: 'knoten', who: 'lea', type: 'faction', target: 'schilfgaenger', title: `Knot signs of the Reedwalkers`, state: 'accepted', result: 'schilfgaenger', daysAgo: 30,
+        detail: `A stalk with two knots means: the path holds. Three knots: daylight only.` }
+    ],
+    bookmarks: { who: 'lea', ch: 7, marks: [[52, `Lantern out – why?`, 1], [161, null, 2]] },
+    sheet: { who: 'lea', fileName: `Mara Venn – sheet.pdf`, title: `Mara Venn`,
+      subtitle: `Character sheet · Nebelpfad (house rules) · Rank 2 · she`,
+      stats: [[`Strength`, `10`], [`Nerve`, `3`], [`Rank`, `2`]],
+      sections: [
+        [`Origin`, [`Scout from Grauwehr, grew up in Hohenwacht. Lives with Uncle Brann.`]],
+        [`Strengths`, [`Reading tracks`, `Keeping quiet`, `Finding paths through the reeds`]],
+        [`Weaknesses`, [`Distrusts the archive`, `Does not like talking about her mother`]],
+        [`Gear`, [`Short bow, 14 arrows`, `Reed knife`, `Rope (15 paces), oilcloth`, `Bread for three days`, `Her mother's compass`]],
+        [`Notes`, [`The compass does not point north.`, `Knot signs: two knots holds, three knots daylight only.`]]
+      ] }
+  },
 };

@@ -645,7 +645,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.21', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.29', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
