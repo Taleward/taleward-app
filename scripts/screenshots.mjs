@@ -9,11 +9,18 @@
  * Die Aufnahmen entstehen im Browser in Handy-Größe – ohne Android-Statusleiste, die setzt die Website selbst.
  * Ausnahme Nr. 16 (SL-Schirm am Tablet quer): 2560 × 1600 px (1600 × 1000, Dichte 1,6).
  */
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:4173';
 const OUT = process.env.OUT_DIR ?? 'screenshots';
+// Freiwillig: Ordner mit eigenen Charakterbildern (<Schlüssel>.jpg|png|webp, z. B. mara.jpg) statt der Wappen
+const PORTRAITS = process.env.PORTRAITS
+  ? Object.fromEntries(readdirSync(process.env.PORTRAITS).filter((f) => /\.(jpe?g|png|webp)$/i.test(f)).map((f) => {
+    const ext = f.split('.').pop().toLowerCase();
+    return [f.replace(/\.[^.]+$/, ''), `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${readFileSync(`${process.env.PORTRAITS}/${f}`).toString('base64')}`];
+  }))
+  : null;
 const SERVER = 'https://muster.taleward.invalid';
 const DPR = 1080 / 411;
 const W = 411, H = 2400.9 / DPR; // leicht aufgerundet, damit genau 2400 px entstehen
@@ -120,14 +127,15 @@ for (const run of RUNS) {
 
   console.log(`${run.lang} / ${run.theme}`);
   await page.goto(`${BASE}/#/`);
-  await page.evaluate((lang, theme) => {
+  await page.evaluate((lang, theme, portraits) => {
     localStorage.clear();
     localStorage.setItem('session-chronik.lang', lang);
     localStorage.setItem('taleward.theme', theme === 'spielabend' ? 'dark' : 'light');
     // Die kurze Tour gehört nicht auf die Aufnahmen
     localStorage.setItem('taleward.tour.player', '1');
     localStorage.setItem('taleward.tour.gm', '1');
-  }, run.lang, run.theme);
+    if (portraits) localStorage.setItem('taleward.mock.portraits', JSON.stringify(portraits));
+  }, run.lang, run.theme, PORTRAITS);
   await page.reload(); await wait(800);
   // 15: Startbildschirm ohne Einladung – Feld leer, Testmodus-Hinweis ausgeblendet
   if (run.shots.includes(15)) {

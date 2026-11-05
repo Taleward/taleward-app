@@ -86,7 +86,10 @@ export function seedMuster(lang: Lang): void {
     ]
   });
   for (const who of PLAYERS) {
-    portraits[m(who)] = { data: emblemBuffer(collection(who).emblem), type: 'image/svg+xml', updatedAt: at(`${JOINED[who]}T18:30:00Z`) };
+    const own = ownPortrait(collection(who).key);
+    portraits[m(who)] = own
+      ? { data: dataUrlBuffer(own), type: own.slice(5, own.indexOf(';')), updatedAt: at(`${JOINED[who]}T18:30:00Z`) }
+      : { data: emblemBuffer(collection(who).emblem), type: 'image/svg+xml', updatedAt: at(`${JOINED[who]}T18:30:00Z`) };
   }
 
   // ---- Kapitel 1–7, veröffentlicht
@@ -277,6 +280,24 @@ export function seedMuster(lang: Lang): void {
   seen.bible[cid] = '2099-01-01T00:00:00Z';
 }
 
+/**
+ * Eigene Bilder statt Wappen, nur für Aufnahmen (scripts/screenshots.mjs mit PORTRAITS): localStorage
+ * `taleward.mock.portraits` = { <Charakter-Schlüssel>: data-URL }. Ohne den Schlüssel bleiben die Wappen.
+ */
+function ownPortrait(key: string): string | null {
+  try {
+    const url = (JSON.parse(localStorage.getItem('taleward.mock.portraits') ?? '{}') as Record<string, unknown>)[key];
+    return typeof url === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(url) ? url : null;
+  } catch { return null; }
+}
+
+function dataUrlBuffer(url: string): ArrayBuffer {
+  const bin = atob(url.slice(url.indexOf(',') + 1));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
 /** Sammlung „Meine Charaktere“ einer Spielerin, verknüpft mit der Musterkampagne auf connId */
 export function musterCollection(lang: Lang, who: Player, connId: string, serverName: string, owner: string | null): StoredCharacter[] {
   const x = musterText[lang];
@@ -288,7 +309,7 @@ export function musterCollection(lang: Lang, who: Player, connId: string, server
       id: chr(c.key), version: 2, name: c.name, nickname: c.nickname ?? null, summary: c.summary, backstory: c.backstory || null,
       system: c.system ?? null, status: c.status, statusChangedAt: c.status === 'active' ? null : created, notes: c.notes,
       pronouns: c.inCampaign ? x.players.pronouns[who] : null, level: c.inCampaign ? x.players.levels[who] : null, classes: [],
-      portrait: emblemDataUrl(c.emblem), portraitMeta: null, portraitChangedAt: created,
+      portrait: ownPortrait(c.key) ?? emblemDataUrl(c.emblem), portraitMeta: null, portraitChangedAt: created,
       world: c.world.map((w) => ({ id: chr(w.key), version: 1, type: w.type, name: w.name, summary: w.summary, secret: w.secret, relation: w.relation ?? null })),
       links: c.inCampaign ? [{
         connId, serverName, campaignId: cid, campaignTitle: x.title, memberId: musterMember(lang, who), linkedAt: at(`${JOINED[who]}T18:00:00Z`),
