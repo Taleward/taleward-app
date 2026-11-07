@@ -51,9 +51,11 @@ export function Speakers() {
           : [];
         setGuests(named);
         setSession(session);
+        // Vor der Bestätigung gilt assignedMemberId nicht (YAML), auch wenn ein Server null mitschickt
+        const confirmed = session.state !== 'awaiting_speakers';
         const start = Object.fromEntries(sp.map((s) => [s.id,
           s.assignedGuestName ? GUEST + s.assignedGuestName
-            : s.assignedMemberId !== undefined ? (s.assignedMemberId ?? IGNORE)
+            : confirmed && s.assignedMemberId !== undefined ? (s.assignedMemberId ?? IGNORE)
               : suggestion(s)]));
         setMapping(start);
         setInitial(start);
@@ -128,14 +130,14 @@ export function Speakers() {
       overline={review && session ? t('Kapitel {n}', { n: session.number }) : t('Abschrift fertig')}>
       <ErrorBox error={error} />
       {review && (
-        <p className="muted small" style={{ margin: 0 }}>
+        <p className="muted" style={{ margin: 0 }}>
           {editable
             ? t('So sind die Stimmen zugeordnet. Stimmt etwas nicht, ändere es hier – Taleward schreibt das Kapitel dann neu.')
             : t('So waren die Stimmen zugeordnet.')}
         </p>
       )}
       {speakers && !review && (
-        <p className="muted small" style={{ margin: 0 }}>
+        <p className="muted" style={{ margin: 0 }}>
           {t('{n} Stimmen erkannt, {auto} davon automatisch zugeordnet.', { n: speakers.length, auto: autoCount })}
         </p>
       )}

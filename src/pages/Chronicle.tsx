@@ -1,5 +1,5 @@
 import { currentConnection, p } from '../api/connections';
-import { formatDate, formatDateFull } from '../components/format';
+import { formatDate } from '../components/format';
 import { t, tk } from '../i18n';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -73,7 +73,7 @@ export function Chronicle() {
             <strong>{t('Kapitel {n}', { n: s.number })}</strong>
             <span className={['awaiting_speakers', 'awaiting_review', 'failed'].includes(s.state) ? 'pill seal' : 'pill'}>{PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state}</span>
           </div>
-          <span className="muted small">{t('Gespielt am {date}', { date: formatDateFull(s.playedAt) })}</span>
+          <span className="muted small">{t('Gespielt am {date}', { date: formatDate(s.playedAt, 'long') })}</span>
         </Link>
       ))}
 

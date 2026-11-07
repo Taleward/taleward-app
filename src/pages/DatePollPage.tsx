@@ -25,6 +25,8 @@ export function DatePollPage() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [poll, setPoll] = useState<DatePoll | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Abstimmung wirklich abgefragt (auch „keine“): ohne Netz nicht das leere Formular zeigen
+  const [pollKnown, setPollKnown] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [note, setNote] = useState('');
   const [newDate, setNewDate] = useState('');
@@ -59,9 +61,11 @@ export function DatePollPage() {
       setCampaign(c);
       try {
         setPoll(await api.datePoll(campaignId));
+        setPollKnown(true);
       } catch (e) {
         if (!isApiError(e) || e.status !== 404) throw e;
         setPoll(null);
+        setPollKnown(true);
       }
     } catch (e) {
       setError(e);
@@ -111,7 +115,7 @@ export function DatePollPage() {
         </div>
       )}
 
-      {loaded && !open && campaign && (
+      {loaded && pollKnown && !open && campaign && (
         gm ? (
           <section className="card">
             <h2>{t('Termin abstimmen')}</h2>

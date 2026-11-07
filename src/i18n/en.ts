@@ -1857,4 +1857,5 @@ export const en: Record<string, string> = {
   "Wer nicht zugestimmt hat, wird ohnehin nie aufgenommen.": "People who haven't consented are never recorded anyway.",
   "Spielleitung: {name} · Server „{server}“ ({host})": "Game master: {name} · server “{server}” ({host})",
   "Server „{server}“ ({host})": "Server “{server}” ({host})",
+  "Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.": "This is where character lore from your players lands: places, people and relationships from their backstories. You can then add it to the bible.",
 };

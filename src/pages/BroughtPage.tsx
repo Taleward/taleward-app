@@ -55,7 +55,12 @@ export function BroughtPage() {
         {t('Übernehmen legt den Eintrag gleich in der Bibel an. Vorher kannst du alles bearbeiten.')}
         {analyses.length > 0 && ' ' + t('Vorschläge aus Charakterbögen und Hintergründen sind zunächst nur für dich und die Spielerin sichtbar.')}
       </p>}
-      {proposals && open.length === 0 && <div className="empty">{t('Nichts Neues mitgebracht.')}</div>}
+      {proposals && open.length === 0 && (
+        <div className="empty">
+          {t('Nichts Neues mitgebracht.')}
+          <span className="muted small" style={{ display: 'block', marginTop: 6 }}>{t('Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.')}</span>
+        </div>
+      )}
 
       {campaign && bySubmitter.map((id) => {
         const m = campaign.members.find((x) => x.id === id);

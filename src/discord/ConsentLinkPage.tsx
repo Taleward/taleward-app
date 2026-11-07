@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchConsentLink, fetchServerInfo, isApiError, postConsentLink } from '../api/client';
 import { activeConnections, sameServerHost } from '../api/connections';
 import type { ConsentLinkInfo, ServerInfo } from '../api/types';
@@ -66,24 +66,25 @@ export function ConsentLinkPage() {
 
   if (done) {
     return (
-      <Screen title={t('Danke')}>
+      <Screen nav={false} title={t('Danke')}>
         <p style={{ margin: 0 }}>{asMember
           ? t('Du bist dabei. Deine Zustimmung gilt für alle Aufnahmen von „{title}“, bis du sie zurücknimmst.', { title: info?.campaignTitle ?? '' })
           : t('Du bist für diese Runde dabei. Du kannst zurück in den Discord.')}</p>
+        {conn && <Link className="btn ghost" to="/">{t('Zu deinen Kampagnen')}</Link>}
       </Screen>
     );
   }
 
   if (gone) {
     return (
-      <Screen title={t('Zur Aufnahme zustimmen')}>
+      <Screen nav={false} title={t('Zur Aufnahme zustimmen')}>
         <p style={{ margin: 0 }}>{t('Dieser Link ist abgelaufen oder schon benutzt. Hol dir im Discord mit „/taleward bereit“ einen neuen.')}</p>
       </Screen>
     );
   }
 
   return (
-    <Screen title={t('Zur Aufnahme zustimmen')} overline={info?.campaignTitle ?? ' '}>
+    <Screen nav={false} title={t('Zur Aufnahme zustimmen')} overline={info?.campaignTitle ?? ' '}>
       <ErrorBox error={error} />
       {info && (
         <>
