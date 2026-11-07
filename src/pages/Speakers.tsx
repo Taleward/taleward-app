@@ -116,7 +116,7 @@ export function Speakers() {
     const m = campaign?.members.find((x) => x.id === v);
     return m ? m.characterName ?? m.displayName : null;
   };
-  const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match').length ?? 0;
+  const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match' || s.source === 'discord_track').length ?? 0;
   // Zwei Stimmen, deren Hinweise denselben Tausch meinen (2 ↔ 3): den Hinweis nur bei der ersten zeigen
   const shownHint = (s: Speaker) => {
     if (!s.hint || mapping[s.id] === s.hint.memberId || !campaign?.members.some((m) => m.id === s.hint!.memberId)) return false;
@@ -161,6 +161,7 @@ export function Speakers() {
             </ul>
             {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
             {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
+            {s.source === 'discord_track' && <div className="muted small">{t('Eigene Spur im Discord')}</div>}
             {!review && suggestion(s) && s.confidence < 0.8 && mapping[s.id] === suggestion(s) && (
               <div className="small" style={{ color: 'var(--siegel-text)', fontWeight: 500 }}>{t('Unsicher – bitte prüfen.')}</div>
             )}

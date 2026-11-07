@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import { currentConnection, p } from '../api/connections';
-import type { Campaign, DiscordConnection } from '../api/types';
+import { apiAtLeast, currentConnection, p } from '../api/connections';
+import type { Campaign, DiscordConnection, DiscordLogEntry } from '../api/types';
 import { confirmDialog } from '../components/confirm';
-import { formatDate } from '../components/format';
+import { formatDate, formatDateTime } from '../components/format';
 import { ErrorBox } from '../components/Screen';
-import { t } from '../i18n';
+import { t, tk } from '../i18n';
 
 /** Server bietet den Discord-Bot an (ServerInfo.discordBot, ab 0.4.32) */
 export function serverHasDiscordBot(): boolean {
@@ -58,14 +58,53 @@ export function DiscordRow({ campaign, pause, busy, onPause }: {
           <span className="lr-text">{t('Mit Discord verbinden')}<span className="lr-sub">{t('Runden im Sprachkanal aufnehmen')}</span></span>
         </Link>
       )}
+      {apiAtLeast('0.4.33') && <DiscordLog campaignId={campaign.id} />}
       {conn && pause !== undefined && (
         <label className="list-row check-row">
           <input type="checkbox" checked={pause} disabled={busy} onChange={(e) => onPause(e.target.checked)} />
-          <span className="lr-text">{t('Aufnahme anhalten, wenn jemand ohne Zustimmung dazukommt')}
-            <span className="lr-sub">{t('Wer nicht zugestimmt hat, wird ohnehin nie aufgenommen.')}</span>
-          </span>
+          <span className="lr-text">{t('Aufnahme anhalten, wenn jemand ohne Zustimmung dazukommt')}</span>
         </label>
       )}
     </>
+  );
+}
+
+const KIND: Record<string, string> = {
+  connected: tk('Mit Discord verbunden'),
+  disconnected: tk('Verbindung gelöst'),
+  disconnected_auto: tk('Verbindung vom Server gelöst'),
+  replaced: tk('Mit anderem Discord-Server verbunden'),
+  recording_started: tk('Aufnahme gestartet'),
+  recording_stopped: tk('Aufnahme beendet'),
+  recording_discarded: tk('Aufnahme verworfen'),
+  track_discarded: tk('Eine Spur verworfen'),
+  track_revoked: tk('Zustimmung während der Aufnahme zurückgenommen'),
+  consent_member: tk('Zugestimmt (Mitglied)'),
+  consent_guest: tk('Zugestimmt (Gast)')
+};
+
+/** Verlauf (ab 0.4.33), lädt erst beim Aufklappen. Ohne Namen, nur Zeitpunkt und Art. */
+function DiscordLog({ campaignId }: { campaignId: string }) {
+  const [entries, setEntries] = useState<DiscordLogEntry[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const load = () => { if (entries === null) api.discordLog(campaignId).then((r) => setEntries(r.entries)).catch(setError); };
+  return (
+    <details className="list-row" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
+      <summary className="lr-text">{t('Verlauf')}</summary>
+      <ErrorBox error={error} />
+      {entries && entries.length === 0 && <p className="muted small" style={{ margin: '8px 0 0' }}>{t('Noch nichts passiert.')}</p>}
+      {entries && entries.length > 0 && (
+        <ul className="small" style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+          {entries.map((x, i) => (
+            <li key={i}>
+              <span className="muted">{formatDateTime(x.at)}</span>{' · '}
+              {x.sessionId
+                ? <Link to={p(`/s/${x.sessionId}`)}>{t(KIND[x.kind] ?? 'Discord')}</Link>
+                : t(KIND[x.kind] ?? 'Discord')}
+            </li>
+          ))}
+        </ul>
+      )}
+    </details>
   );
 }

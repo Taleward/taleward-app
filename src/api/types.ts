@@ -974,6 +974,9 @@ export interface DiscordLinkPreview {
 
 export interface DiscordConnection { guildName: string; connectedAt: string; connectedBy?: string | null }
 
+/** Ab 0.4.33: Verlauf der Discord-Anbindung, nur für die SL, ohne Namen */
+export interface DiscordLogEntry { at: string; kind: string; sessionId?: string }
+
 export interface ConsentLinkInfo {
   campaignTitle: string;
   gmName?: string;

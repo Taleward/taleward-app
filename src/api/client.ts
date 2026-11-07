@@ -6,7 +6,7 @@ import { campaignOfPath, cleanForCopy, copyable } from './readCopyRules';
 import { hasCopy, keepOnlyCampaigns, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, removeCopiesOfCampaign, saveCopy } from './readCopy';
 import { getLang, t, tk } from '../i18n';
 import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
-import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview, DiscordLinkPreview, DiscordConnection, ConsentLinkInfo,
+import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview, DiscordLinkPreview, DiscordConnection, DiscordLogEntry, ConsentLinkInfo,
   ApiError,
   Campaign,
   CampaignBilling,
@@ -541,6 +541,7 @@ function makeApi(conn: () => Connection) {
     request<DiscordConnection>('POST', '/discord-links/redeem', { body: { ...secret, campaignId } }),
   campaignDiscord: (campaignId: string) => request<{ connection: DiscordConnection | null }>('GET', `/campaigns/${campaignId}/discord`),
   unlinkDiscord: (campaignId: string) => request<void>('DELETE', `/campaigns/${campaignId}/discord`),
+  discordLog: (campaignId: string) => request<{ entries: DiscordLogEntry[] }>('GET', `/campaigns/${campaignId}/discord/log`),
   /** Kapitel als verschlüsselte Datei teilen (nur SL, ab 0.4.30) */
   shareChapter: (campaignId: string, sessionId: string) =>
     request<{ file: string; fileName: string; missingKeys: string[] }>('POST', `/campaigns/${campaignId}/shares`, { body: { sessionId } }),

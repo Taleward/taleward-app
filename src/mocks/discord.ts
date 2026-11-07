@@ -14,6 +14,10 @@ if (setting() === 'linked' && !account.providers.includes('discord')) account.pr
 
 const GUILD = 'Taverne zum Krug';
 const connections = new Map<string, { guildName: string; connectedAt: string; connectedBy: string | null }>();
+// Verlauf (0.4.33), neueste zuerst; mit einer Beispielrunde, damit der Testmodus etwas zeigt
+const logs = new Map<string, { at: string; kind: string; sessionId?: string }[]>();
+const logOf = (id: string) => { if (!logs.has(id)) logs.set(id, []); return logs.get(id)!; };
+const addLog = (id: string, kind: string, sessionId?: string) => logOf(id).unshift({ at: new Date().toISOString(), kind, ...(sessionId ? { sessionId } : {}) });
 const pause = new Map<string, boolean>();
 export const mockDiscordPause = (campaignId: string): boolean | undefined => (mockDiscordBot() ? pause.get(campaignId) ?? false : undefined);
 export const setMockDiscordPause = (campaignId: string, v: boolean) => { pause.set(campaignId, v); };
@@ -51,6 +55,7 @@ export function discordHandlers(B: string, deps: { myMember: (c: MockCampaign) =
       const c = gmCampaigns().find((x) => x.id === b.campaignId);
       if (!c) return notFound();
       const conn = { guildName: GUILD, connectedAt: new Date().toISOString(), connectedBy: deps.myMember(c)!.id };
+      addLog(c.id, connections.has(c.id) ? 'replaced' : 'connected');
       connections.set(c.id, conn);
       return HttpResponse.json({ campaignId: c.id, ...conn });
     }),
@@ -59,10 +64,16 @@ export function discordHandlers(B: string, deps: { myMember: (c: MockCampaign) =
       if (!mockDiscordBot() || !c) return notFound();
       return HttpResponse.json({ connection: connections.get(c.id) ?? null });
     }),
+    http.get(`${B}/campaigns/:id/discord/log`, ({ params }) => {
+      const c = gmCampaigns().find((x) => x.id === params.id);
+      if (!mockDiscordBot() || !c) return notFound();
+      return HttpResponse.json({ entries: logOf(c.id).slice(0, 200) });
+    }),
     http.delete(`${B}/campaigns/:id/discord`, ({ params }) => {
       const c = gmCampaigns().find((x) => x.id === params.id);
       if (!mockDiscordBot() || !c) return notFound();
       connections.delete(c.id);
+      addLog(c.id, 'disconnected');
       return new HttpResponse(null, { status: 204 });
     })
   ];

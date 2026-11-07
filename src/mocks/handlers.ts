@@ -755,7 +755,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.32', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.33', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -765,7 +765,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.32',
+      apiVersion: nachbar ? '0.3.9' : '0.4.33',
       serverId: nachbar ? undefined : 'testserver',
       // 0.4.32: Discord-Bot (taleward.mock.discord)
       discordBot: nachbar ? undefined : mockDiscordBot(),
@@ -2064,7 +2064,9 @@ export const handlers = [
     // 0.4.24: Ist ein Gast dabei, schlägt der Testserver ihm die letzte, sonst unbekannte Stimme vor
     const guest = s.attendees.find((a) => a.guestName)?.guestName;
     const last = list.length - 1;
-    if (guest && last >= 0 && !list[last].suggestedMemberId) list[last] = { ...list[last], suggestedGuestName: guest, confidence: 0.6, source: 'intro_round' };
+    // Server 0.4.156: bei Discord-Runden kommt der Gastname aus der eigenen Spur (sicher, discord_track)
+    const discord = (s as { source?: string }).source === 'discord';
+    if (guest && last >= 0 && !list[last].suggestedMemberId) list[last] = { ...list[last], suggestedGuestName: guest, confidence: discord ? 1 : 0.6, source: discord ? 'discord_track' : 'intro_round' };
     // Nach der Bestätigung (0.4.10): bestätigte Zuordnung mitliefern; ältere Testsessions gelten als wie vorgeschlagen bestätigt
     if (s.state !== 'awaiting_speakers') {
       const a = assignments[s.id];
