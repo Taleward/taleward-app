@@ -2471,9 +2471,11 @@ paths:
         (die Android-App teilt alle ~5 Minuten). Der Server hängt sie in der Reihenfolge des
         files-Arrays lückenlos aneinander, bevor er transkribiert.
         Für source=discord: eine Datei pro Spur, jeweils mit `trackMemberId` oder (ab 0.4.32) `trackAttendeeId`.
-        Ab 0.4.32 auch mit dem Bot-Schlüssel (botKey), nur für Runden, die dieser Bot angelegt hat, und nur Spuren von
-        Anwesenden mit Zustimmung (sonst 409 `consent_missing` bzw. `consent_revoked`; der Server prüft beim Anlegen
-        selbst, nicht nur der Bot). Alle Spuren beginnen beim Startton und sind gleich lang (Pausen und Lücken mit Stille
+        Ab 0.4.32 auch mit dem Bot-Schlüssel (botKey), nur für Runden, die dieser Bot angelegt hat (in recording bzw. nach
+        `stopped`, nie nach no_recording), nur mit `trackAttendeeId` (`trackMemberId` mit Bot-Schlüssel → 400) und nur
+        Spuren von Anwesenden mit Zustimmung (sonst 409 `consent_missing` bzw. `consent_revoked`). Der Server prüft die
+        Zustimmung selbst beim Anlegen, bei jedem Teil und beim Abschluss; wer widerrufen hat, verliert alle Teile seiner
+        Spur. Alle Spuren beginnen beim Startton und sind gleich lang (Pausen und Lücken mit Stille
         aufgefüllt). Höchstens 12 Spuren, 6 Stunden; jede Datei einzeln gegen die Upload-Grenze (413), gedacht sind etwa
         25 MB je Person und Stunde.
       requestBody:
@@ -3214,8 +3216,10 @@ paths:
       tags: [Discord]
       summary: Verbindungslink oder Code ansehen, bevor die SL verbindet (ab 0.4.32)
       description: |
-        Die App öffnet den Link vom Bot (`https://<app>/discord?l=<token>`, gleicher Weg wie Einladungen) oder die SL
-        tippt den Drei-Wörter-Code ein. Angemeldet nötig. Antwort nur, wenn das Konto per Discord-Anmeldung mit genau der
+        Die App öffnet den Link vom Bot (`<publicUrl>/discord/<token>`, gleicher Weg wie Einladungen: Server unbekannt →
+        dieselbe Rückfrage und dieselben Regeln wie bei Einladungen) oder die SL tippt den Drei-Wörter-Code ein (in
+        „Kampagne verwalten → Discord“ des richtigen Servers). Das Token nimmt die App sofort aus der Adresse, speichert es
+        nie und schickt es nur im Anfragekörper an diesen Server. Angemeldet nötig. Antwort nur, wenn das Konto per Discord-Anmeldung mit genau der
         Discord-ID verknüpft ist, die den Link angefordert hat; sonst `linked: false` ohne weitere Angaben (die App bietet
         dann „Mit Discord verknüpfen“ an und fragt danach erneut). Ungültig, abgelaufen oder verbraucht → 404.
         `campaigns` nur Kampagnen, in denen das Konto SL ist. Höchstens 10 Versuche je Konto und 30 je Adresse in 15
@@ -3315,7 +3319,8 @@ paths:
       tags: [Discord]
       summary: Zustimmungslink ansehen (ab 0.4.32)
       description: |
-        Link vom Bot, nur für eine Discord-ID und eine Runde, einmalig, 15 Minuten (`https://<app>/zustimmen?z=<token>`).
+        Link vom Bot, nur für eine Discord-ID und eine Runde, einmalig, 15 Minuten (`<publicUrl>/zustimmen/<token>`, Weg wie
+        bei Einladungen; das Token kommt sofort aus der Adresse und nur an diesen Server).
         Ohne Anmeldung nutzbar (für Gäste). Ungültig, abgelaufen, verbraucht oder Runde nicht mehr in recording → 404.
         Antwort ohne Namen anderer Personen. `memberAllowed`: Mit Anmeldung als Mitglied der Kampagne zustimmen (gilt
         dann bis zum Widerruf wie consentSource app). Ist ein Konto verknüpft, dessen Discord-ID nicht zum Link passt,
@@ -3345,8 +3350,10 @@ paths:
       summary: Über den Link zustimmen – als Mitglied oder als Gast (ab 0.4.32)
       description: |
         Gleicher Zustimmungstext wie am Tisch, nur die Person selbst, nie durch die SL.
-        - Mit Anmeldung (Bearer) als Mitglied der Kampagne: setzt die Zustimmung zu Aufnahmen der Kampagne (wie
-          PUT …/members/me/recording-consent) und nimmt die Person in die Runde auf (consentSource app). Die Discord-ID
+        - Mit Anmeldung (Bearer) als Mitglied der Kampagne: setzt die Zustimmung zu **allen Aufnahmen dieser Kampagne bis
+          zum Widerruf** (wie PUT …/members/me/recording-consent und wie am Tisch) und nimmt die Person in die Runde auf
+          (consentSource app). Die App sagt das vor dem Knopf ausdrücklich und nennt, wo man widerruft („Kampagne
+          verwalten → Deine Daten“). Die Discord-ID
           des Links muss die verknüpfte des Kontos sein (sonst 409 `discord_mismatch`); ohne Verknüpfung verknüpft dieser
           Weg nicht, er sagt 409 `discord_link_required`.
         - Ohne Anmeldung als Gast: `guestName` (1–40 Zeichen, bereinigt), `characterName` freiwillig; gilt nur für diese
@@ -3407,7 +3414,12 @@ paths:
                 type: object
                 required: [url, code, expiresAt]
                 properties:
-                  url: { type: string, example: "https://app.taleward.org/discord?l=…" }
+                  url:
+                    type: string
+                    example: "https://taleward.example.org/discord/…"
+                    description: |
+                      `<publicUrl>/discord/<token>` – wie Einladungen: Die Seite des Servers öffnet die App
+                      (`taleward://discord?url=<Link>`) oder die Web-App; so nennt der Link immer seinen Server.
                   code: { type: string, example: "laterne-moor-krug" }
                   expiresAt: { type: string, format: date-time }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -3616,7 +3628,12 @@ paths:
                 type: object
                 required: [url, expiresAt]
                 properties:
-                  url: { type: string, example: "https://app.taleward.org/zustimmen?z=…" }
+                  url:
+                    type: string
+                    example: "https://taleward.example.org/zustimmen/…"
+                    description: |
+                      `<publicUrl>/zustimmen/<token>` – wie Einladungen; die Seite bietet „In Taleward öffnen“ und für Gäste
+                      ohne App „Im Browser zustimmen“ (Web-App des Servers).
                   expiresAt: { type: string, format: date-time }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -3631,7 +3648,8 @@ paths:
         `pause`/`resume` mit Zeit (der Server kennt so die Pausen; die Spuren sind trotzdem gleich lang und dort still),
         `interrupted` (Neustart oder Verbindungsabbruch, setzt Session.interrupted), `stopped` (Ende; Zustand bleibt
         recording, bis der Upload beginnt), `discarded` (die SL bricht ab: die Runde wird gelöscht, falls noch keine Spur
-        angekommen ist). Zeiten zwischen startedAt und startedAt + 6 h, sonst 400.
+        angekommen ist; hat sie schon eine SL-Notiz oder einen Kommentar, wird sie stattdessen no_recording und bleibt).
+        Zeiten zwischen startedAt und startedAt + 6 h, sonst 400.
       security: [{ botKey: [] }]
       requestBody:
         required: true
@@ -4390,6 +4408,10 @@ components:
         Prüfsumme, widerrufbar, mehrere möglich). Gilt nur für /bot/… und POST/PUT des Uploads von Runden, die dieser Bot
         angelegt hat. Kein Nutzerkonto, keine Nutzerrechte, kein X-Taleward-App nötig. Grenzen je Schlüssel und Kampagne
         (429). Ist der Schalter „Discord-Bot“ aus, antworten alle Bot-Wege mit 404.
+        Eine Verbindung Kampagne ↔ Discord-Server gehört zu dem Schlüssel, der den Verbindungslink ausgestellt hat: Alle
+        /bot/…-Wege dieser Kampagne (und der Upload ihrer Runden) gehen nur mit genau diesem Schlüssel, sonst 404. Wird der
+        Schlüssel widerrufen, ruht die Verbindung, bis die SL neu verbindet. Bot-Schlüssel auf anderen Wegen → 401,
+        Nutzer-Token auf /bot/… → 401.
 
   parameters:
     campaignId: { name: campaignId, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" } }
