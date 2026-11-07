@@ -21,6 +21,7 @@ import { CONSENT_ON_SITE, CONSENT_STANDING } from '../consent';
 import { useAuth } from '../auth/AuthContext';
 import { clearTableConsent, loadTableConsent, saveTableConsent } from '../recorder/tableConsent';
 import { MicDenied } from '../components/MicDenied';
+import { MicLevel, QuietNote } from '../recorder/MicNote';
 import { useOfflineSince } from '../components/OfflineNotice';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { useAsync } from '../components/useAsync';
@@ -86,6 +87,8 @@ export function Recording() {
   }, [phase]);
   const [paused, setPaused] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // Pegel und Stille (nativ ab App 0.36.0, im Browser über die Analyse); undefined = unbekannt
+  const [mic, setMic] = useState<{ level?: number; quietMs?: number }>({});
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [micDenied, setMicDenied] = useState(false);
@@ -108,7 +111,11 @@ export function Recording() {
   useEffect(() => {
     if (phase !== 'recording') return;
     if (!native) {
-      const tick = () => setElapsed(Math.floor((recorder.current?.elapsedMs() ?? 0) / 1000));
+      const tick = () => {
+        setElapsed(Math.floor((recorder.current?.elapsedMs() ?? 0) / 1000));
+        const r = recorder.current;
+        setMic(r?.level && r.state === 'recording' ? { level: r.level(), quietMs: r.quietMs?.() } : {});
+      };
       tick();
       const t = setInterval(tick, 1000);
       return () => clearInterval(t);
@@ -118,6 +125,7 @@ export function Recording() {
       if (st.state === 'recording' || st.state === 'paused') {
         setElapsed(Math.floor(st.elapsedMs / 1000));
         setPaused(st.state === 'paused');
+        setMic(st.state === 'recording' ? { level: st.level, quietMs: st.quietMs } : {});
       } else if (st.state === 'stopped') {
         // Dienst wurde beendet (z. B. vom System) – Aufnahme bleibt erhalten
         setPhase('prepare');
@@ -636,8 +644,10 @@ export function Recording() {
               </span>
             </button>
             <div className="rec-time big">{formatTime(elapsed)}</div>
+            {!paused && <MicLevel level={mic.level} />}
             <div className="muted">{paused ? t('Pausiert – tippen zum Fortsetzen') : t('Tippen für eine Pause')}</div>
           </div>
+          {!paused && <QuietNote quietMs={mic.quietMs} />}
           <button type="button" className="btn" onClick={stop}>
             {t('Beenden und hochladen')}
           </button>

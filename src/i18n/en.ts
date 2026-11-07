@@ -1863,4 +1863,7 @@ export const en: Record<string, string> = {
   "Zustimmung ohne Verbindung unbekannt": "consent unknown without a connection",
   "Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.": "You haven't opened this before going offline. It loads once the server is reachable again.",
   "Von deinem Guthaben ({amount}) bekommst du zurück, was aus Zahlungen übrig ist. Bis dahin behält der Server nur den Betrag und deine bestätigte E-Mail-Adresse, höchstens 90 Tage.": "You get back whatever is left of your credit ({amount}) from payments. Until then the server keeps only the amount and your confirmed email address, for 90 days at most.",
+  "Das Mikrofon hört seit einer Minute nichts. Liegt das Handy frei? Nutzt gerade eine andere App das Mikrofon, etwa ein Anruf?": "The microphone hasn't heard anything for a minute. Is the phone uncovered? Is another app using the microphone, such as a call?",
+  "Das Mikrofon hört seit {n} Minuten nichts. Liegt das Handy frei? Nutzt gerade eine andere App das Mikrofon, etwa ein Anruf?": "The microphone hasn't heard anything for {n} minutes. Is the phone uncovered? Is another app using the microphone, such as a call?",
+  "Mikrofon hört nichts": "microphone hears nothing",
 };

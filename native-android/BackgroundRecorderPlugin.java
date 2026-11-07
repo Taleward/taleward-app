@@ -189,6 +189,8 @@ public class BackgroundRecorderPlugin extends Plugin {
             r.put("sessionId", s.getSessionId());
             r.put("title", s.getTitle());
             r.put("elapsedMs", s.elapsedMs());
+            r.put("level", s.level());
+            r.put("quietMs", s.quietMs());
             r.put("files", new JSArray());
             return r;
         }

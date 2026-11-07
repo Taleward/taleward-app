@@ -10,6 +10,7 @@ import { CampaignCover, hasCover } from '../covers/CampaignCover';
 import { IconBack, IconExpand } from '../components/Icons';
 import { ErrorBox, rememberCampaign } from '../components/Screen';
 import { OfflineNotice } from '../components/OfflineNotice';
+import { isTooQuiet } from '../recorder/quiet';
 import { t, tk, tn } from '../i18n';
 import { BackgroundRecorder, hasNativeRecorder, type NativeStatus } from '../recorder/native';
 import { BiblePanel } from '../table/BiblePanel';
@@ -101,6 +102,9 @@ function RecordingBar({ campaignId }: { campaignId: string }) {
       <span className={paused ? 'table-rec-dot paused' : 'table-rec-dot'} aria-hidden />
       <span style={{ flex: 1 }}>
         {paused ? t('Aufnahme pausiert') : t('Aufnahme läuft')} · {clock(elapsedMs)}
+        {!paused && isTooQuiet(web ? web.recorder.quietMs?.() : st?.quietMs) && (
+          <span className="rec-quiet"> · {t('Mikrofon hört nichts')}</span>
+        )}
       </span>
       <button type="button" className="btn small outline" onClick={toggle}>{paused ? t('Weiter') : t('Pause')}</button>
       <Link className="btn small ghost" to={p(`/k/${target}/aufnahme`)}>{t('Zur Aufnahme')}</Link>

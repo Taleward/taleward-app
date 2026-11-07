@@ -11,7 +11,9 @@ import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.media.MediaRecorder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import androidx.core.app.NotificationCompat;
@@ -61,6 +63,20 @@ public class RecorderService extends Service {
     private long accumulatedMs;
     private long runningSince;
     private PowerManager.WakeLock wakeLock;
+
+    // Pegel: alle 0,5 s die lauteste Stelle seit der letzten Abfrage. Darunter gilt es als „nichts gehört“
+    // (Mikrofon belegt oder abgedeckt). Die App zeigt nach 90 s ohne Ton einen ruhigen Hinweis.
+    private static final int QUIET_AMPLITUDE = 40;
+    private final Handler levelHandler = new Handler(Looper.getMainLooper());
+    private volatile double lastLevel;
+    private volatile long heardAt;
+    private final Runnable levelTick = new Runnable() {
+        @Override
+        public void run() {
+            sampleLevel();
+            levelHandler.postDelayed(this, 500);
+        }
+    };
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -113,6 +129,9 @@ public class RecorderService extends Service {
         recorder.start();
         paused = false;
         runningSince = SystemClock.elapsedRealtime();
+        heardAt = runningSince;
+        levelHandler.removeCallbacks(levelTick);
+        levelHandler.post(levelTick);
         acquireWakeLock();
         saveState("recording");
         updateNotification();
@@ -195,6 +214,7 @@ public class RecorderService extends Service {
         if (recorder == null || !paused) return;
         recorder.resume();
         runningSince = SystemClock.elapsedRealtime();
+        heardAt = runningSince;
         paused = false;
         acquireWakeLock();
         saveState("recording");
@@ -240,7 +260,34 @@ public class RecorderService extends Service {
         return dir;
     }
 
+    private synchronized void sampleLevel() {
+        if (recorder == null || paused) {
+            lastLevel = 0;
+            heardAt = SystemClock.elapsedRealtime();
+            return;
+        }
+        int amp;
+        try {
+            amp = recorder.getMaxAmplitude();
+        } catch (RuntimeException e) {
+            return;
+        }
+        lastLevel = Math.min(1.0, Math.sqrt(amp / 32767.0));
+        if (amp >= QUIET_AMPLITUDE) heardAt = SystemClock.elapsedRealtime();
+    }
+
+    /** Pegel 0–1 der letzten halben Sekunde */
+    double level() {
+        return lastLevel;
+    }
+
+    /** Wie lange das Mikrofon schon nichts hört (0 in der Pause) */
+    long quietMs() {
+        return recorder == null || paused ? 0 : SystemClock.elapsedRealtime() - heardAt;
+    }
+
     private void shutdown() {
+        levelHandler.removeCallbacks(levelTick);
         instance = null;
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE);
@@ -250,6 +297,7 @@ public class RecorderService extends Service {
 
     @Override
     public void onDestroy() {
+        levelHandler.removeCallbacks(levelTick);
         if (recorder != null) {
             // Dienst wird vom System beendet: offenen Abschnitt noch sauber abschließen
             try {

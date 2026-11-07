@@ -2371,3 +2371,9 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .namefix-hit { display: grid; gap: 2px; padding: 4px 0; }
 .namefix-hit details { margin-left: 34px; }
 .namefix-hit summary { cursor: pointer; color: var(--ink-muted); min-height: 32px; display: inline-flex; align-items: center; }
+
+/* Pegel unter der Aufnahme-Uhr: nur „hört etwas“, keine Messwerte */
+.mic-level { width: min(160px, 60%); height: 4px; margin: 2px auto 0; border-radius: 999px; background: var(--paper-sunken); overflow: hidden; }
+.mic-level > span { display: block; height: 100%; background: var(--salbei); transition: width 200ms linear; }
+@media (prefers-reduced-motion: reduce) { .mic-level > span { transition: none; } }
+.rec-quiet { color: var(--siegel-text); font-weight: 600; }

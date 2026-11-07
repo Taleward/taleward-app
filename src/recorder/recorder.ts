@@ -1,3 +1,4 @@
+import { QuietWatch } from './quiet';
 import { hasRecordingStore, saveMeta, savePart, loadRecording, type StoredRecording } from './webStore';
 
 /**
@@ -16,6 +17,8 @@ export interface Recorder {
   readonly state: 'idle' | 'recording' | 'paused';
   /** Aktueller Pegel 0–1 (für eine Pegelanzeige); 0, wenn nicht verfügbar */
   level?(): number;
+  /** Wie lange das Mikrofon schon nichts hört (0 = hört etwas, pausiert oder unbekannt) */
+  quietMs?(): number;
   /** Kennung im Zwischenspeicher des Geräts (null: nur im Arbeitsspeicher) */
   readonly storedId?: string | null;
   /** Aufgenommene Zeit ohne Pausen, in Millisekunden */
@@ -55,6 +58,8 @@ export class WebRecorder implements Recorder {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private buf: Float32Array | null = null;
+  private quiet = new QuietWatch();
+  private quietTimer: number | null = null;
 
   level(): number {
     if (!this.analyser || !this.buf) return 0;
@@ -63,6 +68,10 @@ export class WebRecorder implements Recorder {
     for (const v of this.buf) sum += v * v;
     // RMS auf eine gut ablesbare Skala bringen (Sprechen in normaler Lautstärke ≈ 0,4–0,8)
     return Math.min(1, Math.sqrt(sum / this.buf.length) * 4);
+  }
+
+  quietMs(): number {
+    return this.rec?.state === 'recording' ? this.quiet.quietMs(Date.now()) : 0;
   }
 
   constructor(private target?: RecordingTarget) {}
@@ -178,6 +187,9 @@ export class WebRecorder implements Recorder {
     } catch {
       this.analyser = null; // ohne Pegelanzeige weiter
     }
+    this.quietTimer = window.setInterval(() => {
+      this.quiet.sample(this.analyser ? this.level() : null, Date.now(), this.rec?.state === 'recording');
+    }, 500);
     await this.wake();
     document.addEventListener('visibilitychange', this.wake);
   }
@@ -206,6 +218,8 @@ export class WebRecorder implements Recorder {
         this.analyser = null;
         if (this.heartbeat !== null) window.clearInterval(this.heartbeat);
         this.heartbeat = null;
+        if (this.quietTimer !== null) window.clearInterval(this.quietTimer);
+        this.quietTimer = null;
         document.removeEventListener('visibilitychange', this.wake);
         this.wakeLock?.release().catch(() => undefined);
         this.rec = null;

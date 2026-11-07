@@ -12,6 +12,9 @@ export interface NativeStatus {
   sessionId?: string;
   title?: string;
   elapsedMs: number;
+  /** Ab App 0.36.0: Pegel 0–1 und wie lange das Mikrofon schon nichts hört (fehlt bei älterem nativem Teil) */
+  level?: number;
+  quietMs?: number;
   files: NativeFile[];
   error?: string;
 }
