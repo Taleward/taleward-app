@@ -1,0 +1,31 @@
+From 130c17e0580850987661e10ca0a76eab64f074d6 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 20:20:14 +0100
+Subject: [PATCH] Web-App: Anmeldung mit Google/Discord auch mit gespeicherter
+ Verbindung
+
+Der Rueckweg vom Anmeldedienst (#/auth) fehlte, sobald schon eine
+Verbindung gespeichert war (auch eine abgelaufene). Die Anmeldung landete
+dann auf der Startseite und ging verloren; ebenso das Verknuepfen.
+---
+ src/App.tsx | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 2ba3a2c..316f661 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -59,5 +59,4 @@ function Routed() {
+       <Routes>
+         <Route path="/verbinden" element={<ConnectRoute />} />
+-      <Route path="/auth" element={<AuthReturn />} />
+         <Route path="/auth" element={<AuthReturn />} />
+         <Route path="/zustimmen" element={<ConsentLinkPage />} />
+@@ -74,4 +73,6 @@ function Routed() {
+       <Route path="/" element={<Campaigns />} />
+       <Route path="/verbinden" element={<ConnectRoute />} />
++      {/* Rückweg vom Anmeldedienst (Web-App) auch mit schon gespeicherter, z. B. abgelaufener Verbindung */}
++      <Route path="/auth" element={<AuthReturn />} />
+       <Route path="/konto" element={<AccountPage />} />
+       <Route path="/zustimmen" element={<ConsentLinkPage />} />
