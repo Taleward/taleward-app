@@ -1862,4 +1862,5 @@ export const en: Record<string, string> = {
   "Wer zugestimmt hat, siehst du wieder, sobald der Server erreichbar ist.": "You'll see who has consented once the server is reachable again.",
   "Zustimmung ohne Verbindung unbekannt": "consent unknown without a connection",
   "Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.": "You haven't opened this before going offline. It loads once the server is reachable again.",
+  "Von deinem Guthaben ({amount}) bekommst du zurück, was aus Zahlungen übrig ist. Bis dahin behält der Server nur den Betrag und deine bestätigte E-Mail-Adresse, höchstens 90 Tage.": "You get back whatever is left of your credit ({amount}) from payments. Until then the server keeps only the amount and your confirmed email address, for 90 days at most.",
 };

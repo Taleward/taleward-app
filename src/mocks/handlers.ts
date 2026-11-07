@@ -195,7 +195,7 @@ const uncertain: Record<string, UncertainTerm[]> = Object.assign(uncertainTerms,
       examples: [{ start: 1790, quote: 'Ilsabeth, kannst du dir den Wachmann ansehen?' }, { start: 1812, quote: 'Danke, Ilsabeth.' }],
       suggestedEntryId: null, suggestedMemberId: 'm-lea' },
     { id: 'ut2', heard: 'Kaltenfurth', alternatives: ['Kaltenfurt'], occurrences: 2, confidence: 0.55,
-      examples: [{ start: 320, quote: 'Morgen früh sind wir in Kaltenfurth.' }], suggestedEntryId: null, suggestedMemberId: null },
+      examples: [{ start: 320, quote: 'Morgen früh sind wir in Kaltenfurth.' }], suggestedEntryId: null, suggestedMemberId: null, suggestedCorrect: 'Kaltenfurt', suggestionSource: 'entry' },
     { id: 'ut3', heard: 'Veira', alternatives: ['Veyra', 'Vera'], occurrences: 3, confidence: 0.48,
       examples: [{ start: 1530, quote: 'Veira, lass sie durch.' }], suggestedEntryId: null, suggestedMemberId: null }
   ]

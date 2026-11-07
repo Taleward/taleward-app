@@ -255,6 +255,11 @@ function ServerDetails({ conn }: { conn: Connection }) {
                   <span className="small">
                     {t('Gelöscht werden: Konto, Charakterbilder, Zustimmungen, Stimmprofil. Deine Kommentare bleiben als „Gelöschtes Konto“ stehen, damit Gespräche verständlich bleiben. Kampagnen, in denen sonst niemand ist, werden mitgelöscht; solche mit anderen Mitgliedern musst du vorher an eine andere SL übergeben.')}
                   </span>
+                  {billing && balance !== null && balance > 0 && (
+                    <span className="small">
+                      {t('Von deinem Guthaben ({amount}) bekommst du zurück, was aus Zahlungen übrig ist. Bis dahin behält der Server nur den Betrag und deine bestätigte E-Mail-Adresse, höchstens 90 Tage.', { amount: eur(balance) })}
+                    </span>
+                  )}
                   <div className="field">
                     <label htmlFor={`del-${conn.id}`}>{conn.user?.hasPassword === false ? t('Zur Bestätigung dein Benutzername') : t('Zur Bestätigung dein Passwort')}</label>
                     <input id={`del-${conn.id}`} type={conn.user?.hasPassword === false ? 'text' : 'password'} autoCapitalize="none"

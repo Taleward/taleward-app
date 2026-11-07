@@ -112,8 +112,11 @@ export function NamesPage() {
 
       {data?.terms.map((term) => {
         const rule = term.suggestionSource === 'rule' && term.suggestedCorrect ? term.suggestedCorrect : null;
+        // Ab Server 0.4.154 auch ohne Regel: ähnlicher Name aus Bibel oder Charakter
+        const similar = (term.suggestionSource === 'entry' || term.suggestionSource === 'member') && term.suggestedCorrect ? term.suggestedCorrect : null;
         const options = [
           ...(rule ? [rule] : []),
+          ...(similar ? [similar] : []),
           ...(nameOf(term.suggestedMemberId) ? [nameOf(term.suggestedMemberId)!] : []),
           ...(term.suggestedEntryId && entryNames[term.suggestedEntryId] ? [entryNames[term.suggestedEntryId]] : []),
           ...term.alternatives
@@ -138,7 +141,9 @@ export function NamesPage() {
             <div className="term-choices" role="group" aria-label={t('Schreibweise für {name}', { name: term.heard })}>
               {options.map((o) => (
                 <button key={o} type="button" className="btn small outline" aria-pressed={chosen === o} onClick={() => set(chosen === o ? undefined : o)}>
-                  {o}{o === rule ? ' · ' + t('schon einmal berichtigt') : o === nameOf(term.suggestedMemberId) ? ' · ' + t('Charakter') : o === entryNames[term.suggestedEntryId ?? ''] ? ' · ' + t('Bibel') : ''}
+                  {o}{o === rule ? ' · ' + t('schon einmal berichtigt')
+                    : o === nameOf(term.suggestedMemberId) || (o === similar && term.suggestionSource === 'member') ? ' · ' + t('Charakter')
+                      : o === entryNames[term.suggestedEntryId ?? ''] || (o === similar && term.suggestionSource === 'entry') ? ' · ' + t('Bibel') : ''}
                 </button>
               ))}
               <button type="button" className="btn small outline" aria-pressed={chosen === ''} onClick={() => set(chosen === '' ? undefined : '')}>
