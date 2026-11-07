@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useEscape } from './useEscape';
 import { createPortal } from 'react-dom';
 import { resizeImage } from '../covers/resize';
 import { t } from '../i18n';
@@ -18,6 +19,7 @@ export function ImageCropper({ file, onDone, onCancel }: { file: Blob; onDone: (
   const V = Math.min(300, window.innerWidth - 64);
   const [img, setImg] = useState<{ blob: Blob; url: string; w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useEscape(onCancel);
   const [zoom, setZoom] = useState(1);
   const [off, setOff] = useState({ x: 0, y: 0 });
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -101,7 +103,7 @@ export function ImageCropper({ file, onDone, onCancel }: { file: Blob; onDone: (
   };
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(12, 18, 21, 0.94)', display: 'flex', flexDirection: 'column',
+    <div role="dialog" aria-modal="true" aria-label={t('Ausschnitt wählen')} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(12, 18, 21, 0.94)', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 18, padding: 'calc(var(--safe-top) + 16px) 20px calc(var(--safe-bottom) + 16px)', color: '#fbf6ea' }}>
       <div style={{ font: '700 22px/28px var(--font-serif)' }}>{t('Ausschnitt wählen')}</div>
       {error && <div className="error" role="alert">{error}</div>}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useEscape } from './useEscape';
 import { createPortal } from 'react-dom';
 import jsQR from 'jsqr';
 import { t } from '../i18n';
@@ -10,6 +11,7 @@ import { t } from '../i18n';
 export function QrScanner({ onResult, onClose }: { onResult: (text: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
+  useEscape(onClose);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -55,7 +57,7 @@ export function QrScanner({ onResult, onClose }: { onResult: (text: string) => v
   }, [onResult]);
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: '#0c1518', display: 'flex', flexDirection: 'column',
+    <div role="dialog" aria-modal="true" aria-label={t('QR-Code scannen')} style={{ position: 'fixed', inset: 0, zIndex: 80, background: '#0c1518', display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 16, padding: 'calc(var(--safe-top) + 16px) 20px calc(var(--safe-bottom) + 16px)', color: '#fbf6ea' }}>
       <div style={{ font: '700 22px/28px var(--font-serif)' }}>{t('QR-Code scannen')}</div>
       {error ? (

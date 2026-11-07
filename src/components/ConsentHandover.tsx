@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { useState } from 'react';
 import { Divider } from './Screen';
+import { useEscape } from './useEscape';
 
 /**
  * Vollbild zum Weiterreichen des Handys: Die Person selbst liest den Text und bestätigt.
@@ -15,6 +16,8 @@ export function ConsentHandover({ name, text, onConsent, onCancel, self }: {
   onCancel: () => void;
 }) {
   const [checked, setChecked] = useState(false);
+  // Zurück-Taste bzw. Escape = nicht zustimmen, zurück zur Aufnahme
+  useEscape(onCancel);
   return (
     <div
       role="dialog"
