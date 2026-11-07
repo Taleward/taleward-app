@@ -6,7 +6,7 @@ import { campaignOfPath, cleanForCopy, copyable } from './readCopyRules';
 import { hasCopy, keepOnlyCampaigns, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, removeCopiesOfCampaign, saveCopy } from './readCopy';
 import { getLang, t, tk } from '../i18n';
 import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
-import type { InvitePreview, CharacterAnalysis,
+import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview,
   ApiError,
   Campaign,
   CampaignBilling,
@@ -534,6 +534,14 @@ function makeApi(conn: () => Connection) {
     const r = await request<Recap | ProcessingStatus>('POST', `/sessions/${sessionId}/corrections`, { body: { corrections, retranscribe } });
     return 'state' in r ? { status: r } : { recap: r };
   },
+  /** Namen einmal berichtigen, kampagnenweit (nur SL, ab 0.4.31) */
+  nameFixPreview: (campaignId: string, from: string, to: string) =>
+    request<NameFixPreview>('POST', `/campaigns/${campaignId}/name-fixes/preview`, { body: { from, to } }),
+  nameFix: (campaignId: string, body: { from: string; to: string; previewVersion: string; skipHitIds: string[]; rule: boolean }) =>
+    request<NameFix>('POST', `/campaigns/${campaignId}/name-fixes`, { body }),
+  nameFixes: (campaignId: string) => request<{ fixes: NameFix[] }>('GET', `/campaigns/${campaignId}/name-fixes`),
+  deleteNameFixRule: (fixId: string) => request<void>('DELETE', `/name-fixes/${fixId}`),
+  undoNameFix: (fixId: string) => request<{ restored: number; skipped: { place: string; label: string }[] }>('POST', `/name-fixes/${fixId}/undo`),
   publish: (sessionId: string) => request<Session>('POST', `/sessions/${sessionId}/publish`),
   gmNote: (sessionId: string) => request<{ text: string; updatedAt: string }>('GET', `/sessions/${sessionId}/gm-note`),
   saveGmNote: (sessionId: string, text: string) => request<void>('PUT', `/sessions/${sessionId}/gm-note`, { body: { text } }),

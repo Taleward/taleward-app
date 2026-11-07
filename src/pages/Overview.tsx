@@ -1,3 +1,4 @@
+import { NameFixesRow } from '../names/NameFixesRow';
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
 import { LiveBookmark } from '../components/Bookmarks';
 import { CounterKindsRow } from '../characters/Counters';
@@ -774,6 +775,7 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
             <Link className="list-row nav" to={p(`/k/${campaign.id}/unterlagen`)}>
               <span className="lr-text">{t('Unterlagen der SL')}<span className="lr-sub">{t('Abenteuer, Notizen, Karten')}</span></span>
             </Link>
+            {apiAtLeast('0.4.31') && <NameFixesRow campaign={campaign} />}
             {!muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
             <UsageRow campaignId={campaign.id} />
           </div>

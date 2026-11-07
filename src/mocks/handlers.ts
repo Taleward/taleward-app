@@ -3,11 +3,12 @@ import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
 import { textToPdf } from './minipdf';
 import { cleanAliases, findMatch, secretWarnings } from './checks';
 import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
-import { memberCounters, playerExtras, playerHandlers } from './players';
+import { memberCounters, playerExtras, playerHandlers, playerProposals } from './players';
+import { cleanName, countWord, excerptsFor, nameFixProblem, replaceWholeWord } from '../names/nameFix';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
 const COVER_IDS = ['meadow', 'forest', 'desert', 'city', 'cyber', 'mountains', 'coast', 'swamp', 'dungeon', 'space', 'castle', 'dark-fantasy', 'moonwood', 'ancient-ruins', 'tavern', 'battlefield', 'frozen-north', 'arcane-ruins', 'fairy-wilds', 'underworld', 'storm-coast', 'steampunk', 'post-apocalypse', 'western', 'noir', 'space-opera', 'orient', 'necropolis', 'manor', 'riverside-mystery'];
-import type { CampaignDocument, CharacterAnalysis, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member } from '../api/types';
+import type { CampaignDocument, CharacterAnalysis, ChapterPlan, ChapterPlanInput, Link, CampaignExport, CampaignSummary, Character, ImportStatus, Chronicle, Comment, Correction, WorldEntryIn, WorldEntryStatus, Entry, DatePoll, EntryInput, ProcessingStatus, Proposal, Recap, RecapPart, Session, UncertainTerm, VoteAnswer, VoiceProfile, Member, NameFix, NameFixHit, NameFixPlace, NameFixPreview } from '../api/types';
 import {
   ME, NACHBAR_HOST, account, characterAnalyses, gmNotices, world, type WorldRecord, campaigns, comments, coverImages, datePolls, documentTexts, documents, plans, portraits, proposalsForDocument, seen, entries, gmNotes, proposals, proposalsFor, recaps, sessions, speakersFor, uploads, speakerLists, transcripts, uncertainTerms,
   type MockCampaign, type MockSession
@@ -627,6 +628,113 @@ function termsAllowed(method: string, path: string, body: Record<string, unknown
   return false;
 }
 
+// ---------------- 0.4.31: Namen einmal berichtigen
+
+interface NameFixUndo { place: string; label: string; count: number; before: string; after: string; get: () => string; set: (v: string) => void }
+interface NameFixRecord extends NameFix { campaignId: string; undo: NameFixUndo[] }
+const nameFixLog: NameFixRecord[] = [];
+const nameFixCalls: Record<string, number[]> = {};
+
+function nameFixRate(key: string, perHour: number): boolean {
+  const now = Date.now();
+  const list = (nameFixCalls[key] = (nameFixCalls[key] ?? []).filter((t) => now - t < 3600000));
+  if (list.length >= perHour) return true;
+  list.push(now);
+  return false;
+}
+
+function nameFixOut(f: NameFixRecord): NameFix {
+  const { campaignId: _c, undo: _u, ...rest } = f;
+  return { ...rest, undoUntil: f.undoneAt || !f.undoUntil || f.undoUntil < new Date().toISOString() ? null : f.undoUntil };
+}
+
+/** Verhörer-Regel für „Namen prüfen“ (nur Vorschlag, nie still ersetzt) */
+function nameFixRuleFor(campaignId: string, heard: string): NameFixRecord | undefined {
+  return [...nameFixLog].reverse().find((f) => f.campaignId === campaignId && f.rule && f.from === heard);
+}
+
+function nameFixScan(c: MockCampaign, from: string, to: string) {
+  type Spot = { id: string; place: NameFixPlace; label: string; sessionId?: string; sessionNumber?: number; entryId?: string; proposalId?: string;
+    readByPlayers: boolean; get: () => string; set: (v: string) => void };
+  const spots: Spot[] = [];
+  const en = c.language === 'en';
+  const camSessions = sessions.filter((s) => s.campaignId === c.id).sort((a, b) => a.number - b.number);
+  for (const s of camSessions) {
+    const r = recaps[s.id];
+    if (!r) continue;
+    const ch = (en ? 'Chapter' : 'Kapitel') + ` ${s.number}` + (r.title ? ` · ${r.title}` : '');
+    const pub = !!r.publishedAt;
+    spots.push({ id: `t-${s.id}`, place: 'chapter_title', label: ch + (en ? ' (title)' : ' (Titel)'), sessionId: s.id, sessionNumber: s.number, readByPlayers: pub, get: () => r.title, set: (v) => { r.title = v; } });
+    spots.push({ id: `c-${s.id}`, place: 'chapter', label: ch + (pub ? '' : en ? ' (draft)' : ' (Entwurf)'), sessionId: s.id, sessionNumber: s.number, readByPlayers: pub, get: () => r.text, set: (v) => { r.text = v; } });
+  }
+  const bible = en ? 'Bible' : 'Bibel';
+  for (const e of entries.filter((x) => x.campaignId === c.id)) {
+    const open = e.visibility === 'public';
+    spots.push({ id: `n-${e.id}`, place: 'entry_name', label: `${bible}: ${e.name}`, entryId: e.id, readByPlayers: open, get: () => e.name, set: (v) => { e.name = v; } });
+    (e.aliases ?? []).forEach((_, i) => spots.push({ id: `a${i}-${e.id}`, place: 'entry_alias', label: `${bible}: ${e.name} (${en ? 'also called' : 'Auch genannt'})`, entryId: e.id, readByPlayers: open,
+      get: () => (e.aliases ?? [])[i] ?? '', set: (v) => { e.aliases = (e.aliases ?? []).map((x, j) => (j === i ? v : x)).filter((x, j, all) => all.indexOf(x) === j); } }));
+    spots.push({ id: `s-${e.id}`, place: 'entry_summary', label: `${bible}: ${e.name} (${en ? 'description' : 'Beschreibung'})`, entryId: e.id, readByPlayers: open, get: () => e.summary, set: (v) => { e.summary = v; } });
+    spots.push({ id: `g-${e.id}`, place: 'entry_gm_notes', label: `${bible}: ${e.name} (${en ? 'GM note' : 'SL-Notiz'})`, entryId: e.id, readByPlayers: false, get: () => e.gmNotes ?? '', set: (v) => { e.gmNotes = v; } });
+  }
+  for (const p of proposals.filter((x) => x.decision === 'open' && camSessions.some((s) => s.id === x.sessionId))) {
+    const n = camSessions.find((s) => s.id === p.sessionId)?.number;
+    const label = (en ? `Open suggestion from session ${n}` : `Offener Vorschlag aus Runde ${n}`) + `: ${p.title}`;
+    spots.push({ id: `pt-${p.id}`, place: 'session_proposal', label, proposalId: p.id, sessionId: p.sessionId ?? undefined, readByPlayers: false, get: () => p.title, set: (v) => { p.title = v; } });
+    spots.push({ id: `pd-${p.id}`, place: 'session_proposal', label, proposalId: p.id, sessionId: p.sessionId ?? undefined, readByPlayers: false, get: () => p.detail, set: (v) => { p.detail = v; } });
+  }
+  for (const s of camSessions) {
+    const text = transcriptFor(s.id).map((x) => x.text).join('\n');
+    if (!text) continue;
+    spots.push({ id: `x-${s.id}`, place: 'transcript', label: (en ? 'Transcript of session' : 'Abschrift von Runde') + ` ${s.number}`, sessionId: s.id, sessionNumber: s.number, readByPlayers: false,
+      get: () => transcriptFor(s.id).map((x) => x.text).join('\n'),
+      // Abschrift: wie „Namen prüfen“ als Ersetzung über die gespeicherten Korrekturen (Zeitmarken bleiben)
+      set: (v) => {
+        const before = transcriptFor(s.id).map((x) => x.text).join('\n');
+        if (v === replaceWholeWord(before, from, to)) (transcriptFixes[s.id] ??= []).push([from, to]);
+        else (transcriptFixes[s.id] ??= []).push([to, from]);
+      } });
+  }
+  const secretEntry = entries.some((e) => e.campaignId === c.id && (e.visibility !== 'public' || (e.hiddenFromMemberIds ?? []).length > 0)
+    && (e.name === to || (e.aliases ?? []).includes(to)));
+  const hits: NameFixHit[] = [];
+  const apply: Record<string, () => NameFixUndo[]> = {};
+  const versions: string[] = [];
+  let total = 0;
+  for (const sp of spots) {
+    const text = sp.get();
+    const count = countWord(text, from);
+    if (!count) continue;
+    const readByPlayers = sp.readByPlayers;
+    hits.push({ id: sp.id, place: sp.place, label: sp.label, sessionId: sp.sessionId ?? null, sessionNumber: sp.sessionNumber ?? null,
+      entryId: sp.entryId ?? null, proposalId: sp.proposalId ?? null, count, readByPlayers,
+      preselected: !(secretEntry && readByPlayers), excerpts: excerptsFor(text, from) });
+    versions.push(`${sp.id}:${text.length}:${text.slice(0, 40)}`);
+    total += count;
+    apply[sp.id] = () => {
+      const before = sp.get();
+      const after = replaceWholeWord(before, from, to);
+      sp.set(after);
+      return [{ place: sp.place, label: sp.label, count, before, after: sp.get(), get: sp.get, set: sp.set }];
+    };
+  }
+  const gm = myMember(c);
+  const preview: NameFixPreview = {
+    from, to, previewVersion: btoa(unescape(encodeURIComponent(versions.join('|')))).slice(0, 64) + `-${versions.length}`,
+    total, secretWarning: secretEntry && hits.some((h) => h.readByPlayers), hits,
+    untouched: {
+      characters: c.members.flatMap((m) => [
+        ...(countWord(m.characterName ?? '', from) ? [{ memberId: m.id, field: 'name' }] : []),
+        ...(countWord(m.characterSummary ?? '', from) ? [{ memberId: m.id, field: 'summary' }] : []),
+        ...(countWord(m.characterBackstory ?? '', from) ? [{ memberId: m.id, field: 'background' }] : [])
+      ]),
+      comments: gm ? comments.filter((k) => camSessions.some((s) => s.id === k.sessionId) && visibleTo(k, gm.id) && countWord(k.text, from)).length : 0,
+      playerProposals: playerProposals.filter((p) => p.campaignId === c.id && p.state === 'open' && countWord(`${p.title} ${p.detail ?? ''}`, from)).length
+    },
+    existingRule: nameFixRuleFor(c.id, from)?.id ?? null
+  };
+  return { preview, total, apply };
+}
+
 export const handlers = [
   http.post(`${B}/auth/login`, async ({ request }) => {
     await delay(300);
@@ -645,7 +753,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.29', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.31', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -655,7 +763,7 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.29',
+      apiVersion: nachbar ? '0.3.9' : '0.4.31',
       serverId: nachbar ? undefined : 'testserver',
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
@@ -2108,7 +2216,10 @@ export const handlers = [
       audioAvailable: !s.audioDeletedAt,
       audioDeletesAt: s.audioDeletedAt ? null : new Date(Date.now() + 3 * 86400000).toISOString(),
       retranscribesLeft: 2 - (s.retranscribes ?? 0),
-      terms: uncertain[s.id] ?? []
+      terms: (uncertain[s.id] ?? []).map((u) => {
+        const rule = nameFixRuleFor(s.campaignId, u.heard);
+        return rule ? { ...u, suggestedCorrect: rule.to, suggestionSource: 'rule', ruleId: rule.id } : u;
+      })
     });
   }),
 
@@ -2147,6 +2258,82 @@ export const handlers = [
     }
     if (r?.review) Object.assign(r.review, { stale: false, checkedAt: new Date().toISOString() });
     return HttpResponse.json(recapFor(r, true));
+  }),
+
+  // ---------------- 0.4.31: Namen einmal berichtigen (wie der Server, ohne Sprachmodell)
+  http.post(`${B}/campaigns/:id/name-fixes/preview`, async ({ params, request }) => {
+    const c = campaigns.find((x) => x.id === params.id);
+    if (!c || !myMember(c) || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    if (nameFixRate(`p:${c.id}`, 60)) return err(429, 'too_many_requests', 'Zu viele Vorschauen. Versuch es in einer Stunde wieder.');
+    const body = (await request.json()) as { from?: string; to?: string };
+    const from = cleanName(body.from ?? ''), to = cleanName(body.to ?? '');
+    if (nameFixProblem(from, to)) return err(400, 'invalid_name_fix', 'Beide Schreibweisen brauchen 3 bis 64 Zeichen und müssen sich unterscheiden.');
+    const found = nameFixScan(c, from, to);
+    if (found.total > 2000) return err(409, 'too_many_hits', 'Das sind mehr als 2 000 Stellen. Berichtige es lieber in kleineren Schritten.');
+    return HttpResponse.json(found.preview);
+  }),
+
+  http.get(`${B}/campaigns/:id/name-fixes`, ({ params }) => {
+    const c = campaigns.find((x) => x.id === params.id);
+    if (!c || !myMember(c) || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    return HttpResponse.json({ fixes: nameFixLog.filter((f) => f.campaignId === c.id).map(nameFixOut).reverse() });
+  }),
+
+  http.post(`${B}/campaigns/:id/name-fixes`, async ({ params, request }) => {
+    const c = campaigns.find((x) => x.id === params.id);
+    const me = c && myMember(c);
+    if (!c || !me || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    if (nameFixRate(`f:${c.id}`, 20)) return err(429, 'too_many_requests', 'Zu viele Berichtigungen in kurzer Zeit. Versuch es in einer Stunde wieder.');
+    const body = (await request.json()) as { from?: string; to?: string; previewVersion?: string; skipHitIds?: string[]; rule?: boolean };
+    const from = cleanName(body.from ?? ''), to = cleanName(body.to ?? '');
+    if (nameFixProblem(from, to)) return err(400, 'invalid_name_fix', 'Beide Schreibweisen brauchen 3 bis 64 Zeichen und müssen sich unterscheiden.');
+    const found = nameFixScan(c, from, to);
+    if (body.previewVersion !== found.preview.previewVersion) return err(409, 'preview_stale', 'Seit der Vorschau hat sich etwas geändert. Sieh dir die Stellen noch einmal an.');
+    const skip = new Set(body.skipHitIds ?? []);
+    if ([...skip].some((id) => !found.preview.hits.some((h) => h.id === id))) return err(400, 'invalid_input', 'Unbekannte Fundstelle.');
+    const rule = body.rule !== false;
+    if (rule && !nameFixLog.some((f) => f.campaignId === c.id && f.rule && f.from === from) && nameFixLog.filter((f) => f.campaignId === c.id && f.rule).length >= 200) {
+      return err(409, 'rule_limit', 'Diese Kampagne hat schon 200 gemerkte Berichtigungen.');
+    }
+    const undo: NameFixUndo[] = [];
+    let changed = 0;
+    for (const h of found.preview.hits) {
+      if (skip.has(h.id)) continue;
+      changed += h.count;
+      undo.push(...found.apply[h.id]());
+    }
+    if (rule) for (const f of nameFixLog) if (f.campaignId === c.id && f.from === from) f.rule = false;
+    if (rule && !(c.hotwords ?? []).includes(to)) c.hotwords = [...(c.hotwords ?? []), to];
+    const fix: NameFixRecord = {
+      id: `nf-${Date.now().toString(36)}`, campaignId: c.id, from, to, changed, rule, createdAt: new Date().toISOString(),
+      createdBy: me.id, undoUntil: new Date(Date.now() + 24 * 3600000).toISOString(), undoneAt: null, undo
+    };
+    nameFixLog.push(fix);
+    return HttpResponse.json(nameFixOut(fix), { status: 201 });
+  }),
+
+  http.delete(`${B}/name-fixes/:id`, ({ params }) => {
+    const f = nameFixLog.find((x) => x.id === params.id);
+    if (!f || !isGm(f.campaignId)) return err(404, 'not_found', 'Nicht gefunden.');
+    f.rule = false;
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post(`${B}/name-fixes/:id/undo`, ({ params }) => {
+    const f = nameFixLog.find((x) => x.id === params.id);
+    if (!f || !isGm(f.campaignId)) return err(404, 'not_found', 'Nicht gefunden.');
+    if (f.undoneAt) return err(409, 'already_undone', 'Diese Berichtigung ist schon rückgängig gemacht.');
+    if (!f.undoUntil || f.undoUntil < new Date().toISOString()) return err(409, 'undo_expired', 'Rückgängig geht nur 24 Stunden lang.');
+    let restored = 0;
+    const skipped: { place: string; label: string }[] = [];
+    for (const u of f.undo) {
+      if (u.get() === u.after) { u.set(u.before); restored += u.count; }
+      else skipped.push({ place: u.place, label: u.label });
+    }
+    f.undoneAt = new Date().toISOString();
+    f.rule = false;
+    f.undo = [];
+    return HttpResponse.json({ restored, skipped });
   }),
 
   http.post(`${B}/sessions/:id/publish`, ({ params }) => {

@@ -622,6 +622,10 @@ export interface UncertainTerm {
   examples: { start: number; quote: string }[];
   suggestedEntryId: string | null;
   suggestedMemberId: string | null;
+  /** Ab 0.4.31: vorgeschlagene Schreibweise; bei suggestionSource rule aus einer Berichtigung der Kampagne */
+  suggestedCorrect?: string | null;
+  suggestionSource?: 'rule' | 'entry' | 'member' | string | null;
+  ruleId?: string | null;
 }
 
 export interface UncertainTerms {
@@ -949,4 +953,51 @@ export interface ImportStatus {
 /** Gelöschtes Konto: nicht mehr als Person anbieten (Anwesende, Empfänger, Auswahl) */
 export function isDeletedMember(m: Member): boolean {
   return !!m.deletedAt || m.userId === '' || !!m.leftAt || !!m.openSeat;
+}
+
+// ---- Ab Schnittstelle 0.4.31: Namen einmal berichtigen ----
+
+export type NameFixPlace = 'chapter' | 'chapter_title' | 'entry_name' | 'entry_alias' | 'entry_summary' | 'entry_gm_notes'
+  | 'session_proposal' | 'transcript' | string;
+
+export interface NameFixHit {
+  id: string;
+  place: NameFixPlace;
+  label: string;
+  sessionId?: string | null;
+  sessionNumber?: number | null;
+  entryId?: string | null;
+  proposalId?: string | null;
+  count: number;
+  readByPlayers?: boolean;
+  preselected: boolean;
+  /** Satz um die Stelle, das Wort als [[…]] markiert */
+  excerpts?: string[];
+}
+
+export interface NameFixPreview {
+  from: string;
+  to: string;
+  previewVersion: string;
+  total: number;
+  secretWarning: boolean;
+  hits: NameFixHit[];
+  untouched: {
+    characters: { memberId: string; field: 'name' | 'summary' | 'background' | string }[];
+    comments: number;
+    playerProposals: number;
+  };
+  existingRule?: string | null;
+}
+
+export interface NameFix {
+  id: string;
+  from: string;
+  to: string;
+  changed: number;
+  rule: boolean;
+  createdAt: string;
+  createdBy: string;
+  undoUntil?: string | null;
+  undoneAt?: string | null;
 }

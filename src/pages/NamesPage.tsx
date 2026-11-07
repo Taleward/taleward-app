@@ -9,6 +9,7 @@ import { IconLock } from '../components/Icons';
 import { clock } from '../components/RecapReviewView';
 import { ErrorBox, Screen, sessionStorageGet, sessionStorageSet } from '../components/Screen';
 import { t, tn } from '../i18n';
+import { NameFixDialog, serverHasNameFix } from '../names/NameFixDialog';
 
 /** Kann der Server unsichere Namen melden? (Schnittstelle ab 0.4.6) */
 export function serverHasNameCheck(): boolean {
@@ -34,6 +35,10 @@ export function NamesPage() {
   const navigate = useNavigate();
   const [session, setSession] = useState<Session | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [campaignTitle, setCampaignTitle] = useState('');
+  // 0.4.31: auch in früheren Kapiteln und der Bibel berichtigen (je Begriff), danach nacheinander die Vorschau
+  const [everywhere, setEverywhere] = useState<Record<string, boolean>>({});
+  const [fixQueue, setFixQueue] = useState<{ from: string; to: string }[]>([]);
   const [entryNames, setEntryNames] = useState<Record<string, string>>({});
   const [data, setData] = useState<UncertainTerms | null>(null);
   // heard → gewählte Schreibweise; '' = so lassen; fehlt = noch nicht entschieden
@@ -48,7 +53,9 @@ export function NamesPage() {
       .then(([s, u]) => {
         setSession(s);
         setData(u);
-        api.campaign(s.campaignId).then((c) => setMembers(c.members)).catch(() => undefined);
+        api.campaign(s.campaignId).then((c) => { setMembers(c.members); setCampaignTitle(c.title); }).catch(() => undefined);
+        // Gemerkte Berichtigungen der Kampagne gleich vorauswählen (nur Vorschlag, übernommen wird erst mit „Übernehmen“)
+        setChoice(Object.fromEntries(u.terms.filter((x) => x.suggestionSource === 'rule' && x.suggestedCorrect).map((x) => [x.heard, x.suggestedCorrect!])));
         if (u.terms.some((x) => x.suggestedEntryId)) {
           api.entries(s.campaignId).then((list) => setEntryNames(Object.fromEntries(list.map((e) => [e.id, e.name])))).catch(() => undefined);
         }
@@ -73,7 +80,10 @@ export function NamesPage() {
       const r = await api.corrections(sessionId, corrections(), retranscribe);
       markSkipped(sessionId); // Rest nicht noch einmal automatisch zeigen
       if ('status' in r) navigate(p(`/s/${sessionId}`), { replace: true });
-      else toReview();
+      else {
+        const queue = Object.entries(choice).filter(([heard, correct]) => correct && everywhere[heard]).map(([from, to]) => ({ from, to }));
+        if (queue.length && session) { setFixQueue(queue); setBusy(false); } else toReview();
+      }
     } catch (e) {
       setError(e);
       setBusy(false);
@@ -101,7 +111,9 @@ export function NamesPage() {
       )}
 
       {data?.terms.map((term) => {
+        const rule = term.suggestionSource === 'rule' && term.suggestedCorrect ? term.suggestedCorrect : null;
         const options = [
+          ...(rule ? [rule] : []),
           ...(nameOf(term.suggestedMemberId) ? [nameOf(term.suggestedMemberId)!] : []),
           ...(term.suggestedEntryId && entryNames[term.suggestedEntryId] ? [entryNames[term.suggestedEntryId]] : []),
           ...term.alternatives
@@ -126,7 +138,7 @@ export function NamesPage() {
             <div className="term-choices" role="group" aria-label={t('Schreibweise für {name}', { name: term.heard })}>
               {options.map((o) => (
                 <button key={o} type="button" className="btn small outline" aria-pressed={chosen === o} onClick={() => set(chosen === o ? undefined : o)}>
-                  {o}{o === nameOf(term.suggestedMemberId) ? ' · ' + t('Charakter') : o === entryNames[term.suggestedEntryId ?? ''] ? ' · ' + t('Bibel') : ''}
+                  {o}{o === rule ? ' · ' + t('schon einmal berichtigt') : o === nameOf(term.suggestedMemberId) ? ' · ' + t('Charakter') : o === entryNames[term.suggestedEntryId ?? ''] ? ' · ' + t('Bibel') : ''}
                 </button>
               ))}
               <button type="button" className="btn small ghost" aria-pressed={chosen === ''} onClick={() => set(chosen === '' ? undefined : '')}>
@@ -142,6 +154,13 @@ export function NamesPage() {
                   set(v.trim() ? v.trim() : undefined);
                 }} />
             </div>
+            {serverHasNameFix() && !!chosen && chosen !== term.heard && (
+              <label className="check small">
+                <input type="checkbox" checked={!!everywhere[term.heard]}
+                  onChange={(e) => setEverywhere((w) => ({ ...w, [term.heard]: e.target.checked }))} />
+                <span>{t('Auch in früheren Kapiteln und der Bibel')}</span>
+              </label>
+            )}
           </section>
         );
       })}
@@ -177,6 +196,11 @@ export function NamesPage() {
       <button type="button" className="btn ghost" disabled={busy} onClick={skip}>
         {data && data.terms.length === 0 ? t('Weiter zu den Vorschlägen') : t('Überspringen')}
       </button>
+      {fixQueue.length > 0 && session && (
+        <NameFixDialog key={fixQueue[0].from} campaignId={session.campaignId} campaignTitle={campaignTitle} members={members}
+          from={fixQueue[0].from} to={fixQueue[0].to}
+          onClose={() => { const rest = fixQueue.slice(1); setFixQueue(rest); if (!rest.length) toReview(); }} />
+      )}
     </Screen>
   );
 }

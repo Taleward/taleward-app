@@ -2362,3 +2362,10 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .recap p:focus { outline: none; }
 .recap p:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
 .live-bookmark { gap: 10px; }
+
+/* Namen einmal berichtigen (0.4.31): Fundstellen als ruhige Liste, Achtung bei geheimen Namen */
+.notice.warn { box-shadow: inset 3px 0 0 var(--siegel); }
+.namefix-hits { display: grid; gap: 2px; max-height: 40vh; overflow-y: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 6px 0; }
+.namefix-hit { display: grid; gap: 2px; padding: 4px 0; }
+.namefix-hit details { margin-left: 34px; }
+.namefix-hit summary { cursor: pointer; color: var(--ink-muted); min-height: 32px; display: inline-flex; align-items: center; }

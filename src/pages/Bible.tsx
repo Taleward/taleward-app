@@ -1,3 +1,4 @@
+import { NameFixDialog, serverHasNameFix } from '../names/NameFixDialog';
 import { isDeletedMember } from '../api/types';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { confirmDialog } from '../components/confirm';
@@ -173,7 +174,7 @@ export function Bible() {
         {all && !entry && <div className="empty">{t('Diesen Eintrag gibt es nicht mehr.')}</div>}
         {entry && (
           <EntryDetail key={entry.id} entry={entry} gm={gm} holder={holder(entry.holderMemberId)} campaign={campaign} players={players}
-            canPropose={!gm && proposalsOn} onProposed={loadPps}
+            canPropose={!gm && proposalsOn} onProposed={loadPps} onReload={() => setReload((n) => n + 1)}
             onChanged={(u) => {
               setAll((list) => (u ? list?.map((x) => (x.id === u.id ? u : x)) : list?.filter((x) => x.id !== entry.id)) ?? null);
               if (!u) setParam('e', null);
@@ -434,16 +435,19 @@ function AddEntry({ campaignId, type: initialType, players, onDone }: { campaign
 }
 
 /** Ein Bibeleintrag, ganz geöffnet; die SL kann bearbeiten, Sichtbarkeit ändern, freigeben, löschen */
-function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged, canPropose, onProposed }: {
+function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged, canPropose, onProposed, onReload }: {
   entry: Entry;
   gm: boolean;
   holder: string | null;
   campaign: Campaign | null;
   players: Member[];
   onChanged: (updated: Entry | null) => void;
+  /** Nach einer Berichtigung der Schreibweise (0.4.31) die ganze Bibel neu laden */
+  onReload?: () => void;
   canPropose?: boolean;
   onProposed?: () => void;
 }) {
+  const [fixing, setFixing] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [proposed, setProposed] = useState(false);
   const [choosing, setChoosing] = useState(false);
@@ -663,8 +667,15 @@ function EntryDetail({ entry: e, gm, holder, campaign, players, onChanged, canPr
           onDone={(created) => { setProposing(false); if (created) { setProposed(true); onProposed?.(); } }} />
       )}
 
+      {gm && campaign && serverHasNameFix() && (
+        <button type="button" className="quiet-link" disabled={busy} onClick={() => setFixing(true)}>{t('Schreibweise berichtigen')}</button>
+      )}
       {gm && (
         <button type="button" className="quiet-link danger" disabled={busy} onClick={remove}>{t('Eintrag löschen')}</button>
+      )}
+      {fixing && campaign && (
+        <NameFixDialog campaignId={campaign.id} campaignTitle={campaign.title} members={campaign.members} from={e.name}
+          onClose={() => setFixing(false)} onDone={() => onReload?.()} />
       )}
 
       {assigning && campaign && (
