@@ -1,3 +1,5 @@
+import { OpenShareRow, canOpenShares } from '../share/OpenShareRow';
+import { cleanShareKeys } from '../share/keys';
 import { listCharacters } from '../characters/store';
 import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
 import { EmailNudge } from '../components/EmailNudge';
@@ -109,7 +111,9 @@ export function Campaigns() {
           appDownloadSha256: info.appDownloadSha256 ?? null, appDownloadSizeBytes: info.appDownloadSizeBytes ?? null
         };
         const tooOld = !!appInfo.minAppVersion && versionLess(APP_VERSION, appInfo.minAppVersion);
-        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null });
+        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null,
+          // Schlüssel für geteilte Kapitel nur über eine angemeldete Verbindung merken, nie aus einer Datei
+          ...(hasValidToken(conn) && info.shareKeys !== undefined ? { shareKeys: cleanShareKeys(info.shareKeys) } : {}) });
         if (tooOld || versionLess(info.apiVersion, MIN_API_VERSION)) return { conn, list: [] as CampaignSummary[], ok: true };
         // Eigenes Profil nur, wenn es für das Anlegen zählt (SL-Freigabe ab 0.4.23, Nutzungsbedingungen ab 0.4.22)
         if (hasValidToken(conn) && (info.gmApproval === 'required' || info.termsVersion)) {
@@ -388,6 +392,7 @@ export function Campaigns() {
             <IconLink /><span className="lr-text">{t('Einladung annehmen')}</span>
           </button>
         )}
+        {mode === 'none' && canOpenShares() && <OpenShareRow />}
         {(active.some(serverHasCharacters) || listCharacters().length > 0) && (
           <Link className="list-row" to="/charaktere"><IconUser /><span className="lr-text">{t('Meine Charaktere')}</span></Link>
         )}

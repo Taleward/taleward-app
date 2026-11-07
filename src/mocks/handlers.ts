@@ -4,6 +4,7 @@ import { textToPdf } from './minipdf';
 import { cleanAliases, findMatch, secretWarnings } from './checks';
 import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
 import { memberCounters, playerExtras, playerHandlers, playerProposals } from './players';
+import { mockMemberKey, mockShareFile, mockShareServerKey } from './share';
 import { cleanName, countWord, excerptsFor, nameFixProblem, replaceWholeWord } from '../names/nameFix';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
@@ -749,7 +750,7 @@ export const handlers = [
     return HttpResponse.json({ accessToken: TOKEN, expiresAt: new Date(Date.now() + 864e5 * 30).toISOString(), user: meUser() });
   }),
 
-  http.get(`${B}/info`, ({ request }) => {
+  http.get(`${B}/info`, async ({ request }) => {
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
@@ -765,6 +766,8 @@ export const handlers = [
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
       apiVersion: nachbar ? '0.3.9' : '0.4.31',
       serverId: nachbar ? undefined : 'testserver',
+      // 0.4.30: Kapitel teilen
+      shareKeys: nachbar ? undefined : [await mockShareServerKey().then(({ id, spki }) => ({ id, spki }))],
       registration: nachbar ? 'invite_only' : registrationSetting(),
       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
       // 0.4.25: Guthaben (taleward.mock.billing)
@@ -1090,10 +1093,34 @@ export const handlers = [
     return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), members: membersFor(c) });
   }),
 
-  http.get(`${B}/campaigns/:id`, ({ params }) => {
+  http.get(`${B}/campaigns/:id`, ({ params, request }) => {
     const c = campaigns.find((x) => x.id === params.id);
     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
+    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c),
+      // 0.4.30: eigener Schlüssel für geteilte Kapitel, nur für sich selbst
+      shareKey: hostKey(request) === DEMO_HOST ? undefined : mockMemberKey(myMember(c)!.id, myMember(c)!.displayName) });
+  }),
+
+  // 0.4.30: Kapitel als verschlüsselte Datei teilen (nur SL, nur veröffentlicht)
+  http.post(`${B}/campaigns/:id/shares`, async ({ params, request }) => {
+    const c = campaigns.find((x) => x.id === params.id);
+    if (!c || !myMember(c) || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+    const { sessionId } = (await request.json()) as { sessionId?: string };
+    const s = sessions.find((x) => x.id === sessionId && x.campaignId === c.id);
+    const r = s && recaps[s.id];
+    if (!s || !r) return err(404, 'not_found', 'Kapitel nicht gefunden.');
+    if (s.state !== 'published' || !r.publishedAt) return err(409, 'not_published', 'Teilen geht erst, wenn das Kapitel veröffentlicht ist.');
+    const active = c.members.filter((m) => !m.leftAt && !m.deletedAt);
+    const keys = active.map((m) => ({ m, k: mockMemberKey(m.id, m.displayName) }));
+    const content = {
+      campaignTitle: c.title,
+      sessions: [{ session: { id: s.id, number: s.number, title: s.title, playedAt: s.playedAt, state: s.state },
+        recap: { sessionId: r.sessionId, number: r.number, title: r.title, text: r.text, openThreads: r.openThreads, publishedAt: r.publishedAt, parts: r.parts ?? [] } }],
+      entries: entries.filter((e) => e.campaignId === c.id && e.visibility === 'public' && !(e.hiddenFromMemberIds ?? []).length)
+        .map(({ gmNotes: _g, hiddenFromMemberIds: _h, formerHolderMemberId: _f, links, ...e }) => ({ ...e, links: (links ?? []).filter((l) => l.shared !== false), mentions: [] }))
+    };
+    const file = await mockShareFile('testserver', c.id, content, keys.flatMap(({ k }) => (k ? [k] : [])));
+    return HttpResponse.json({ file, fileName: `taleward-kapitel-${s.number}.taleward`, missingKeys: keys.filter(({ k }) => !k).map(({ m }) => m.id) });
   }),
 
   // ---------------- Charaktere (0.4.7)

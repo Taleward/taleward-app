@@ -71,6 +71,9 @@ function campaign(c: Obj, me: string | null): Obj {
   // Spieler bekommen ohnehin nur geteilte Links; bei der SL nur die ausdrücklich geteilten
   out.links = c.myRole === 'gm' ? sharedLinks(c.links) : (Array.isArray(c.links) ? c.links.filter(isObj) : []);
   out.members = Array.isArray(c.members) ? c.members.filter(isObj).map((m) => member(m, me)) : [];
+  // Ab 0.4.30: eigener Schlüssel für geteilte Kapitel – öffnet nur, was ohnehin in dieser Kopie liegt
+  if (isObj(c.shareKey) && typeof c.shareKey.id === 'string' && typeof c.shareKey.key === 'string'
+    && /^[A-Za-z0-9_-]{1,64}$/.test(c.shareKey.id) && /^[A-Za-z0-9_-]{43}$/.test(c.shareKey.key)) out.shareKey = { id: c.shareKey.id, key: c.shareKey.key };
   return out;
 }
 

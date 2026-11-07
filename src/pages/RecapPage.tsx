@@ -8,6 +8,7 @@ import { MyBookmarks } from '../components/Bookmarks';
 import { Comments } from '../components/Comments';
 import { OpenThreads, RecapView } from '../components/RecapView';
 import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+import { ShareChapter, serverCanShare } from '../share/ShareChapter';
 
 export function RecapPage() {
   const { sessionId = '' } = useParams();
@@ -56,6 +57,7 @@ export function RecapPage() {
           <RecapView recap={recap} playedAt={playedAt}
             marked={new Set(bookmarks.map((b) => b.recapParagraph).filter((n): n is number => n != null))} />
           <OpenThreads threads={recap.openThreads} />
+          {campaign?.myRole === 'gm' && recap.publishedAt && serverCanShare() && <ShareChapter campaign={campaign} sessionId={sessionId} />}
           {campaign?.myRole !== 'gm' && (
             <MyBookmarks list={bookmarks} onJump={jump}
               onDelete={(id) => api.deleteBookmark(id).then(loadBookmarks).catch(setError)} />

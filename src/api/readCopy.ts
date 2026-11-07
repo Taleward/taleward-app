@@ -41,7 +41,7 @@ function req<T>(r: IDBRequest<T>): Promise<T> {
 const keyOf = (connId: string, userId: string, path: string) => `${connId}|${userId}|${path}`;
 
 export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null,
-  stillAllowed: () => boolean = () => true): Promise<void> {
+  stillAllowed: () => boolean = () => true, savedAt: string = new Date().toISOString()): Promise<void> {
   const db = await open();
   if (!db) return;
   const key = keyOf(connId, userId, path);
@@ -61,7 +61,7 @@ export async function saveCopy(connId: string, userId: string, path: string, dat
   // holt den Kapitel-Kopf zuerst, danach kommt der Rest beim nächsten Nachladen
   if (!campaign && path !== '/campaigns') return;
   if (!stillAllowed()) return;
-  const row: Row = { key, connId, userId, campaignId: campaign, savedAt: new Date().toISOString(), data };
+  const row: Row = { key, connId, userId, campaignId: campaign, savedAt, data };
   const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
   await req(store.put(row));
 }

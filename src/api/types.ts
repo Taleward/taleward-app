@@ -278,6 +278,8 @@ export interface Link {
 
 export interface Campaign extends CampaignSummary {
   description: string;
+  /** Ab 0.4.30: eigener Schlüssel für geteilte Kapitel (nur für sich selbst, nur in GET /campaigns/{id}) */
+  shareKey?: { id: string; key: string } | null;
   /** Links der Kampagne (ab 0.4.13); Spieler bekommen nur geteilte */
   links?: Link[];
   /** Spielsystem; null wird wie 'other' behandelt (ab 0.3.3) */
@@ -844,6 +846,10 @@ export interface CloudProviderInfo {
 /** Öffentliche Angaben eines Servers, abrufbar ohne Anmeldung (ab 0.3.2) */
 export interface ServerInfo {
   name: string;
+  /** Ab 0.4.30: Signierschlüssel für geteilte Kapitel; fehlt = Server kann nicht teilen */
+  shareKeys?: { id: string; spki: string }[];
+  /** Ab 0.4.32: Discord-Bot eingeschaltet */
+  discordBot?: boolean;
   operator: string;
   contact: string | null;
   apiVersion: string;

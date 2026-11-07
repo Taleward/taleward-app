@@ -534,6 +534,9 @@ function makeApi(conn: () => Connection) {
     const r = await request<Recap | ProcessingStatus>('POST', `/sessions/${sessionId}/corrections`, { body: { corrections, retranscribe } });
     return 'state' in r ? { status: r } : { recap: r };
   },
+  /** Kapitel als verschlüsselte Datei teilen (nur SL, ab 0.4.30) */
+  shareChapter: (campaignId: string, sessionId: string) =>
+    request<{ file: string; fileName: string; missingKeys: string[] }>('POST', `/campaigns/${campaignId}/shares`, { body: { sessionId } }),
   /** Namen einmal berichtigen, kampagnenweit (nur SL, ab 0.4.31) */
   nameFixPreview: (campaignId: string, from: string, to: string) =>
     request<NameFixPreview>('POST', `/campaigns/${campaignId}/name-fixes/preview`, { body: { from, to } }),

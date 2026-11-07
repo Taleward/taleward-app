@@ -33,6 +33,8 @@ export interface Connection {
   appOutdated?: boolean;
   /** Feste Kennung des Servers aus /info (ab 0.4.16) – erkennt ihn unter neuer Adresse wieder */
   serverId?: string | null;
+  /** Signierschlüssel für geteilte Kapitel (ab 0.4.30), nur aus /info einer angemeldeten Verbindung */
+  shareKeys?: { id: string; spki: string }[] | null;
 }
 
 /** Ist diese App für den Server zu alt? */
