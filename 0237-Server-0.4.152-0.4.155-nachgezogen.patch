@@ -1,0 +1,89 @@
+From ea30f48ab47f60851608fd6a2f2483c17d348b37 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 14:28:20 +0100
+Subject: [PATCH] Server 0.4.152-0.4.155 nachgezogen
+
+YAML: 503 share_unavailable beim Kapitel teilen. Namen pruefen zeigt auch
+aehnliche Namen aus Bibel und Charakteren (suggestionSource entry/member).
+Konto loeschen nennt den Umgang mit restlichem Guthaben.
+---
+ docs/session-chronik-api.yaml | 6 ++++++
+ src/i18n/en.ts                | 1 +
+ src/mocks/handlers.ts         | 2 +-
+ src/pages/AccountPage.tsx     | 5 +++++
+ src/pages/NamesPage.tsx       | 7 ++++++-
+ 5 files changed, 19 insertions(+), 2 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 7d78099..6e79fbc 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -1401,4 +1401,10 @@ paths:
+         "409": { $ref: "#/components/responses/Conflict" }
+         "429": { $ref: "#/components/responses/TooManyRequests" }
++        "503":
++          description: |
++            `share_unavailable` (ab Server 0.4.152): Der Signierschlüssel ist gerade nicht lesbar (z. B. Schutz der
++            Schlüsselablage des Betriebssystems). Nichts wurde erzeugt; später noch einmal versuchen. Die App zeigt die
++            Meldung des Servers.
++          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+ 
+   /campaigns/{campaignId}/members/me/world:
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 338d9d5..2b0990c 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1863,3 +1863,4 @@ export const en: Record<string, string> = {
+   "Zustimmung ohne Verbindung unbekannt": "consent unknown without a connection",
+   "Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.": "You haven't opened this before going offline. It loads once the server is reachable again.",
++  "Von deinem Guthaben ({amount}) bekommst du zurück, was aus Zahlungen übrig ist. Bis dahin behält der Server nur den Betrag und deine bestätigte E-Mail-Adresse, höchstens 90 Tage.": "You get back whatever is left of your credit ({amount}) from payments. Until then the server keeps only the amount and your confirmed email address, for 90 days at most.",
+ };
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index e5a7e83..4a4a2a8 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -196,5 +196,5 @@ const uncertain: Record<string, UncertainTerm[]> = Object.assign(uncertainTerms,
+       suggestedEntryId: null, suggestedMemberId: 'm-lea' },
+     { id: 'ut2', heard: 'Kaltenfurth', alternatives: ['Kaltenfurt'], occurrences: 2, confidence: 0.55,
+-      examples: [{ start: 320, quote: 'Morgen früh sind wir in Kaltenfurth.' }], suggestedEntryId: null, suggestedMemberId: null },
++      examples: [{ start: 320, quote: 'Morgen früh sind wir in Kaltenfurth.' }], suggestedEntryId: null, suggestedMemberId: null, suggestedCorrect: 'Kaltenfurt', suggestionSource: 'entry' },
+     { id: 'ut3', heard: 'Veira', alternatives: ['Veyra', 'Vera'], occurrences: 3, confidence: 0.48,
+       examples: [{ start: 1530, quote: 'Veira, lass sie durch.' }], suggestedEntryId: null, suggestedMemberId: null }
+diff --git a/src/pages/AccountPage.tsx b/src/pages/AccountPage.tsx
+index 7a87a5c..dc13879 100644
+--- a/src/pages/AccountPage.tsx
++++ b/src/pages/AccountPage.tsx
+@@ -256,4 +256,9 @@ function ServerDetails({ conn }: { conn: Connection }) {
+                     {t('Gelöscht werden: Konto, Charakterbilder, Zustimmungen, Stimmprofil. Deine Kommentare bleiben als „Gelöschtes Konto“ stehen, damit Gespräche verständlich bleiben. Kampagnen, in denen sonst niemand ist, werden mitgelöscht; solche mit anderen Mitgliedern musst du vorher an eine andere SL übergeben.')}
+                   </span>
++                  {billing && balance !== null && balance > 0 && (
++                    <span className="small">
++                      {t('Von deinem Guthaben ({amount}) bekommst du zurück, was aus Zahlungen übrig ist. Bis dahin behält der Server nur den Betrag und deine bestätigte E-Mail-Adresse, höchstens 90 Tage.', { amount: eur(balance) })}
++                    </span>
++                  )}
+                   <div className="field">
+                     <label htmlFor={`del-${conn.id}`}>{conn.user?.hasPassword === false ? t('Zur Bestätigung dein Benutzername') : t('Zur Bestätigung dein Passwort')}</label>
+diff --git a/src/pages/NamesPage.tsx b/src/pages/NamesPage.tsx
+index f2a904c..dc5a98d 100644
+--- a/src/pages/NamesPage.tsx
++++ b/src/pages/NamesPage.tsx
+@@ -113,6 +113,9 @@ export function NamesPage() {
+       {data?.terms.map((term) => {
+         const rule = term.suggestionSource === 'rule' && term.suggestedCorrect ? term.suggestedCorrect : null;
++        // Ab Server 0.4.154 auch ohne Regel: ähnlicher Name aus Bibel oder Charakter
++        const similar = (term.suggestionSource === 'entry' || term.suggestionSource === 'member') && term.suggestedCorrect ? term.suggestedCorrect : null;
+         const options = [
+           ...(rule ? [rule] : []),
++          ...(similar ? [similar] : []),
+           ...(nameOf(term.suggestedMemberId) ? [nameOf(term.suggestedMemberId)!] : []),
+           ...(term.suggestedEntryId && entryNames[term.suggestedEntryId] ? [entryNames[term.suggestedEntryId]] : []),
+@@ -139,5 +142,7 @@ export function NamesPage() {
+               {options.map((o) => (
+                 <button key={o} type="button" className="btn small outline" aria-pressed={chosen === o} onClick={() => set(chosen === o ? undefined : o)}>
+-                  {o}{o === rule ? ' · ' + t('schon einmal berichtigt') : o === nameOf(term.suggestedMemberId) ? ' · ' + t('Charakter') : o === entryNames[term.suggestedEntryId ?? ''] ? ' · ' + t('Bibel') : ''}
++                  {o}{o === rule ? ' · ' + t('schon einmal berichtigt')
++                    : o === nameOf(term.suggestedMemberId) || (o === similar && term.suggestionSource === 'member') ? ' · ' + t('Charakter')
++                      : o === entryNames[term.suggestedEntryId ?? ''] || (o === similar && term.suggestionSource === 'entry') ? ' · ' + t('Bibel') : ''}
+                 </button>
+               ))}
