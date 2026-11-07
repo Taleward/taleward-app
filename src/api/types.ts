@@ -7,6 +7,8 @@ export type EntryType = 'npc' | 'location' | 'quest' | 'item' | 'faction' | 'oth
 
 export type ProcessingState =
   | 'created'
+  | 'recording' // ab 0.4.32: der Discord-Bot nimmt auf
+  | 'no_recording' // ab 0.4.32: Bot-Runde ohne Ton
   | 'uploading'
   | 'queued'
   | 'transcribing'
@@ -404,7 +406,7 @@ export interface Attendee {
   memberId?: string;
   guestName?: string;
   consent: boolean;
-  consentSource?: 'app' | 'on_site';
+  consentSource?: 'app' | 'on_site' | 'link'; // link ab 0.4.32 (Discord-Bot, nur Server)
   consentAt?: string | null;
 }
 

@@ -1763,4 +1763,5 @@ export const en: Record<string, string> = {
   "Neuer Gast …": "New guest …",
   "Unterlagen der SL": "GM documents",
   "Abenteuer, Notizen, Karten": "Adventures, notes, maps",
+  "Ohne Aufnahme": "No recording",
 };

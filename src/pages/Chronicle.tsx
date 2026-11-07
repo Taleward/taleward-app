@@ -10,6 +10,8 @@ import { ErrorBox, Screen, clearStoredUnread, rememberCampaign, sessionStorageSe
 
 export const PENDING_LABEL: Partial<Record<SessionSummary['state'], string>> = {
   created: tk('Noch keine Aufnahme'),
+  recording: tk('Aufnahme läuft'),
+  no_recording: tk('Ohne Aufnahme'),
   uploading: tk('Upload läuft'),
   queued: tk('Wartet auf den Server'),
   transcribing: tk('Wird transkribiert'),
