@@ -1,0 +1,296 @@
+From 4bcd9f306e98a7a4919e17b893a5a13ca6d9801c Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 11:00:48 +0100
+Subject: [PATCH 228/229] Schnittstelle 0.4.31: Namen einmal berichtigen
+
+---
+ docs/session-chronik-api.yaml | 257 +++++++++++++++++++++++++++++++++-
+ 1 file changed, 256 insertions(+), 1 deletion(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 55b7cb0..e4f1932 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.30
++  version: 0.4.31
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -292,4 +292,11 @@ info:
+     nur, was jedes Mitglied ohnehin sieht. Dateiformat und Prüfreihenfolge: Schema ShareFile. Ältere Apps ignorieren
+     shareKey und shareKeys; ältere Server bieten das Teilen nicht an.
++    Änderungen in 0.4.31 (Namen einmal berichtigen): Die SL berichtigt eine Schreibweise kampagnenweit
++    (/campaigns/{id}/name-fixes): erst Vorschau mit allen Fundstellen, dann Berichtigen, 24 Stunden lang rückgängig.
++    Geändert werden Kapitel (auch veröffentlichte, ohne Benachrichtigung), Bibel, offene Vorschläge aus Runden und
++    Abschriften; nie Charaktere, Kommentare, Vorschläge von Spielenden, Merkstellen oder Unterlagen. Daraus entsteht auf
++    Wunsch eine Verhörer-Regel: „Namen prüfen“ späterer Runden schlägt die richtige Schreibweise vor
++    (UncertainTerm.suggestedCorrect, suggestionSource rule), ersetzt aber nie still. Nur SL, kein Sprachmodell.
++    Ältere Apps sehen davon nur die berichtigten Texte; ältere Server bieten es nicht an.
+ 
+ servers:
+@@ -319,4 +326,5 @@ tags:
+   - name: Umzug
+   - name: Guthaben
++  - name: Namen
+ 
+ paths:
+@@ -3021,4 +3029,160 @@ paths:
+         "409": { $ref: "#/components/responses/Conflict" }
+ 
++  /campaigns/{campaignId}/name-fixes/preview:
++    parameters: [{ $ref: "#/components/parameters/campaignId" }]
++    post:
++      tags: [Namen]
++      summary: Vorschau einer Berichtigung – alle Fundstellen einer Schreibweise (nur SL, ab 0.4.31; sonst 404)
++      description: |
++        Sucht `from` als ganzes Wort (wörtlich, keine regulären Ausdrücke, Groß-/Kleinschreibung wie eingegeben; deutsche
++        Endungen mit: „Orasilas’“, „Orasilas’ Schwur“, „Orasilas'“) in:
++        - Kapiteln (veröffentlicht und Entwürfe; Titel und Text),
++        - Bibel-Einträgen (Name, „Auch genannt“, Beschreibung, SL-Notiz),
++        - offenen Vorschlägen aus Runden (Titel, Text) – nicht in Vorschlägen von Spielenden,
++        - Abschriften aller Runden, solange vorhanden (reine Wortersetzung, Zeitmarken bleiben).
++        Nur gezählt bzw. als Ort genannt, nie geändert und nie im Wortlaut (`untouched`): Charaktere (nur Name,
++        Kurzbeschreibung, Hintergrund – Felder, die die SL ohnehin sieht), Kommentare, die die SL sehen kann (private
++        Kommentare unter anderen zählen nicht), offene Vorschläge von Spielenden. Nie durchsucht, auch nicht gezählt:
++        Merkstellen und ihre Notizen, Zähler, Teilen-Schlüssel, Stimmen und Hörproben, Unterlagen, Mails, Protokolle.
++
++        Warnung bei geheimen Namen: Ist `to` der Name oder ein „Auch genannt“ eines Eintrags, den nicht alle Spielenden
++        sehen, und sind unter den Treffern Orte, die Spielende lesen (veröffentlichte Kapitel, Einträge für alle oder
++        einzelne), steht `secretWarning: true`, und diese Treffer tragen `preselected: false`. Die App zeigt dann oben:
++        „‚Horasilas‘ steht bisher nur in Geheimem. In veröffentlichten Kapiteln lesen ihn danach alle.“
++
++        Eingabe: beide Seiten bereinigt (Steuerzeichen, Leerraum an den Enden), 3–64 Zeichen, kein Zeilenumbruch,
++        `from` ≠ `to` (sonst 400 `invalid_name_fix`). Mehr als 2 000 Stellen → 409 `too_many_hits` (message sagt, es
++        lieber in kleineren Schritten zu tun). Keine Treffer → 200 mit leerer Liste. Höchstens 60 Vorschauen je Konto und
++        Stunde (429).
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema: { $ref: "#/components/schemas/NameFixInput" }
++      responses:
++        "200":
++          description: Fundstellen
++          content:
++            application/json:
++              schema: { $ref: "#/components/schemas/NameFixPreview" }
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++        "429": { $ref: "#/components/responses/TooManyRequests" }
++
++  /campaigns/{campaignId}/name-fixes:
++    parameters: [{ $ref: "#/components/parameters/campaignId" }]
++    get:
++      tags: [Namen]
++      summary: Berichtigungen und Verhörer-Regeln der Kampagne (nur SL, ab 0.4.31; sonst 404)
++      description: |
++        Neueste zuerst. Für alle SL der Kampagne sichtbar (Protokoll: wer, wann, von → nach, Anzahl), nie für
++        Spielende, nie in Mails oder Push. `undoUntil` nur, solange Rückgängig möglich ist.
++      responses:
++        "200":
++          description: OK
++          content:
++            application/json:
++              schema:
++                type: object
++                required: [fixes]
++                properties:
++                  fixes:
++                    type: array
++                    items: { $ref: "#/components/schemas/NameFix" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++    post:
++      tags: [Namen]
++      summary: Berichtigen (nur SL, ab 0.4.31; sonst 404)
++      description: |
++        Führt die Berichtigung aus der Vorschau aus, in einer Transaktion. `previewVersion` und `skipHitIds` stammen aus
++        der eigenen Vorschau. Hat sich ein Treffer-Ort seit der Vorschau geändert (Prüfsumme je Ort), passiert nichts →
++        409 `preview_stale` (die App holt die Vorschau neu). Unbekannte `skipHitIds` → 400.
++        Veröffentlichte Kapitel ändern sich als Bearbeitung der SL (in der vorhandenen Fassungsgeschichte, nur SL
++        sichtbar), ohne Benachrichtigung an die Spielenden. Bibel-Änderungen laufen wie PATCH /entries (Säubern,
++        „Auch genannt“ ohne Doppel). Sichtbarkeiten ändern sich nie. Die Abschrift-Ersetzung ist eine ausdrückliche
++        Handlung der SL, die Zeitmarken bleiben.
++        `rule: true` (Standard) legt zusätzlich eine Verhörer-Regel `from → to` an und nimmt `to` in die Namenshilfe der
++        Kampagne. Die Regel gilt nur in dieser Kampagne und wirkt nur als Vorschlag in „Namen prüfen“ (siehe
++        UncertainTerm.suggestionSource); höchstens 200 Regeln je Kampagne (409 `rule_limit`).
++        Höchstens 20 Berichtigungen je Kampagne und Stunde (429).
++        Umzug: Verhörer-Regeln gehen mit (ohne Person, ohne Protokoll), Rückgängig-Texte nie.
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              allOf:
++                - { $ref: "#/components/schemas/NameFixInput" }
++                - type: object
++                  required: [previewVersion]
++                  properties:
++                    previewVersion: { type: string, description: "Aus NameFixPreview.previewVersion" }
++                    skipHitIds:
++                      type: array
++                      items: { type: string }
++                      description: "Abgewählte Treffer aus der Vorschau"
++                    rule: { type: boolean, default: true, description: "Künftig erkennen (Verhörer-Regel)" }
++      responses:
++        "201":
++          description: Berichtigt
++          content:
++            application/json:
++              schema: { $ref: "#/components/schemas/NameFix" }
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++        "429": { $ref: "#/components/responses/TooManyRequests" }
++
++  /name-fixes/{fixId}:
++    parameters: [{ name: fixId, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" } }]
++    delete:
++      tags: [Namen]
++      summary: Verhörer-Regel löschen (nur SL der Kampagne, ab 0.4.31; sonst 404)
++      description: |
++        Entfernt nur die Regel (künftige Vorschläge). Schon berichtigte Texte bleiben, der Eintrag im Protokoll bleibt
++        (`rule: false`). Der Name bleibt in der Namenshilfe.
++      responses:
++        "204": { description: Gelöscht }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++
++  /name-fixes/{fixId}/undo:
++    parameters: [{ name: fixId, in: path, required: true, schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$" } }]
++    post:
++      tags: [Namen]
++      summary: Berichtigung rückgängig machen (nur SL der Kampagne, 24 Stunden, ab 0.4.31; sonst 404)
++      description: |
++        Setzt nur Stellen zurück, die seit der Berichtigung unverändert sind; die anderen werden übersprungen und in
++        `skipped` genannt. Die Regel wird mit gelöscht. Nach 24 Stunden → 409 `undo_expired`; schon rückgängig → 409
++        `already_undone`.
++        Die alten Texte liegen nur auf dem Server und nur 24 Stunden (danach löscht die Wartung sie), nie im Umzug und
++        in keiner Antwort. Wird die Runde, der Eintrag oder die Kampagne gelöscht, werden sie mit gelöscht.
++      responses:
++        "200":
++          description: Rückgängig gemacht
++          content:
++            application/json:
++              schema:
++                type: object
++                required: [restored, skipped]
++                properties:
++                  restored: { type: integer, description: "Zurückgesetzte Stellen" }
++                  skipped:
++                    type: array
++                    description: "Seitdem bearbeitete Orte, die so bleiben"
++                    items:
++                      type: object
++                      required: [place, label]
++                      properties:
++                        place: { $ref: "#/components/schemas/NameFixPlace" }
++                        label: { type: string }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++
+   /sessions/{sessionId}/transcript:
+     parameters: [{ $ref: "#/components/parameters/sessionId" }]
+@@ -5187,4 +5351,95 @@ components:
+         suggestedEntryId: { type: [string, "null"], description: "Ähnlich klingender Bibel-Eintrag" }
+         suggestedMemberId: { type: [string, "null"], description: "Ähnlich klingender Charaktername" }
++        suggestedCorrect:
++          type: [string, "null"]
++          description: |
++            Ab 0.4.31: vorgeschlagene richtige Schreibweise. Bei suggestionSource `rule` aus einer Verhörer-Regel der
++            Kampagne – die App wählt sie in „Namen prüfen“ vor, übernommen wird sie erst mit POST …/corrections.
++        suggestionSource:
++          type: [string, "null"]
++          enum: [rule, entry, member, null]
++          description: "Ab 0.4.31: Herkunft von suggestedCorrect (Verhörer-Regel, Bibel-Eintrag, Charaktername)"
++        ruleId: { type: [string, "null"], description: "Ab 0.4.31: Regel bei suggestionSource rule (NameFix.id)" }
++
++    NameFixInput:
++      type: object
++      required: [from, to]
++      properties:
++        from: { type: string, minLength: 3, maxLength: 64, example: "Orasilas", description: "Falsch geschrieben" }
++        to: { type: string, minLength: 3, maxLength: 64, example: "Horasilas", description: "Richtig" }
++
++    NameFixPlace:
++      type: string
++      description: |
++        Ort eines Treffers. Unbekannte Werte (neuere Server) zeigt die App als allgemeinen Ort.
++      enum: [chapter, chapter_title, entry_name, entry_alias, entry_summary, entry_gm_notes, session_proposal, transcript]
++
++    NameFixHit:
++      type: object
++      required: [id, place, label, count, preselected]
++      properties:
++        id: { type: string, description: "Nur innerhalb dieser Vorschau gültig (für skipHitIds)" }
++        place: { $ref: "#/components/schemas/NameFixPlace" }
++        label: { type: string, example: "Kapitel 3 · Am Hungerstein", description: "Für die SL lesbar, in der Sprache aus Accept-Language" }
++        sessionId: { type: [string, "null"] }
++        sessionNumber: { type: [integer, "null"] }
++        entryId: { type: [string, "null"] }
++        proposalId: { type: [string, "null"] }
++        count: { type: integer, minimum: 1 }
++        readByPlayers:
++          type: boolean
++          description: "Spielende lesen diesen Ort (veröffentlichtes Kapitel, Eintrag für alle oder einzelne)"
++        preselected: { type: boolean, description: "false bei secretWarning für Orte, die Spielende lesen" }
++        excerpts:
++          type: array
++          maxItems: 3
++          description: "Der Satz um die Stelle, höchstens 200 Zeichen, das Wort markiert als [[…]]"
++          items: { type: string, example: "Dann trat [[Orasilas]] aus dem Schilf." }
++
++    NameFixPreview:
++      type: object
++      required: [from, to, previewVersion, hits, total, secretWarning, untouched]
++      properties:
++        from: { type: string }
++        to: { type: string }
++        previewVersion: { type: string, description: "Prüfsummen aller Treffer-Orte; beim Berichtigen mitschicken" }
++        total: { type: integer, description: "Stellen insgesamt (Summe der count)" }
++        secretWarning: { type: boolean }
++        hits:
++          type: array
++          description: "Nach Ort sortiert: Kapitel (nach Nummer), Bibel, Vorschläge, Abschriften"
++          items: { $ref: "#/components/schemas/NameFixHit" }
++        untouched:
++          type: object
++          description: "Wird nicht geändert; nur als Ort bzw. Anzahl, nie im Wortlaut"
++          required: [characters, comments, playerProposals]
++          properties:
++            characters:
++              type: array
++              items:
++                type: object
++                required: [memberId, field]
++                properties:
++                  memberId: { type: string }
++                  field: { type: string, enum: [name, summary, background] }
++            comments: { type: integer, description: "Nur Kommentare, die die SL sehen kann" }
++            playerProposals: { type: integer, description: "Offene Vorschläge von Spielenden" }
++        existingRule:
++          type: [string, "null"]
++          description: "Es gibt schon eine Regel für from (NameFix.id); Berichtigen ersetzt deren Ziel"
++
++    NameFix:
++      type: object
++      required: [id, from, to, changed, rule, createdAt, createdBy]
++      properties:
++        id: { type: string }
++        from: { type: string }
++        to: { type: string }
++        changed: { type: integer, description: "Geänderte Stellen" }
++        rule: { type: boolean, description: "Verhörer-Regel aktiv" }
++        createdAt: { type: string, format: date-time }
++        createdBy: { type: string, description: "Mitglied (SL), das berichtigt hat" }
++        undoUntil: { type: [string, "null"], format: date-time, description: "Bis wann Rückgängig geht; null = nicht mehr" }
++        undoneAt: { type: [string, "null"], format: date-time }
+ 
+     EntryInput:

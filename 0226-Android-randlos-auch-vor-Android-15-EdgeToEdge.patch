@@ -1,0 +1,28 @@
+From fc118c8835d03e6106989f4002ce198a81ddb6dd Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Thu, 5 Nov 2026 23:10:07 +0100
+Subject: [PATCH 226/229] Android: randlos auch vor Android 15 (EdgeToEdge)
+
+---
+ native-android/MainActivity.java | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/native-android/MainActivity.java b/native-android/MainActivity.java
+index bdbcc82..a15e58d 100644
+--- a/native-android/MainActivity.java
++++ b/native-android/MainActivity.java
+@@ -2,4 +2,5 @@ package app.taleward;
+ 
+ import android.os.Bundle;
++import androidx.activity.EdgeToEdge;
+ import com.getcapacitor.BridgeActivity;
+ 
+@@ -11,4 +12,7 @@ public class MainActivity extends BridgeActivity {
+         registerPlugin(NotifierPlugin.class);
+         registerPlugin(TextScalePlugin.class);
++        // Randlos auch unter Android 14 und älter (ab 15 ist es Pflicht); die Abstände zu Status- und Gestenleiste
++        // setzt Capacitor (SystemBars) bzw. die App über env(safe-area-inset-*)
++        EdgeToEdge.enable(this);
+         super.onCreate(savedInstanceState);
+     }
