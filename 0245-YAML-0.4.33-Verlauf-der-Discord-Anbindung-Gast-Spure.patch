@@ -1,0 +1,304 @@
+From c753fcda67390a3776c38b27bffcaf6c9f091aa1 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sun, 8 Nov 2026 00:20:49 +0100
+Subject: [PATCH] YAML 0.4.33: Verlauf der Discord-Anbindung; Gast-Spuren aus
+ Discord
+
+GET /campaigns/{id}/discord/log (nur SL, ohne Namen und Kennungen),
+in der App unter Kampagne verwalten, Discord, Verlauf (laedt beim
+Aufklappen). Stimmen zuordnen zeigt discord_track als eigene Spur.
+Testserver: Verlauf und Gast-Spuren bei Discord-Runden.
+---
+ docs/session-chronik-api.yaml | 49 +++++++++++++++++++++++++++++++-
+ src/api/client.ts             |  3 +-
+ src/api/types.ts              |  3 ++
+ src/discord/DiscordRow.tsx    | 53 ++++++++++++++++++++++++++++++-----
+ src/i18n/en.ts                | 14 ++++++++-
+ src/mocks/discord.ts          | 11 ++++++++
+ src/mocks/handlers.ts         |  8 ++++--
+ src/pages/Speakers.tsx        |  3 +-
+ 8 files changed, 130 insertions(+), 14 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index 6e79fbc..927392c 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.32
++  version: 0.4.33
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -310,4 +310,7 @@ info:
+     CampaignSettings.discordPauseOnUnconsented. Ältere Apps müssen die neuen Zustände und consentSource link vertragen
+     (die App zeigt Unbekanntes als „in Arbeit“); ältere Server melden kein discordBot.
++    Änderungen in 0.4.33 (Verlauf für die SL): GET /campaigns/{id}/discord/log zeigt der SL, wann die Kampagne mit
++    Discord verbunden oder gelöst wurde, wann Bot-Aufnahmen liefen und wann über einen Link zugestimmt wurde – ohne Namen,
++    ohne Discord-Kennungen, ohne Audio. Ältere Server antworten 404, die App zeigt dann keinen Verlauf.
+ 
+ servers:
+@@ -3319,4 +3322,31 @@ paths:
+         "404": { $ref: "#/components/responses/NotFound" }
+ 
++  /campaigns/{campaignId}/discord/log:
++    parameters: [{ $ref: "#/components/parameters/campaignId" }]
++    get:
++      tags: [Discord]
++      summary: Verlauf der Discord-Anbindung (nur SL, ab 0.4.33; Spielende und ältere Server 404)
++      description: |
++        Für die SL nachvollziehbar, was der Bot in ihrer Kampagne getan hat. Neueste zuerst, höchstens 200 Einträge.
++        Enthält nie Namen (auch nicht von Gästen), Discord-Kennungen, Kanalnamen, Gildennamen früherer Verbindungen oder
++        Audio – nur Zeitpunkt, Art und ggf. die Runde. `sessionId` nur, wenn die SL die Runde sehen darf (sonst fehlt das
++        Feld). Der Verlauf wird beim Umzug nicht mitgenommen und mit der Kampagne gelöscht. Unbekannte `kind`-Werte
++        (neuere Server) zeigt die App als allgemeinen Eintrag.
++      responses:
++        "200":
++          description: OK
++          content:
++            application/json:
++              schema:
++                type: object
++                required: [entries]
++                properties:
++                  entries:
++                    type: array
++                    maxItems: 200
++                    items: { $ref: "#/components/schemas/DiscordLogEntry" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++
+   /consent-links/{token}:
+     parameters:
+@@ -5923,4 +5953,21 @@ components:
+         connectedBy: { type: [string, "null"], description: "Mitglied (SL)" }
+ 
++    DiscordLogEntry:
++      type: object
++      required: [at, kind]
++      properties:
++        at: { type: string, format: date-time }
++        kind:
++          type: string
++          description: |
++            connected – mit einem Discord-Server verbunden; disconnected – von der SL gelöst; disconnected_auto – vom
++            Server gelöst (z. B. Bot-Schlüssel ersetzt oder Bot abgeschaltet); replaced – mit einem anderen Discord-Server
++            neu verbunden; recording_started / recording_stopped / recording_discarded – Bot-Aufnahme; track_discarded –
++            eine Spur verworfen (z. B. zu lang, ohne Zustimmung); track_revoked – eine Person hat ihre Zustimmung während der
++            Aufnahme zurückgenommen; consent_member / consent_guest – Zustimmung über einen Link (Mitglied bzw. Gast).
++          enum: [connected, disconnected, disconnected_auto, replaced, recording_started, recording_stopped,
++            recording_discarded, track_discarded, track_revoked, consent_member, consent_guest]
++        sessionId: { type: string, description: "Runde, falls betroffen und für die SL sichtbar" }
++
+     NameFixInput:
+       type: object
+diff --git a/src/api/client.ts b/src/api/client.ts
+index d03ae61..1532388 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -7,5 +7,5 @@ import { hasCopy, keepOnlyCampaigns, markOffline, markOnline, offlineSince, read
+ import { getLang, t, tk } from '../i18n';
+ import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
+-import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview, DiscordLinkPreview, DiscordConnection, ConsentLinkInfo,
++import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview, DiscordLinkPreview, DiscordConnection, DiscordLogEntry, ConsentLinkInfo,
+   ApiError,
+   Campaign,
+@@ -542,4 +542,5 @@ function makeApi(conn: () => Connection) {
+   campaignDiscord: (campaignId: string) => request<{ connection: DiscordConnection | null }>('GET', `/campaigns/${campaignId}/discord`),
+   unlinkDiscord: (campaignId: string) => request<void>('DELETE', `/campaigns/${campaignId}/discord`),
++  discordLog: (campaignId: string) => request<{ entries: DiscordLogEntry[] }>('GET', `/campaigns/${campaignId}/discord/log`),
+   /** Kapitel als verschlüsselte Datei teilen (nur SL, ab 0.4.30) */
+   shareChapter: (campaignId: string, sessionId: string) =>
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 74cb7a5..04dec98 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -975,4 +975,7 @@ export interface DiscordLinkPreview {
+ export interface DiscordConnection { guildName: string; connectedAt: string; connectedBy?: string | null }
+ 
++/** Ab 0.4.33: Verlauf der Discord-Anbindung, nur für die SL, ohne Namen */
++export interface DiscordLogEntry { at: string; kind: string; sessionId?: string }
++
+ export interface ConsentLinkInfo {
+   campaignTitle: string;
+diff --git a/src/discord/DiscordRow.tsx b/src/discord/DiscordRow.tsx
+index 964a720..8619b6b 100644
+--- a/src/discord/DiscordRow.tsx
++++ b/src/discord/DiscordRow.tsx
+@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
+ import { Link } from 'react-router-dom';
+ import { api } from '../api/client';
+-import { currentConnection, p } from '../api/connections';
+-import type { Campaign, DiscordConnection } from '../api/types';
++import { apiAtLeast, currentConnection, p } from '../api/connections';
++import type { Campaign, DiscordConnection, DiscordLogEntry } from '../api/types';
+ import { confirmDialog } from '../components/confirm';
+-import { formatDate } from '../components/format';
++import { formatDate, formatDateTime } from '../components/format';
+ import { ErrorBox } from '../components/Screen';
+-import { t } from '../i18n';
++import { t, tk } from '../i18n';
+ 
+ /** Server bietet den Discord-Bot an (ServerInfo.discordBot, ab 0.4.32) */
+@@ -59,10 +59,9 @@ export function DiscordRow({ campaign, pause, busy, onPause }: {
+         </Link>
+       )}
++      {apiAtLeast('0.4.33') && <DiscordLog campaignId={campaign.id} />}
+       {conn && pause !== undefined && (
+         <label className="list-row check-row">
+           <input type="checkbox" checked={pause} disabled={busy} onChange={(e) => onPause(e.target.checked)} />
+-          <span className="lr-text">{t('Aufnahme anhalten, wenn jemand ohne Zustimmung dazukommt')}
+-            <span className="lr-sub">{t('Wer nicht zugestimmt hat, wird ohnehin nie aufgenommen.')}</span>
+-          </span>
++          <span className="lr-text">{t('Aufnahme anhalten, wenn jemand ohne Zustimmung dazukommt')}</span>
+         </label>
+       )}
+@@ -70,2 +69,42 @@ export function DiscordRow({ campaign, pause, busy, onPause }: {
+   );
+ }
++
++const KIND: Record<string, string> = {
++  connected: tk('Mit Discord verbunden'),
++  disconnected: tk('Verbindung gelöst'),
++  disconnected_auto: tk('Verbindung vom Server gelöst'),
++  replaced: tk('Mit anderem Discord-Server verbunden'),
++  recording_started: tk('Aufnahme gestartet'),
++  recording_stopped: tk('Aufnahme beendet'),
++  recording_discarded: tk('Aufnahme verworfen'),
++  track_discarded: tk('Eine Spur verworfen'),
++  track_revoked: tk('Zustimmung während der Aufnahme zurückgenommen'),
++  consent_member: tk('Zugestimmt (Mitglied)'),
++  consent_guest: tk('Zugestimmt (Gast)')
++};
++
++/** Verlauf (ab 0.4.33), lädt erst beim Aufklappen. Ohne Namen, nur Zeitpunkt und Art. */
++function DiscordLog({ campaignId }: { campaignId: string }) {
++  const [entries, setEntries] = useState<DiscordLogEntry[] | null>(null);
++  const [error, setError] = useState<unknown>(null);
++  const load = () => { if (entries === null) api.discordLog(campaignId).then((r) => setEntries(r.entries)).catch(setError); };
++  return (
++    <details className="list-row" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
++      <summary className="lr-text">{t('Verlauf')}</summary>
++      <ErrorBox error={error} />
++      {entries && entries.length === 0 && <p className="muted small" style={{ margin: '8px 0 0' }}>{t('Noch nichts passiert.')}</p>}
++      {entries && entries.length > 0 && (
++        <ul className="small" style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
++          {entries.map((x, i) => (
++            <li key={i}>
++              <span className="muted">{formatDateTime(x.at)}</span>{' · '}
++              {x.sessionId
++                ? <Link to={p(`/s/${x.sessionId}`)}>{t(KIND[x.kind] ?? 'Discord')}</Link>
++                : t(KIND[x.kind] ?? 'Discord')}
++            </li>
++          ))}
++        </ul>
++      )}
++    </details>
++  );
++}
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 11ae1cd..e807a60 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1855,5 +1855,4 @@ export const en: Record<string, string> = {
+   "Runden im Sprachkanal aufnehmen": "Record sessions in a voice channel",
+   "Aufnahme anhalten, wenn jemand ohne Zustimmung dazukommt": "Pause recording when someone without consent joins",
+-  "Wer nicht zugestimmt hat, wird ohnehin nie aufgenommen.": "People who haven't consented are never recorded anyway.",
+   "Spielleitung: {name} · Server „{server}“ ({host})": "Game master: {name} · server “{server}” ({host})",
+   "Server „{server}“ ({host})": "Server “{server}” ({host})",
+@@ -1866,3 +1865,16 @@ export const en: Record<string, string> = {
+   "Das Mikrofon hört seit einer Minute nichts.": "The microphone hasn't heard anything for a minute.",
+   "Das Mikrofon hört seit {n} Minuten nichts.": "The microphone hasn't heard anything for {n} minutes.",
++  "Verbindung gelöst": "Disconnected",
++  "Verbindung vom Server gelöst": "Disconnected by the server",
++  "Mit anderem Discord-Server verbunden": "Connected to another Discord server",
++  "Aufnahme gestartet": "Recording started",
++  "Aufnahme beendet": "Recording stopped",
++  "Aufnahme verworfen": "Recording discarded",
++  "Eine Spur verworfen": "One track discarded",
++  "Zustimmung während der Aufnahme zurückgenommen": "Consent withdrawn during recording",
++  "Zugestimmt (Mitglied)": "Consented (member)",
++  "Zugestimmt (Gast)": "Consented (guest)",
++  "Verlauf": "History",
++  "Noch nichts passiert.": "Nothing yet.",
++  "Eigene Spur im Discord": "Own track in Discord",
+ };
+diff --git a/src/mocks/discord.ts b/src/mocks/discord.ts
+index 528e6a1..3755fab 100644
+--- a/src/mocks/discord.ts
++++ b/src/mocks/discord.ts
+@@ -15,4 +15,8 @@ if (setting() === 'linked' && !account.providers.includes('discord')) account.pr
+ const GUILD = 'Taverne zum Krug';
+ const connections = new Map<string, { guildName: string; connectedAt: string; connectedBy: string | null }>();
++// Verlauf (0.4.33), neueste zuerst; mit einer Beispielrunde, damit der Testmodus etwas zeigt
++const logs = new Map<string, { at: string; kind: string; sessionId?: string }[]>();
++const logOf = (id: string) => { if (!logs.has(id)) logs.set(id, []); return logs.get(id)!; };
++const addLog = (id: string, kind: string, sessionId?: string) => logOf(id).unshift({ at: new Date().toISOString(), kind, ...(sessionId ? { sessionId } : {}) });
+ const pause = new Map<string, boolean>();
+ export const mockDiscordPause = (campaignId: string): boolean | undefined => (mockDiscordBot() ? pause.get(campaignId) ?? false : undefined);
+@@ -52,4 +56,5 @@ export function discordHandlers(B: string, deps: { myMember: (c: MockCampaign) =
+       if (!c) return notFound();
+       const conn = { guildName: GUILD, connectedAt: new Date().toISOString(), connectedBy: deps.myMember(c)!.id };
++      addLog(c.id, connections.has(c.id) ? 'replaced' : 'connected');
+       connections.set(c.id, conn);
+       return HttpResponse.json({ campaignId: c.id, ...conn });
+@@ -60,8 +65,14 @@ export function discordHandlers(B: string, deps: { myMember: (c: MockCampaign) =
+       return HttpResponse.json({ connection: connections.get(c.id) ?? null });
+     }),
++    http.get(`${B}/campaigns/:id/discord/log`, ({ params }) => {
++      const c = gmCampaigns().find((x) => x.id === params.id);
++      if (!mockDiscordBot() || !c) return notFound();
++      return HttpResponse.json({ entries: logOf(c.id).slice(0, 200) });
++    }),
+     http.delete(`${B}/campaigns/:id/discord`, ({ params }) => {
+       const c = gmCampaigns().find((x) => x.id === params.id);
+       if (!mockDiscordBot() || !c) return notFound();
+       connections.delete(c.id);
++      addLog(c.id, 'disconnected');
+       return new HttpResponse(null, { status: 204 });
+     })
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 4a4a2a8..6a71869 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -756,5 +756,5 @@ export const handlers = [
+     if (hostKey(request) === DEMO_HOST) {
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.32', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.33', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
+@@ -766,5 +766,5 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.32',
++      apiVersion: nachbar ? '0.3.9' : '0.4.33',
+       serverId: nachbar ? undefined : 'testserver',
+       // 0.4.32: Discord-Bot (taleward.mock.discord)
+@@ -2065,5 +2065,7 @@ export const handlers = [
+     const guest = s.attendees.find((a) => a.guestName)?.guestName;
+     const last = list.length - 1;
+-    if (guest && last >= 0 && !list[last].suggestedMemberId) list[last] = { ...list[last], suggestedGuestName: guest, confidence: 0.6, source: 'intro_round' };
++    // Server 0.4.156: bei Discord-Runden kommt der Gastname aus der eigenen Spur (sicher, discord_track)
++    const discord = (s as { source?: string }).source === 'discord';
++    if (guest && last >= 0 && !list[last].suggestedMemberId) list[last] = { ...list[last], suggestedGuestName: guest, confidence: discord ? 1 : 0.6, source: discord ? 'discord_track' : 'intro_round' };
+     // Nach der Bestätigung (0.4.10): bestätigte Zuordnung mitliefern; ältere Testsessions gelten als wie vorgeschlagen bestätigt
+     if (s.state !== 'awaiting_speakers') {
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index 9b9e029..eec56d1 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -117,5 +117,5 @@ export function Speakers() {
+     return m ? m.characterName ?? m.displayName : null;
+   };
+-  const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match').length ?? 0;
++  const autoCount = speakers?.filter((s) => s.source === 'intro_round' || s.source === 'voice_match' || s.source === 'discord_track').length ?? 0;
+   // Zwei Stimmen, deren Hinweise denselben Tausch meinen (2 ↔ 3): den Hinweis nur bei der ersten zeigen
+   const shownHint = (s: Speaker) => {
+@@ -162,4 +162,5 @@ export function Speakers() {
+             {s.source === 'voice_match' && <div className="muted small">{t('Über Stimmprofil erkannt')}</div>}
+             {s.source === 'intro_round' && <div className="muted small">{t('Aus der Vorstellungsrunde')}</div>}
++            {s.source === 'discord_track' && <div className="muted small">{t('Eigene Spur im Discord')}</div>}
+             {!review && suggestion(s) && s.confidence < 0.8 && mapping[s.id] === suggestion(s) && (
+               <div className="small" style={{ color: 'var(--siegel-text)', fontWeight: 500 }}>{t('Unsicher – bitte prüfen.')}</div>
