@@ -58,7 +58,6 @@ function Routed() {
       <DeepLinks />
       <Routes>
         <Route path="/verbinden" element={<ConnectRoute />} />
-      <Route path="/auth" element={<AuthReturn />} />
         <Route path="/auth" element={<AuthReturn />} />
         <Route path="/zustimmen" element={<ConsentLinkPage />} />
         <Route path="/link" element={null} />
@@ -73,6 +72,8 @@ function Routed() {
     <Routes>
       <Route path="/" element={<Campaigns />} />
       <Route path="/verbinden" element={<ConnectRoute />} />
+      {/* Rückweg vom Anmeldedienst (Web-App) auch mit schon gespeicherter, z. B. abgelaufener Verbindung */}
+      <Route path="/auth" element={<AuthReturn />} />
       <Route path="/konto" element={<AccountPage />} />
       <Route path="/zustimmen" element={<ConsentLinkPage />} />
       <Route path="/link" element={null} />
