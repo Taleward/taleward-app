@@ -1,0 +1,155 @@
+From a6dddd743dc0d2dc08f47ffc10a813b8457361a6 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 11:39:32 +0100
+Subject: [PATCH] Durchsicht: Termin ohne Netz, Stimmen vor der Bestaetigung,
+ kleine Texte
+
+Termin: Formular nur, wenn die Abstimmung wirklich abgefragt wurde.
+Stimmen: assignedMemberId vor der Bestaetigung nicht als Zuordnung lesen.
+Chronik: gleiche Datumsform fuer alle Kapitel. Mitgebrachte Welt: leerer
+Zustand erklaert. Aenderungsprotokoll nennt auch Vorschlaege, Zaehler und
+Discord. Zustimmungsseite ohne untere Leiste.
+---
+ src/discord/ConsentLinkPage.tsx | 9 +++++----
+ src/i18n/en.ts                  | 1 +
+ src/pages/BroughtPage.tsx       | 7 ++++++-
+ src/pages/Chronicle.tsx         | 4 ++--
+ src/pages/DatePollPage.tsx      | 6 +++++-
+ src/pages/Speakers.tsx          | 8 +++++---
+ 6 files changed, 24 insertions(+), 11 deletions(-)
+
+diff --git a/src/discord/ConsentLinkPage.tsx b/src/discord/ConsentLinkPage.tsx
+index 807b286..c6b837d 100644
+--- a/src/discord/ConsentLinkPage.tsx
++++ b/src/discord/ConsentLinkPage.tsx
+@@ -1,4 +1,4 @@
+ import { useEffect, useState } from 'react';
+-import { useLocation, useNavigate } from 'react-router-dom';
++import { Link, useLocation, useNavigate } from 'react-router-dom';
+ import { fetchConsentLink, fetchServerInfo, isApiError, postConsentLink } from '../api/client';
+ import { activeConnections, sameServerHost } from '../api/connections';
+@@ -67,8 +67,9 @@ export function ConsentLinkPage() {
+   if (done) {
+     return (
+-      <Screen title={t('Danke')}>
++      <Screen nav={false} title={t('Danke')}>
+         <p style={{ margin: 0 }}>{asMember
+           ? t('Du bist dabei. Deine Zustimmung gilt für alle Aufnahmen von „{title}“, bis du sie zurücknimmst.', { title: info?.campaignTitle ?? '' })
+           : t('Du bist für diese Runde dabei. Du kannst zurück in den Discord.')}</p>
++        {conn && <Link className="btn ghost" to="/">{t('Zu deinen Kampagnen')}</Link>}
+       </Screen>
+     );
+@@ -77,5 +78,5 @@ export function ConsentLinkPage() {
+   if (gone) {
+     return (
+-      <Screen title={t('Zur Aufnahme zustimmen')}>
++      <Screen nav={false} title={t('Zur Aufnahme zustimmen')}>
+         <p style={{ margin: 0 }}>{t('Dieser Link ist abgelaufen oder schon benutzt. Hol dir im Discord mit „/taleward bereit“ einen neuen.')}</p>
+       </Screen>
+@@ -84,5 +85,5 @@ export function ConsentLinkPage() {
+ 
+   return (
+-    <Screen title={t('Zur Aufnahme zustimmen')} overline={info?.campaignTitle ?? ' '}>
++    <Screen nav={false} title={t('Zur Aufnahme zustimmen')} overline={info?.campaignTitle ?? ' '}>
+       <ErrorBox error={error} />
+       {info && (
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 0b8c84e..346385a 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1858,3 +1858,4 @@ export const en: Record<string, string> = {
+   "Spielleitung: {name} · Server „{server}“ ({host})": "Game master: {name} · server “{server}” ({host})",
+   "Server „{server}“ ({host})": "Server “{server}” ({host})",
++  "Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.": "This is where character lore from your players lands: places, people and relationships from their backstories. You can then add it to the bible.",
+ };
+diff --git a/src/pages/BroughtPage.tsx b/src/pages/BroughtPage.tsx
+index 588c22f..c4f9007 100644
+--- a/src/pages/BroughtPage.tsx
++++ b/src/pages/BroughtPage.tsx
+@@ -56,5 +56,10 @@ export function BroughtPage() {
+         {analyses.length > 0 && ' ' + t('Vorschläge aus Charakterbögen und Hintergründen sind zunächst nur für dich und die Spielerin sichtbar.')}
+       </p>}
+-      {proposals && open.length === 0 && <div className="empty">{t('Nichts Neues mitgebracht.')}</div>}
++      {proposals && open.length === 0 && (
++        <div className="empty">
++          {t('Nichts Neues mitgebracht.')}
++          <span className="muted small" style={{ display: 'block', marginTop: 6 }}>{t('Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.')}</span>
++        </div>
++      )}
+ 
+       {campaign && bySubmitter.map((id) => {
+diff --git a/src/pages/Chronicle.tsx b/src/pages/Chronicle.tsx
+index b845fb3..ca893d6 100644
+--- a/src/pages/Chronicle.tsx
++++ b/src/pages/Chronicle.tsx
+@@ -1,4 +1,4 @@
+ import { currentConnection, p } from '../api/connections';
+-import { formatDate, formatDateFull } from '../components/format';
++import { formatDate } from '../components/format';
+ import { t, tk } from '../i18n';
+ import { useEffect, useState } from 'react';
+@@ -74,5 +74,5 @@ export function Chronicle() {
+             <span className={['awaiting_speakers', 'awaiting_review', 'failed'].includes(s.state) ? 'pill seal' : 'pill'}>{PENDING_LABEL[s.state] ? t(PENDING_LABEL[s.state]!) : s.state}</span>
+           </div>
+-          <span className="muted small">{t('Gespielt am {date}', { date: formatDateFull(s.playedAt) })}</span>
++          <span className="muted small">{t('Gespielt am {date}', { date: formatDate(s.playedAt, 'long') })}</span>
+         </Link>
+       ))}
+diff --git a/src/pages/DatePollPage.tsx b/src/pages/DatePollPage.tsx
+index 084a4a0..6c358ec 100644
+--- a/src/pages/DatePollPage.tsx
++++ b/src/pages/DatePollPage.tsx
+@@ -26,4 +26,6 @@ export function DatePollPage() {
+   const [poll, setPoll] = useState<DatePoll | null>(null);
+   const [loaded, setLoaded] = useState(false);
++  // Abstimmung wirklich abgefragt (auch „keine“): ohne Netz nicht das leere Formular zeigen
++  const [pollKnown, setPollKnown] = useState(false);
+   const [error, setError] = useState<unknown>(null);
+   const [note, setNote] = useState('');
+@@ -60,7 +62,9 @@ export function DatePollPage() {
+       try {
+         setPoll(await api.datePoll(campaignId));
++        setPollKnown(true);
+       } catch (e) {
+         if (!isApiError(e) || e.status !== 404) throw e;
+         setPoll(null);
++        setPollKnown(true);
+       }
+     } catch (e) {
+@@ -112,5 +116,5 @@ export function DatePollPage() {
+       )}
+ 
+-      {loaded && !open && campaign && (
++      {loaded && pollKnown && !open && campaign && (
+         gm ? (
+           <section className="card">
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index 6edf1c7..9b9e029 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -52,7 +52,9 @@ export function Speakers() {
+         setGuests(named);
+         setSession(session);
++        // Vor der Bestätigung gilt assignedMemberId nicht (YAML), auch wenn ein Server null mitschickt
++        const confirmed = session.state !== 'awaiting_speakers';
+         const start = Object.fromEntries(sp.map((s) => [s.id,
+           s.assignedGuestName ? GUEST + s.assignedGuestName
+-            : s.assignedMemberId !== undefined ? (s.assignedMemberId ?? IGNORE)
++            : confirmed && s.assignedMemberId !== undefined ? (s.assignedMemberId ?? IGNORE)
+               : suggestion(s)]));
+         setMapping(start);
+@@ -129,5 +131,5 @@ export function Speakers() {
+       <ErrorBox error={error} />
+       {review && (
+-        <p className="muted small" style={{ margin: 0 }}>
++        <p className="muted" style={{ margin: 0 }}>
+           {editable
+             ? t('So sind die Stimmen zugeordnet. Stimmt etwas nicht, ändere es hier – Taleward schreibt das Kapitel dann neu.')
+@@ -136,5 +138,5 @@ export function Speakers() {
+       )}
+       {speakers && !review && (
+-        <p className="muted small" style={{ margin: 0 }}>
++        <p className="muted" style={{ margin: 0 }}>
+           {t('{n} Stimmen erkannt, {auto} davon automatisch zugeordnet.', { n: speakers.length, auto: autoCount })}
+         </p>
