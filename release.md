@@ -4,4 +4,5 @@
 - Namen einmal berichtigen: Ein falsch geschriebener Name wird in allen Kapiteln, der Bibel und den Abschriften auf einmal korrigiert, mit Vorschau und Rückgängig.
 - Kapitel als Datei teilen, für Gruppen, deren Server nur zu Hause erreichbar ist.
 - Bei der Aufnahme zeigt ein Schein um den Knopf, dass das Mikrofon etwas hört. Hört es länger nichts, sagt die App Bescheid.
-- Die App nutzt den ganzen Bildschirm, ohne Netz zeigt sie keine falschen Zustimmungen mehr, und kleinere Verbesserungen.
+- Die App nutzt den ganzen Bildschirm, und ohne Netz zeigt sie keine falschen Zustimmungen mehr.
+- Kleinere Verbesserungen.
