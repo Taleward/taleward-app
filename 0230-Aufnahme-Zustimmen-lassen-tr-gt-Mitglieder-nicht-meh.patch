@@ -1,0 +1,107 @@
+From 46599fc46c4ffb4ebe4dbcbaa0a950d119be4e53 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 11:05:34 +0100
+Subject: [PATCH 230/232] =?UTF-8?q?Aufnahme:=20Zustimmen=20lassen=20tr?=
+ =?UTF-8?q?=C3=A4gt=20Mitglieder=20nicht=20mehr=20zus=C3=A4tzlich=20als=20?=
+ =?UTF-8?q?Gast=20ein?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/handover.test.mjs | 27 +++++++++++++++++++++++++++
+ src/pages/Recording.tsx         | 11 ++++++-----
+ src/recorder/handover.ts        | 20 ++++++++++++++++++++
+ 3 files changed, 53 insertions(+), 5 deletions(-)
+ create mode 100644 scripts/tests/handover.test.mjs
+ create mode 100644 src/recorder/handover.ts
+
+diff --git a/scripts/tests/handover.test.mjs b/scripts/tests/handover.test.mjs
+new file mode 100644
+index 0000000..22d564b
+--- /dev/null
++++ b/scripts/tests/handover.test.mjs
+@@ -0,0 +1,27 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { applyHandover } from '../../src/recorder/handover.ts';
++
++const empty = { onSite: {}, guests: [] };
++const at = '2026-11-07T20:00:00Z';
++
++test('Mitglied am Tisch wird nicht zusätzlich Gast', () => {
++  const r = applyHandover(empty, { memberId: 'm1', name: 'Lea' }, at);
++  assert.deepEqual(r.onSite, { m1: at });
++  assert.deepEqual(r.guests, []);
++  assert.equal(r.consentSelf, false);
++});
++
++test('Eigene Zustimmung: vor Ort und für die Kampagne', () => {
++  const r = applyHandover(empty, { memberId: 'me', name: 'Anja', self: true }, at);
++  assert.deepEqual(r.onSite, { me: at });
++  assert.deepEqual(r.guests, []);
++  assert.equal(r.consentSelf, true);
++});
++
++test('Person ohne Konto wird Gast', () => {
++  const r = applyHandover({ onSite: { m1: at }, guests: [] }, { name: 'Sina' }, at);
++  assert.deepEqual(r.onSite, { m1: at });
++  assert.deepEqual(r.guests, [{ name: 'Sina', consentAt: at }]);
++  assert.equal(r.consentSelf, false);
++});
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index 73f00b7..60da16d 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -1,2 +1,3 @@
++import { applyHandover, type Handover } from '../recorder/handover';
+ import { setRecordingActive } from '../recorder/activity';
+ import { getLive, setLive } from '../recorder/live';
+@@ -73,5 +74,5 @@ export function Recording() {
+   const serverInfo = useServerInfo();
+   const [addingGuest, setAddingGuest] = useState(false);
+-  const [handover, setHandover] = useState<{ memberId?: string; name: string; self?: boolean } | null>(null);
++  const [handover, setHandover] = useState<Handover | null>(null);
+   const [phase, setPhase] = useState<Phase>('prepare');
+   const [showTip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
+@@ -201,9 +202,9 @@ export function Recording() {
+   const confirmHandover = () => {
+     if (!handover) return;
+-    const at = new Date().toISOString();
+-    if (handover.memberId) setOnSite({ ...onSite, [handover.memberId]: at });
++    const next = applyHandover({ onSite, guests }, handover, new Date().toISOString());
++    setOnSite(next.onSite);
++    setGuests(next.guests);
+     // Die eigene Zustimmung gilt gleich für die ganze Kampagne (wie „Ich stimme zu“ auf der Übersicht)
+-    if (handover.self) api.setRecordingConsent(campaignId, true).catch(() => undefined);
+-    else setGuests([...guests, { name: handover.name, consentAt: at }]);
++    if (next.consentSelf) api.setRecordingConsent(campaignId, true).catch(() => undefined);
+     setGuestName('');
+     setAddingGuest(false);
+diff --git a/src/recorder/handover.ts b/src/recorder/handover.ts
+new file mode 100644
+index 0000000..8a9e2c9
+--- /dev/null
++++ b/src/recorder/handover.ts
+@@ -0,0 +1,20 @@
++/*
++ * Zustimmung am Tisch übernehmen: Mitglied (auch die eigene Person) kommt zu den Anwesenden vor Ort, nur eine Person
++ * ohne Konto wird Gast. Ohne Laufzeit-Importe (Test: scripts/tests/handover.test.mjs).
++ */
++export interface Handover {
++  memberId?: string;
++  name: string;
++  /** Die eigene Person: zusätzlich stehende Zustimmung für die Kampagne */
++  self?: boolean;
++}
++
++export interface TableState {
++  onSite: Record<string, string>;
++  guests: { name: string; consentAt: string }[];
++}
++
++export function applyHandover(state: TableState, h: Handover, at: string): TableState & { consentSelf: boolean } {
++  if (h.memberId) return { onSite: { ...state.onSite, [h.memberId]: at }, guests: state.guests, consentSelf: !!h.self };
++  return { onSite: state.onSite, guests: [...state.guests, { name: h.name, consentAt: at }], consentSelf: false };
++}

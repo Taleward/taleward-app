@@ -1,0 +1,756 @@
+From e33063a4720ed8588464b751e54a90bbd8c07b01 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 11:17:54 +0100
+Subject: [PATCH 232/232] =?UTF-8?q?Kapitel=20teilen:=20SL=20teilt=20ein=20?=
+ =?UTF-8?q?ver=C3=B6ffentlichtes=20Kapitel=20als=20Datei,=20Mitglieder=20?=
+ =?UTF-8?q?=C3=B6ffnen=20es=20ohne=20Verbindung=20(ab=20Schnittstelle=200.?=
+ =?UTF-8?q?4.30)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ scripts/tests/share-file.test.mjs            |  51 +++++++++
+ scripts/tests/vektoren/kapitel-teilen-1.json |  72 ++++++++++++
+ src/api/client.ts                            |   3 +
+ src/api/connections.ts                       |   2 +
+ src/api/readCopy.ts                          |   4 +-
+ src/api/readCopyRules.ts                     |   3 +
+ src/api/types.ts                             |   6 +
+ src/i18n/en.ts                               |  10 ++
+ src/mocks/handlers.ts                        |  33 +++++-
+ src/mocks/share.ts                           |  54 +++++++++
+ src/pages/Campaigns.tsx                      |   7 +-
+ src/pages/RecapPage.tsx                      |   2 +
+ src/share/OpenShareRow.tsx                   |  47 ++++++++
+ src/share/ShareChapter.tsx                   |  53 +++++++++
+ src/share/importShare.ts                     |  78 +++++++++++++
+ src/share/keys.ts                            |  10 ++
+ src/share/shareFile.ts                       | 112 +++++++++++++++++++
+ 17 files changed, 541 insertions(+), 6 deletions(-)
+ create mode 100644 scripts/tests/share-file.test.mjs
+ create mode 100644 scripts/tests/vektoren/kapitel-teilen-1.json
+ create mode 100644 src/mocks/share.ts
+ create mode 100644 src/share/OpenShareRow.tsx
+ create mode 100644 src/share/ShareChapter.tsx
+ create mode 100644 src/share/importShare.ts
+ create mode 100644 src/share/keys.ts
+ create mode 100644 src/share/shareFile.ts
+
+diff --git a/scripts/tests/share-file.test.mjs b/scripts/tests/share-file.test.mjs
+new file mode 100644
+index 0000000..b16aaa6
+--- /dev/null
++++ b/scripts/tests/share-file.test.mjs
+@@ -0,0 +1,51 @@
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { readFileSync } from 'node:fs';
++import { openShareFile, ShareRejected } from '../../src/share/shareFile.ts';
++
++const v = JSON.parse(readFileSync(new URL('./vektoren/kapitel-teilen-1.json', import.meta.url), 'utf8'));
++const lookup = (key, keys = [{ id: v.signKeyId, spki: v.spki }]) => ({
++  serverKeys: (id) => (id === v.serverId ? keys : []),
++  memberKey: async (s, c) => (s === v.serverId && c === v.campaignId ? key : null)
++});
++
++test('beide Empfänger öffnen die Datei und bekommen genau den Inhalt', async () => {
++  for (const r of v.recipients) {
++    const { head, content } = await openShareFile(v.file, lookup({ id: r.keyId, key: r.key }));
++    assert.equal(head.campaignId, v.campaignId);
++    assert.equal(head.createdAt, v.createdAt);
++    assert.deepEqual(content, v.content);
++  }
++});
++
++const rejects = (p) => assert.rejects(p, (e) => e instanceof ShareRejected);
++
++test('fremder Schlüssel, unbekannter Server, falscher Signierschlüssel → abgelehnt', async () => {
++  await rejects(openShareFile(v.file, lookup(v.fremderSchluessel)));
++  const r = v.recipients[0];
++  await rejects(openShareFile(v.file, lookup({ id: r.keyId, key: r.key }, [])));
++  await rejects(openShareFile(v.file, lookup({ id: r.keyId, key: r.key }, [{ id: v.signKeyId, spki: v.spki.slice(0, -4) + 'AAAA' }])));
++  await rejects(openShareFile(v.file, { serverKeys: () => [{ id: v.signKeyId, spki: v.spki }], memberKey: async () => null }));
++});
++
++test('veränderte Datei → abgelehnt', async () => {
++  const r = v.recipients[0];
++  const ok = lookup({ id: r.keyId, key: r.key });
++  const f = JSON.parse(v.file);
++  const flip = (s) => s.slice(0, 20) + (s[20] === 'A' ? 'B' : 'A') + s.slice(21);
++  await rejects(openShareFile(JSON.stringify({ ...f, signed: flip(f.signed) }), ok));
++  await rejects(openShareFile(JSON.stringify({ ...f, signature: flip(f.signature) }), ok));
++  await rejects(openShareFile(JSON.stringify({ ...f, format: 'taleward-kapitel/2' }), ok));
++  await rejects(openShareFile('kein json', ok));
++  await rejects(openShareFile(' '.repeat(5 * 1024 * 1024 + 1), ok));
++});
++
++test('Signatur r‖s passt zu DER (gleiches Paar)', () => {
++  const der = Buffer.from(v.derSignature, 'base64url');
++  const p1363 = Buffer.from(v.p1363Signature, 'base64url');
++  assert.equal(p1363.length, 64);
++  // DER: 30 len 02 lr r 02 ls s – führende Nullen entfernt
++  const rLen = der[3], r = der.subarray(4, 4 + rLen), s = der.subarray(6 + rLen);
++  const pad = (x) => Buffer.concat([Buffer.alloc(32), x.subarray(x[0] === 0 ? 1 : 0)]).subarray(-32);
++  assert.deepEqual(Buffer.concat([pad(r), pad(s)]), p1363);
++});
+diff --git a/scripts/tests/vektoren/kapitel-teilen-1.json b/scripts/tests/vektoren/kapitel-teilen-1.json
+new file mode 100644
+index 0000000..a3d1866
+--- /dev/null
++++ b/scripts/tests/vektoren/kapitel-teilen-1.json
+@@ -0,0 +1,72 @@
++{
++ "beschreibung": "Gemeinsamer Testvektor Server und App für ShareFile (Schnittstelle 0.4.30). Der private Schlüssel gilt nur für diesen Test. Die Signatur ist ECDSA (zufällig) und lässt sich nicht nachrechnen, nur prüfen.",
++ "privateKeyPkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg6jjUUoNjhqfQY1vDRCKQadCLd-aUyyZVJgv9YaevfZmhRANCAATdlItVuFAdjnPPESiK6XByAWPoTGtmuKRddJ7PWcoey97vEEfkk5wk6ljp1o19pkD8pnvieRfPcXabVHSwQJTG",
++ "spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE3ZSLVbhQHY5zzxEoiulwcgFj6ExrZrikXXSez1nKHsve7xBH5JOcJOpY6daNfaZA_KZ74nkXz3F2m1R0sECUxg",
++ "signKeyId": "7RciPQvJAB2v4Dk2",
++ "serverId": "chronik-vektor",
++ "campaignId": "c-0001",
++ "shareId": "vektor-1",
++ "createdAt": "2026-11-01T09:30:00Z",
++ "contentKey": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA",
++ "contentNonce": "ZWZnaGlqa2xtbm9w",
++ "recipients": [
++  {
++   "keyId": "schluessel-sl",
++   "key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
++   "nonce": "ycrLzM3Oz9DR0tPU"
++  },
++  {
++   "keyId": "schluessel-mira",
++   "key": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
++   "nonce": "l5iZmpucnZ6foKGi"
++  }
++ ],
++ "fremderSchluessel": {
++  "keyId": "schluessel-mira",
++  "key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
++ },
++ "header": "{\"format\":\"taleward-kapitel/1\",\"serverId\":\"chronik-vektor\",\"campaignId\":\"c-0001\",\"shareId\":\"vektor-1\",\"createdAt\":\"2026-11-01T09:30:00Z\"}",
++ "signed": "{\"serverId\":\"chronik-vektor\",\"campaignId\":\"c-0001\",\"shareId\":\"vektor-1\",\"createdAt\":\"2026-11-01T09:30:00Z\",\"signKeyId\":\"7RciPQvJAB2v4Dk2\",\"recipients\":[{\"keyId\":\"schluessel-sl\",\"nonce\":\"ycrLzM3Oz9DR0tPU\",\"wrapped\":\"oldMQHHbbQaC6rGW-p7tEskKXMz9je1yBg9O3R8TXpCBTJVtzFZcHsf-k1Wgj368\"},{\"keyId\":\"schluessel-mira\",\"nonce\":\"l5iZmpucnZ6foKGi\",\"wrapped\":\"HWX5KU3yf1pL5I-Qu6y6EX0VMw_edN8o5WV3WBJy9g22C0jfMgN2aKg7XI_W3v9N\"}],\"nonce\":\"ZWZnaGlqa2xtbm9w\",\"ciphertext\":\"We5U_xyH7atYco4kMmyNxEX9nHfuU5muqC8p6qdjUyxM3tLwG5AxepGW9f7JJGLTsmpD1nKZq5K3Ze34qdLJ0GIdtUT5MOQ4SlMH1AOAe90z_zYW-sbEDDdCYYg2Rjay-7U6YCRvcEDxyoffBX9V2vALQyMlKceqwgLO_ZqBDd7wsKT1yS2Jks5wNXeNt92f_tpZSrQ3hQqquyutTrurC7qmiCp_JOqAh9UvQ_VJTcHnClKZsZnjfYRPIb1pVWuNJXgmrVuzme8Ln-T9SSbGgBjz_HohQHxFhcmbznj8o2BG9K6cy9TwSvoTkKadPu1yDHGyxq_US0DYYsvCrjI4zKOxd3__sv_7WyVFI6j7mjviZyuBG-DMBb_nTWSy7KpaOFescLhacob1pPy_e_CM5jY6uElWtAQez82YJXwAPkOolB3teIcPHBhT2xtbrXrNv-jLiO1qFSB0C4JQLNbaXaMPqBzVERSdkbIxdjgU9LKXBemyU2KSfcoIt5o4DFU\"}",
++ "derSignature": "MEYCIQCZS5lSrvaaAUikRSsFEU03jrkXnSq_Xl5NB6a-Rzs2BwIhAIvEjbS-Pv8qTi35B0S2F-NSSJYRj7zR8Soz-Or8OuT1",
++ "p1363Signature": "mUuZUq72mgFIpEUrBRFNN465F50qv15eTQemvkc7NgeLxI20vj7_Kk4t-QdEthfjUkiWEY-80fEqM_jq_Drk9Q",
++ "content": {
++  "campaignTitle": "Die Glocken von Vellmarsch",
++  "sessions": [
++   {
++    "session": {
++     "id": "s-0001",
++     "number": 7,
++     "title": "Nebel über dem Moor",
++     "playedAt": "2026-10-31T18:00:00Z",
++     "state": "published"
++    },
++    "recap": {
++     "sessionId": "s-0001",
++     "number": 7,
++     "title": "Nebel über dem Moor",
++     "text": "Die Gruppe erreicht Vellmarsch.\n\nIm Turm schweigt die Glocke.",
++     "openThreads": [
++      "Wer hat die Glocke angehalten?"
++     ],
++     "publishedAt": "2026-11-01T09:00:00Z",
++     "parts": []
++    }
++   }
++  ],
++  "entries": [
++   {
++    "id": "e-0001",
++    "campaignId": "c-0001",
++    "type": "location",
++    "name": "Vellmarsch",
++    "summary": "Dorf am Rand des Moors.",
++    "visibility": "public",
++    "aliases": [],
++    "mentions": [],
++    "updatedAt": "2026-11-01T09:00:00Z",
++    "links": []
++   }
++  ]
++ },
++ "file": "{\"format\":\"taleward-kapitel/1\",\"signed\":\"eyJzZXJ2ZXJJZCI6ImNocm9uaWstdmVrdG9yIiwiY2FtcGFpZ25JZCI6ImMtMDAwMSIsInNoYXJlSWQiOiJ2ZWt0b3ItMSIsImNyZWF0ZWRBdCI6IjIwMjYtMTEtMDFUMDk6MzA6MDBaIiwic2lnbktleUlkIjoiN1JjaVBRdkpBQjJ2NERrMiIsInJlY2lwaWVudHMiOlt7ImtleUlkIjoic2NobHVlc3NlbC1zbCIsIm5vbmNlIjoieWNyTHpNM096OURSMHRQVSIsIndyYXBwZWQiOiJvbGRNUUhIYmJRYUM2ckdXLXA3dEVza0tYTXo5amUxeUJnOU8zUjhUWHBDQlRKVnR6RlpjSHNmLWsxV2dqMzY4In0seyJrZXlJZCI6InNjaGx1ZXNzZWwtbWlyYSIsIm5vbmNlIjoibDVpWm1wdWNuWjZmb0tHaSIsIndyYXBwZWQiOiJIV1g1S1UzeWYxcEw1SS1RdTZ5NkVYMFZNd19lZE44bzVXVjNXQkp5OWcyMkMwamZNZ04yYUtnN1hJX1czdjlOIn1dLCJub25jZSI6IlpXWm5hR2xxYTJ4dGJtOXciLCJjaXBoZXJ0ZXh0IjoiV2U1VV94eUg3YXRZY280a01teU54RVg5bkhmdVU1bXVxQzhwNnFkalV5eE0zdEx3RzVBeGVwR1c5ZjdKSkdMVHNtcEQxbktacTVLM1plMzRxZExKMEdJZHRVVDVNT1E0U2xNSDFBT0FlOTB6X3pZVy1zYkVERGRDWVlnMlJqYXktN1U2WUNSdmNFRHh5b2ZmQlg5VjJ2QUxReU1sS2NlcXdnTE9fWnFCRGQ3d3NLVDF5UzJKa3M1d05YZU50OTJmX3RwWlNyUTNoUXFxdXl1dFRydXJDN3FtaUNwX0pPcUFoOVV2UV9WSlRjSG5DbEtac1puamZZUlBJYjFwVld1TkpYZ21yVnV6bWU4TG4tVDlTU2JHZ0Jqel9Ib2hRSHhGaGNtYnpuajhvMkJHOUs2Y3k5VHdTdm9Ua0thZFB1MXlESEd5eHFfVVMwRFlZc3ZDcmpJNHpLT3hkM19fc3ZfN1d5VkZJNmo3bWp2aVp5dUJHLURNQmJfblRXU3k3S3BhT0Zlc2NMaGFjb2IxcFB5X2VfQ001alk2dUVsV3RBUWV6ODJZSlh3QVBrT29sQjN0ZUljUEhCaFQyeHRiclhyTnYtakxpTzFxRlNCMEM0SlFMTmJhWGFNUHFCelZFUlNka2JJeGRqZ1U5TEtYQmVteVUyS1NmY29JdDVvNERGVSJ9\",\"signature\":\"mUuZUq72mgFIpEUrBRFNN465F50qv15eTQemvkc7NgeLxI20vj7_Kk4t-QdEthfjUkiWEY-80fEqM_jq_Drk9Q\"}"
++}
+\ No newline at end of file
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 8a6c57d..465906d 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -535,4 +535,7 @@ function makeApi(conn: () => Connection) {
+     return 'state' in r ? { status: r } : { recap: r };
+   },
++  /** Kapitel als verschlüsselte Datei teilen (nur SL, ab 0.4.30) */
++  shareChapter: (campaignId: string, sessionId: string) =>
++    request<{ file: string; fileName: string; missingKeys: string[] }>('POST', `/campaigns/${campaignId}/shares`, { body: { sessionId } }),
+   /** Namen einmal berichtigen, kampagnenweit (nur SL, ab 0.4.31) */
+   nameFixPreview: (campaignId: string, from: string, to: string) =>
+diff --git a/src/api/connections.ts b/src/api/connections.ts
+index 9368f81..baa52f6 100644
+--- a/src/api/connections.ts
++++ b/src/api/connections.ts
+@@ -34,4 +34,6 @@ export interface Connection {
+   /** Feste Kennung des Servers aus /info (ab 0.4.16) – erkennt ihn unter neuer Adresse wieder */
+   serverId?: string | null;
++  /** Signierschlüssel für geteilte Kapitel (ab 0.4.30), nur aus /info einer angemeldeten Verbindung */
++  shareKeys?: { id: string; spki: string }[] | null;
+ }
+ 
+diff --git a/src/api/readCopy.ts b/src/api/readCopy.ts
+index 273828c..10a8e04 100644
+--- a/src/api/readCopy.ts
++++ b/src/api/readCopy.ts
+@@ -42,5 +42,5 @@ const keyOf = (connId: string, userId: string, path: string) => `${connId}|${use
+ 
+ export async function saveCopy(connId: string, userId: string, path: string, data: unknown, campaignId: string | null = null,
+-  stillAllowed: () => boolean = () => true): Promise<void> {
++  stillAllowed: () => boolean = () => true, savedAt: string = new Date().toISOString()): Promise<void> {
+   const db = await open();
+   if (!db) return;
+@@ -62,5 +62,5 @@ export async function saveCopy(connId: string, userId: string, path: string, dat
+   if (!campaign && path !== '/campaigns') return;
+   if (!stillAllowed()) return;
+-  const row: Row = { key, connId, userId, campaignId: campaign, savedAt: new Date().toISOString(), data };
++  const row: Row = { key, connId, userId, campaignId: campaign, savedAt, data };
+   const store = db.transaction(STORE, 'readwrite').objectStore(STORE);
+   await req(store.put(row));
+diff --git a/src/api/readCopyRules.ts b/src/api/readCopyRules.ts
+index 61e0603..ebbb917 100644
+--- a/src/api/readCopyRules.ts
++++ b/src/api/readCopyRules.ts
+@@ -72,4 +72,7 @@ function campaign(c: Obj, me: string | null): Obj {
+   out.links = c.myRole === 'gm' ? sharedLinks(c.links) : (Array.isArray(c.links) ? c.links.filter(isObj) : []);
+   out.members = Array.isArray(c.members) ? c.members.filter(isObj).map((m) => member(m, me)) : [];
++  // Ab 0.4.30: eigener Schlüssel für geteilte Kapitel – öffnet nur, was ohnehin in dieser Kopie liegt
++  if (isObj(c.shareKey) && typeof c.shareKey.id === 'string' && typeof c.shareKey.key === 'string'
++    && /^[A-Za-z0-9_-]{1,64}$/.test(c.shareKey.id) && /^[A-Za-z0-9_-]{43}$/.test(c.shareKey.key)) out.shareKey = { id: c.shareKey.id, key: c.shareKey.key };
+   return out;
+ }
+diff --git a/src/api/types.ts b/src/api/types.ts
+index bffabfa..0ca1f50 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -279,4 +279,6 @@ export interface Link {
+ export interface Campaign extends CampaignSummary {
+   description: string;
++  /** Ab 0.4.30: eigener Schlüssel für geteilte Kapitel (nur für sich selbst, nur in GET /campaigns/{id}) */
++  shareKey?: { id: string; key: string } | null;
+   /** Links der Kampagne (ab 0.4.13); Spieler bekommen nur geteilte */
+   links?: Link[];
+@@ -845,4 +847,8 @@ export interface CloudProviderInfo {
+ export interface ServerInfo {
+   name: string;
++  /** Ab 0.4.30: Signierschlüssel für geteilte Kapitel; fehlt = Server kann nicht teilen */
++  shareKeys?: { id: string; spki: string }[];
++  /** Ab 0.4.32: Discord-Bot eingeschaltet */
++  discordBot?: boolean;
+   operator: string;
+   contact: string | null;
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 5072cc6..96c7497 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1809,3 +1809,13 @@ export const en: Record<string, string> = {
+   "schon einmal berichtigt": "corrected before",
+   "Auch in früheren Kapiteln und der Bibel": "Also in earlier chapters and the bible",
++  "Geteiltes Kapitel öffnen": "Open a shared chapter",
++  "Datei aus dem Gruppenchat": "File from your group chat",
++  "Diese Datei ist nicht für dich bestimmt.": "This file is not meant for you.",
++  "Kapitel {n} ist jetzt in deiner Kampagne „{title}“.": "Chapter {n} is now in your campaign “{title}”.",
++  "Die Bibel von „{title}“ ist auf dem neuesten Stand der Datei.": "The bible of “{title}” is up to date with the file.",
++  "Lesen": "Read",
++  "Für {names} geht es erst nach dem nächsten Treffen im WLAN.": "For {names} it only works after the next meeting on the local network.",
++  "Kapitel teilen": "Share chapter",
++  "Kapitel als Datei teilen": "Share chapter as a file",
++  "Für den Gruppenchat, wenn euer Server nur im Heimnetz läuft. Öffnen kann die Datei nur, wer in der Kampagne ist.": "For your group chat, if your server only runs on your home network. Only people in the campaign can open the file.",
+ };
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 91909e5..b3abc5f 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -5,4 +5,5 @@ import { cleanAliases, findMatch, secretWarnings } from './checks';
+ import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
+ import { memberCounters, playerExtras, playerHandlers, playerProposals } from './players';
++import { mockMemberKey, mockShareFile, mockShareServerKey } from './share';
+ import { cleanName, countWord, excerptsFor, nameFixProblem, replaceWholeWord } from '../names/nameFix';
+ 
+@@ -750,5 +751,5 @@ export const handlers = [
+   }),
+ 
+-  http.get(`${B}/info`, ({ request }) => {
++  http.get(`${B}/info`, async ({ request }) => {
+     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
+     if (hostKey(request) === DEMO_HOST) {
+@@ -766,4 +767,6 @@ export const handlers = [
+       apiVersion: nachbar ? '0.3.9' : '0.4.31',
+       serverId: nachbar ? undefined : 'testserver',
++      // 0.4.30: Kapitel teilen
++      shareKeys: nachbar ? undefined : [await mockShareServerKey().then(({ id, spki }) => ({ id, spki }))],
+       registration: nachbar ? 'invite_only' : registrationSetting(),
+       gmApproval: nachbar ? undefined : gmRequired() ? 'required' : 'none',
+@@ -1091,8 +1094,32 @@ export const handlers = [
+   }),
+ 
+-  http.get(`${B}/campaigns/:id`, ({ params }) => {
++  http.get(`${B}/campaigns/:id`, ({ params, request }) => {
+     const c = campaigns.find((x) => x.id === params.id);
+     if (!c || !myMember(c)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
+-    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c) });
++    return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), ...playerExtras(c, myMember(c)), ...(isGm(c.id) ? { hotwords: c.hotwords ?? [], gmNotices: gmNotices[c.id] ?? [] } : {}), members: membersFor(c),
++      // 0.4.30: eigener Schlüssel für geteilte Kapitel, nur für sich selbst
++      shareKey: hostKey(request) === DEMO_HOST ? undefined : mockMemberKey(myMember(c)!.id, myMember(c)!.displayName) });
++  }),
++
++  // 0.4.30: Kapitel als verschlüsselte Datei teilen (nur SL, nur veröffentlicht)
++  http.post(`${B}/campaigns/:id/shares`, async ({ params, request }) => {
++    const c = campaigns.find((x) => x.id === params.id);
++    if (!c || !myMember(c) || !isGm(c.id)) return err(404, 'not_found', 'Kampagne nicht gefunden.');
++    const { sessionId } = (await request.json()) as { sessionId?: string };
++    const s = sessions.find((x) => x.id === sessionId && x.campaignId === c.id);
++    const r = s && recaps[s.id];
++    if (!s || !r) return err(404, 'not_found', 'Kapitel nicht gefunden.');
++    if (s.state !== 'published' || !r.publishedAt) return err(409, 'not_published', 'Teilen geht erst, wenn das Kapitel veröffentlicht ist.');
++    const active = c.members.filter((m) => !m.leftAt && !m.deletedAt);
++    const keys = active.map((m) => ({ m, k: mockMemberKey(m.id, m.displayName) }));
++    const content = {
++      campaignTitle: c.title,
++      sessions: [{ session: { id: s.id, number: s.number, title: s.title, playedAt: s.playedAt, state: s.state },
++        recap: { sessionId: r.sessionId, number: r.number, title: r.title, text: r.text, openThreads: r.openThreads, publishedAt: r.publishedAt, parts: r.parts ?? [] } }],
++      entries: entries.filter((e) => e.campaignId === c.id && e.visibility === 'public' && !(e.hiddenFromMemberIds ?? []).length)
++        .map(({ gmNotes: _g, hiddenFromMemberIds: _h, formerHolderMemberId: _f, links, ...e }) => ({ ...e, links: (links ?? []).filter((l) => l.shared !== false), mentions: [] }))
++    };
++    const file = await mockShareFile('testserver', c.id, content, keys.flatMap(({ k }) => (k ? [k] : [])));
++    return HttpResponse.json({ file, fileName: `taleward-kapitel-${s.number}.taleward`, missingKeys: keys.filter(({ k }) => !k).map(({ m }) => m.id) });
+   }),
+ 
+diff --git a/src/mocks/share.ts b/src/mocks/share.ts
+new file mode 100644
+index 0000000..d32a4e3
+--- /dev/null
++++ b/src/mocks/share.ts
+@@ -0,0 +1,54 @@
++/*
++ * Testserver für „Kapitel teilen“ (Schnittstelle 0.4.30): eigener Signierschlüssel je Seitenaufruf, Schlüssel je
++ * Mitglied, Datei genau nach ShareFile (gzip, AES-256-GCM, Kopf als AAD, ECDSA P-256 r‖s). Sina hat noch keinen
++ * Schlüssel (zeigt den Hinweis „erst nach dem nächsten Treffen im WLAN“).
++ */
++import { shareHeader, SHARE_FORMAT } from '../share/shareFile';
++
++const b64url = (b: Uint8Array) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
++const rand = (n: number) => crypto.getRandomValues(new Uint8Array(n));
++const utf8 = (s: string) => new TextEncoder().encode(s);
++
++let server: Promise<{ id: string; spki: string; key: CryptoKey }> | null = null;
++export function mockShareServerKey() {
++  server ??= (async () => {
++    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']) as CryptoKeyPair;
++    const spki = new Uint8Array(await crypto.subtle.exportKey('spki', pair.publicKey));
++    return { id: 'testschluessel-1', spki: b64url(spki), key: pair.privateKey };
++  })();
++  return server;
++}
++
++const memberKeys = new Map<string, { id: string; key: string }>();
++/** Schlüssel eines Mitglieds; ohne Schlüssel (noch nicht im WLAN gewesen) = null */
++export function mockMemberKey(memberId: string, displayName: string): { id: string; key: string } | null {
++  if (/^sina$/i.test(displayName)) return null;
++  let k = memberKeys.get(memberId);
++  if (!k) { k = { id: `k-${memberId}`, key: b64url(rand(32)) }; memberKeys.set(memberId, k); }
++  return k;
++}
++
++async function gzip(data: Uint8Array): Promise<Uint8Array<ArrayBuffer>> {
++  const out = await new Response(new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
++  return new Uint8Array(out);
++}
++
++export async function mockShareFile(serverId: string, campaignId: string, content: unknown, recipients: { id: string; key: string }[]): Promise<string> {
++  const s = await mockShareServerKey();
++  const head = { serverId, campaignId, shareId: `share-${Date.now().toString(36)}`, createdAt: new Date().toISOString().replace(/\.\d+Z$/, 'Z') };
++  const header = shareHeader(head);
++  const contentKeyRaw = rand(32);
++  const contentKey = await crypto.subtle.importKey('raw', contentKeyRaw, 'AES-GCM', false, ['encrypt']);
++  const nonce = rand(12);
++  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: header }, contentKey, await gzip(utf8(JSON.stringify(content)))));
++  const wrapped = await Promise.all(recipients.map(async (r) => {
++    const raw = Uint8Array.from(atob(r.key.replace(/-/g, '+').replace(/_/g, '/') + '='), (c) => c.charCodeAt(0));
++    const k = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt']);
++    const n = rand(12);
++    const aad = new Uint8Array([...header, ...utf8(r.id)]);
++    return { keyId: r.id, nonce: b64url(n), wrapped: b64url(new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: n, additionalData: aad }, k, contentKeyRaw))) };
++  }));
++  const signed = utf8(JSON.stringify({ ...head, signKeyId: s.id, recipients: wrapped, nonce: b64url(nonce), ciphertext: b64url(ciphertext) }));
++  const signature = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, s.key, signed));
++  return JSON.stringify({ format: SHARE_FORMAT, signed: b64url(signed), signature: b64url(signature) });
++}
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index 59c75fa..274a1da 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -1,2 +1,4 @@
++import { OpenShareRow, canOpenShares } from '../share/OpenShareRow';
++import { cleanShareKeys } from '../share/keys';
+ import { listCharacters } from '../characters/store';
+ import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
+@@ -110,5 +112,7 @@ export function Campaigns() {
+         };
+         const tooOld = !!appInfo.minAppVersion && versionLess(APP_VERSION, appInfo.minAppVersion);
+-        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null });
++        updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null,
++          // Schlüssel für geteilte Kapitel nur über eine angemeldete Verbindung merken, nie aus einer Datei
++          ...(hasValidToken(conn) && info.shareKeys !== undefined ? { shareKeys: cleanShareKeys(info.shareKeys) } : {}) });
+         if (tooOld || versionLess(info.apiVersion, MIN_API_VERSION)) return { conn, list: [] as CampaignSummary[], ok: true };
+         // Eigenes Profil nur, wenn es für das Anlegen zählt (SL-Freigabe ab 0.4.23, Nutzungsbedingungen ab 0.4.22)
+@@ -389,4 +393,5 @@ export function Campaigns() {
+           </button>
+         )}
++        {mode === 'none' && canOpenShares() && <OpenShareRow />}
+         {(active.some(serverHasCharacters) || listCharacters().length > 0) && (
+           <Link className="list-row" to="/charaktere"><IconUser /><span className="lr-text">{t('Meine Charaktere')}</span></Link>
+diff --git a/src/pages/RecapPage.tsx b/src/pages/RecapPage.tsx
+index 6a1e338..f70f294 100644
+--- a/src/pages/RecapPage.tsx
++++ b/src/pages/RecapPage.tsx
+@@ -9,4 +9,5 @@ import { Comments } from '../components/Comments';
+ import { OpenThreads, RecapView } from '../components/RecapView';
+ import { Divider, ErrorBox, Screen, rememberCampaign } from '../components/Screen';
++import { ShareChapter, serverCanShare } from '../share/ShareChapter';
+ 
+ export function RecapPage() {
+@@ -57,4 +58,5 @@ export function RecapPage() {
+             marked={new Set(bookmarks.map((b) => b.recapParagraph).filter((n): n is number => n != null))} />
+           <OpenThreads threads={recap.openThreads} />
++          {campaign?.myRole === 'gm' && recap.publishedAt && serverCanShare() && <ShareChapter campaign={campaign} sessionId={sessionId} />}
+           {campaign?.myRole !== 'gm' && (
+             <MyBookmarks list={bookmarks} onJump={jump}
+diff --git a/src/share/OpenShareRow.tsx b/src/share/OpenShareRow.tsx
+new file mode 100644
+index 0000000..a76f009
+--- /dev/null
++++ b/src/share/OpenShareRow.tsx
+@@ -0,0 +1,47 @@
++import { useRef, useState } from 'react';
++import { Link } from 'react-router-dom';
++import { listConnections } from '../api/connections';
++import { IconDownload } from '../components/Icons';
++import { t } from '../i18n';
++import { importShareFile, type OpenedShare } from './importShare';
++
++/** Zeigt die Zeile nur, wenn ein angemeldeter Server Kapitel teilen kann */
++export function canOpenShares(): boolean {
++  return listConnections().some((c) => !!c.token && !!c.shareKeys?.length);
++}
++
++/** „Geteiltes Kapitel öffnen“ (ab 0.4.30): Datei aus dem Gruppenchat in die Lesekopie übernehmen */
++export function OpenShareRow() {
++  const picker = useRef<HTMLInputElement>(null);
++  const [busy, setBusy] = useState(false);
++  const [done, setDone] = useState<OpenedShare | null>(null);
++  const [failed, setFailed] = useState(false);
++
++  const open = async (file: File | undefined) => {
++    if (!file) return;
++    setBusy(true);
++    setDone(null);
++    setFailed(false);
++    try { setDone(await importShareFile(file)); } catch { setFailed(true); } finally { setBusy(false); }
++  };
++
++  return (
++    <>
++      <button type="button" className="list-row nav" disabled={busy} onClick={() => picker.current?.click()}>
++        <IconDownload /><span className="lr-text">{t('Geteiltes Kapitel öffnen')}<span className="lr-sub">{t('Datei aus dem Gruppenchat')}</span></span>
++      </button>
++      <input ref={picker} type="file" hidden onChange={(e) => { open(e.target.files?.[0]); e.target.value = ''; }} />
++      {failed && <div className="error" role="alert">{t('Diese Datei ist nicht für dich bestimmt.')}</div>}
++      {done && (
++        <div className="notice" role="status">
++          <span>
++            {done.sessionNumber != null
++              ? t('Kapitel {n} ist jetzt in deiner Kampagne „{title}“.', { n: done.sessionNumber, title: done.campaignTitle })
++              : t('Die Bibel von „{title}“ ist auf dem neuesten Stand der Datei.', { title: done.campaignTitle })}
++            {done.sessionId && <> <Link to={`/v/${done.conn.id}/s/${done.sessionId}/recap`}>{t('Lesen')}</Link></>}
++          </span>
++        </div>
++      )}
++    </>
++  );
++}
+diff --git a/src/share/ShareChapter.tsx b/src/share/ShareChapter.tsx
+new file mode 100644
+index 0000000..71b6259
+--- /dev/null
++++ b/src/share/ShareChapter.tsx
+@@ -0,0 +1,53 @@
++import { useState } from 'react';
++import { api } from '../api/client';
++import { currentConnection } from '../api/connections';
++import type { Campaign } from '../api/types';
++import { saveOrShare } from '../characters/backup';
++import { ErrorBox } from '../components/Screen';
++import { t } from '../i18n';
++
++/** Kann dieser Server Kapitel als Datei teilen? (Schnittstelle 0.4.30, Signierschlüssel bekannt) */
++export function serverCanShare(): boolean {
++  try { return !!currentConnection().shareKeys?.length; } catch { return false; }
++}
++
++/**
++ * „Kapitel teilen“ (nur SL, veröffentlichtes Kapitel): Datei vom Server holen und über das Teilen-Menü weitergeben –
++ * für Gruppen, deren Server nur im Heimnetz läuft. Die Datei öffnet nur, wer Mitglied der Kampagne ist.
++ */
++export function ShareChapter({ campaign, sessionId }: { campaign: Campaign; sessionId: string }) {
++  const [busy, setBusy] = useState(false);
++  const [error, setError] = useState<unknown>(null);
++  const [missing, setMissing] = useState<string | null>(null);
++
++  const share = async () => {
++    setBusy(true);
++    setError(null);
++    setMissing(null);
++    try {
++      const r = await api.shareChapter(campaign.id, sessionId);
++      const names = r.missingKeys
++        .map((id) => campaign.members.find((m) => m.id === id))
++        .map((m) => m?.characterName || m?.displayName)
++        .filter((x): x is string => !!x);
++      if (names.length) setMissing(t('Für {names} geht es erst nach dem nächsten Treffen im WLAN.', { names: names.join(', ') }));
++      const safeName = /^[A-Za-z0-9._-]{1,80}$/.test(r.fileName) ? r.fileName : 'taleward-kapitel.taleward';
++      await saveOrShare(new File([r.file], safeName, { type: 'application/vnd.taleward.share+json' }), t('Kapitel teilen'));
++    } catch (e) {
++      setError(e);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <>
++      <ErrorBox error={error} />
++      <button type="button" className="quiet-link" disabled={busy} onClick={share}>{t('Kapitel als Datei teilen')}</button>
++      <p className="muted small" style={{ margin: '-6px 0 0' }}>
++        {t('Für den Gruppenchat, wenn euer Server nur im Heimnetz läuft. Öffnen kann die Datei nur, wer in der Kampagne ist.')}
++      </p>
++      {missing && <div className="notice" role="status">{missing}</div>}
++    </>
++  );
++}
+diff --git a/src/share/importShare.ts b/src/share/importShare.ts
+new file mode 100644
+index 0000000..c90edd7
+--- /dev/null
++++ b/src/share/importShare.ts
+@@ -0,0 +1,78 @@
++/*
++ * Geteiltes Kapitel öffnen (Schnittstelle 0.4.30): Datei prüfen (shareFile.ts) und den Inhalt in die Lesekopie der
++ * passenden Verbindung legen – durch dieselbe Positivliste wie Antworten des Servers. Neueres gewinnt; die nächste
++ * Antwort des Servers ersetzt die Kopie ohnehin.
++ */
++import { listConnections, type Connection } from '../api/connections';
++import { readCopy, saveCopy } from '../api/readCopy';
++import { cleanForCopy } from '../api/readCopyRules';
++import { openShareFile, SHARE_MAX_FILE, ShareRejected, type ShareMemberKey } from './shareFile';
++
++type Obj = Record<string, unknown>;
++const isObj = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
++
++/** Angemeldete Verbindungen zu diesem Server (Schlüssel und Kopie gehören zu Verbindung und Konto) */
++const signedIn = (serverId: string) => listConnections().filter((c) => c.serverId === serverId && !!c.token && !!c.user);
++
++export interface OpenedShare { conn: Connection; campaignId: string; campaignTitle: string; sessionId: string | null; sessionNumber: number | null; createdAt: string }
++
++export async function importShareFile(file: File): Promise<OpenedShare> {
++  if (file.size > SHARE_MAX_FILE) throw new ShareRejected();
++  let target: Connection | null = null;
++  const { head, content } = await openShareFile(await file.text(), {
++    serverKeys: (serverId) => signedIn(serverId).flatMap((c) => c.shareKeys ?? []),
++    memberKey: async (serverId, campaignId) => {
++      for (const c of signedIn(serverId)) {
++        const copy = await readCopy(c.id, c.user!.id, `/campaigns/${campaignId}`).catch(() => null);
++        const key = isObj(copy?.data) && isObj(copy.data.shareKey) ? copy.data.shareKey as unknown as ShareMemberKey : null;
++        if (key) { target = c; return key; }
++      }
++      return null;
++    }
++  });
++  const conn = target as Connection | null;
++  if (!conn?.user) throw new ShareRejected();
++  const userId = conn.user.id;
++  const { campaignId, createdAt } = head;
++
++  // Nur überschreiben, was älter ist als die Datei
++  const put = async (path: string, data: unknown) => {
++    const clean = cleanForCopy(path, data, userId);
++    if (clean === null) return;
++    const old = await readCopy(conn.id, userId, path).catch(() => null);
++    if (old && old.savedAt >= createdAt) return;
++    await saveCopy(conn.id, userId, path, clean, campaignId, () => true, createdAt);
++  };
++
++  let first: { id: string; number: number } | null = null;
++  for (const item of (content.sessions as unknown[]).slice(0, 1)) {
++    if (!isObj(item) || !isObj(item.session) || !isObj(item.recap)) continue;
++    const s = item.session, r = item.recap;
++    if (typeof s.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(s.id) || r.sessionId !== s.id || !r.publishedAt) continue;
++    await put(`/sessions/${s.id}`, { ...s, campaignId, publishedAt: r.publishedAt, state: 'published' });
++    await put(`/sessions/${s.id}/recap`, r);
++    // Kapitelliste: zusammenführen, das geteilte Kapitel ersetzt nur sich selbst
++    const listPath = `/campaigns/${campaignId}/sessions`;
++    const list = await readCopy(conn.id, userId, listPath).catch(() => null);
++    const old = Array.isArray(list?.data) ? (list.data as Obj[]).filter((x) => x.id !== s.id) : [];
++    const merged = [...old, { ...s, state: 'published' }].sort((a, b) => Number(a.number) - Number(b.number));
++    const clean = cleanForCopy(listPath, merged, userId);
++    if (clean) await saveCopy(conn.id, userId, listPath, clean, campaignId, () => true, list?.savedAt && list.savedAt > createdAt ? list.savedAt : createdAt);
++    if (typeof s.number === 'number') first = { id: s.id, number: s.number };
++  }
++
++  // Einträge: nach id zusammenführen, höheres updatedAt gewinnt
++  const entriesPath = `/campaigns/${campaignId}/entries`;
++  const have = await readCopy(conn.id, userId, entriesPath).catch(() => null);
++  const byId = new Map<string, Obj>((Array.isArray(have?.data) ? have.data as Obj[] : []).map((e) => [String(e.id), e]));
++  for (const e of content.entries as unknown[]) {
++    if (!isObj(e) || typeof e.id !== 'string' || e.campaignId !== campaignId) continue;
++    const old = byId.get(e.id);
++    if (!old || String(e.updatedAt ?? '') > String(old.updatedAt ?? '')) byId.set(e.id, e);
++  }
++  const cleanEntries = cleanForCopy(entriesPath, [...byId.values()], userId);
++  if (cleanEntries) await saveCopy(conn.id, userId, entriesPath, cleanEntries, campaignId, () => true, have?.savedAt && have.savedAt > createdAt ? have.savedAt : createdAt);
++
++  return { conn, campaignId, campaignTitle: String(content.campaignTitle).slice(0, 200), sessionId: (first as { id: string } | null)?.id ?? null,
++    sessionNumber: (first as { number: number } | null)?.number ?? null, createdAt };
++}
+diff --git a/src/share/keys.ts b/src/share/keys.ts
+new file mode 100644
+index 0000000..07efc94
+--- /dev/null
++++ b/src/share/keys.ts
+@@ -0,0 +1,10 @@
++/** Signierschlüssel aus /info säubern (ab 0.4.30): höchstens 4, Kennung und SPKI nur base64url. Ohne Laufzeit-Importe. */
++export function cleanShareKeys(keys: unknown): { id: string; spki: string }[] {
++  if (!Array.isArray(keys)) return [];
++  return keys
++    .filter((k): k is { id: string; spki: string } => typeof k === 'object' && k !== null
++      && typeof (k as { id?: unknown }).id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test((k as { id: string }).id)
++      && typeof (k as { spki?: unknown }).spki === 'string' && /^[A-Za-z0-9_-]{40,400}$/.test((k as { spki: string }).spki))
++    .slice(0, 4)
++    .map((k) => ({ id: k.id, spki: k.spki }));
++}
+diff --git a/src/share/shareFile.ts b/src/share/shareFile.ts
+new file mode 100644
+index 0000000..6a21a1e
+--- /dev/null
++++ b/src/share/shareFile.ts
+@@ -0,0 +1,112 @@
++/*
++ * „Kapitel teilen“ (Schnittstelle 0.4.30): geteilte Datei prüfen und öffnen. Nur WebCrypto und Kompression des
++ * Browsers, ohne Laufzeit-Importe (Test mit dem gemeinsamen Testvektor: scripts/tests/share-file.test.mjs).
++ *
++ * Reihenfolge nach S45: Größe → format → Signatur gegen einen gespeicherten Schlüssel genau dieser serverId (nie aus
++ * der Datei) → Verbindung und Mitgliedschaft → entschlüsseln (höchstens 20 MB entpackt) → Schema. Jeder Fehlschlag
++ * ist derselbe Fehler (ShareRejected), damit niemand am Text sieht, woran es lag.
++ */
++
++export const SHARE_FORMAT = 'taleward-kapitel/1';
++export const SHARE_MAX_FILE = 5 * 1024 * 1024;
++export const SHARE_MAX_CONTENT = 20 * 1024 * 1024;
++
++export class ShareRejected extends Error {
++  constructor() { super('share_rejected'); }
++}
++
++export interface ShareServerKey { id: string; spki: string }
++export interface ShareMemberKey { id: string; key: string }
++
++export interface ShareHead { serverId: string; campaignId: string; shareId: string; createdAt: string }
++
++export interface ShareLookup {
++  /** Gespeicherte Signierschlüssel des Servers (nur aus angemeldeten Verbindungen), leer = unbekannter Server */
++  serverKeys(serverId: string): ShareServerKey[];
++  /** Eigener Schlüssel in dieser Kampagne auf diesem Server, oder null (kein Mitglied, keine Verbindung) */
++  memberKey(serverId: string, campaignId: string): Promise<ShareMemberKey | null>;
++}
++
++type Obj = Record<string, unknown>;
++const isObj = (x: unknown): x is Obj => typeof x === 'object' && x !== null && !Array.isArray(x);
++const isStr = (x: unknown): x is string => typeof x === 'string';
++const ID = /^[A-Za-z0-9_-]{1,64}$/;
++
++export function fromB64url(s: string): Uint8Array<ArrayBuffer> {
++  if (!/^[A-Za-z0-9_-]*$/.test(s)) throw new ShareRejected();
++  const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
++  const bin = atob(b64);
++  const out = new Uint8Array(bin.length);
++  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
++  return out;
++}
++
++const utf8 = (s: string) => new TextEncoder().encode(s);
++const concat = (a: Uint8Array, b: Uint8Array) => { const o = new Uint8Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
++
++/** Kopf (AAD) in genau dieser Reihenfolge, ohne Leerzeichen */
++export function shareHeader(h: ShareHead): Uint8Array<ArrayBuffer> {
++  return utf8(JSON.stringify({ format: SHARE_FORMAT, serverId: h.serverId, campaignId: h.campaignId, shareId: h.shareId, createdAt: h.createdAt }));
++}
++
++async function gunzipLimited(data: Uint8Array<ArrayBuffer>, limit: number): Promise<Uint8Array<ArrayBuffer>> {
++  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'));
++  const reader = stream.getReader();
++  const chunks: Uint8Array[] = [];
++  let size = 0;
++  for (;;) {
++    const { done, value } = await reader.read();
++    if (done) break;
++    size += value.length;
++    if (size > limit) { await reader.cancel(); throw new ShareRejected(); }
++    chunks.push(value);
++  }
++  const out = new Uint8Array(size);
++  let at = 0;
++  for (const c of chunks) { out.set(c, at); at += c.length; }
++  return out;
++}
++
++/**
++ * Prüft und entschlüsselt eine geteilte Datei. Liefert Kopf und Inhalt (noch ungeprüft gegen die Positivliste der
++ * Lesekopie – das macht der Aufrufer) oder wirft ShareRejected.
++ */
++export async function openShareFile(text: string, lookup: ShareLookup): Promise<{ head: ShareHead; content: Obj }> {
++  try {
++    if (text.length > SHARE_MAX_FILE) throw new ShareRejected();
++    const file = JSON.parse(text) as unknown;
++    if (!isObj(file) || file.format !== SHARE_FORMAT || !isStr(file.signed) || !isStr(file.signature)) throw new ShareRejected();
++    const signedBytes = fromB64url(file.signed);
++    const signed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(signedBytes)) as unknown;
++    if (!isObj(signed) || !isStr(signed.serverId) || !isStr(signed.signKeyId)) throw new ShareRejected();
++    // Signatur zuerst: Schlüssel nur aus einer angemeldeten Verbindung zu genau diesem Server
++    const serverKey = lookup.serverKeys(signed.serverId).find((k) => k.id === signed.signKeyId);
++    if (!serverKey) throw new ShareRejected();
++    const pub = await crypto.subtle.importKey('spki', fromB64url(serverKey.spki), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
++    const sig = fromB64url(file.signature);
++    if (sig.length !== 64) throw new ShareRejected();
++    if (!(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pub, sig, signedBytes))) throw new ShareRejected();
++
++    const { serverId, campaignId, shareId, createdAt, recipients, nonce, ciphertext } = signed;
++    if (!isStr(campaignId) || !ID.test(campaignId) || !isStr(shareId) || !isStr(createdAt) || Number.isNaN(Date.parse(createdAt))
++      || !Array.isArray(recipients) || !isStr(nonce) || !isStr(ciphertext)) throw new ShareRejected();
++    const head: ShareHead = { serverId, campaignId, shareId, createdAt };
++    const mine = await lookup.memberKey(serverId, campaignId);
++    if (!mine) throw new ShareRejected();
++    const r = recipients.find((x): x is Obj => isObj(x) && x.keyId === mine.id);
++    if (!r || !isStr(r.nonce) || !isStr(r.wrapped)) throw new ShareRejected();
++    const header = shareHeader(head);
++    const memberKey = await crypto.subtle.importKey('raw', fromB64url(mine.key), 'AES-GCM', false, ['decrypt']);
++    const contentKeyRaw = new Uint8Array(await crypto.subtle.decrypt(
++      { name: 'AES-GCM', iv: fromB64url(r.nonce), additionalData: concat(header, utf8(mine.id)) }, memberKey, fromB64url(r.wrapped)));
++    if (contentKeyRaw.length !== 32) throw new ShareRejected();
++    const contentKey = await crypto.subtle.importKey('raw', contentKeyRaw, 'AES-GCM', false, ['decrypt']);
++    const packed = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64url(nonce), additionalData: header }, contentKey, fromB64url(ciphertext)));
++    const raw = await gunzipLimited(packed, SHARE_MAX_CONTENT);
++    const content = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)) as unknown;
++    if (!isObj(content) || !isStr(content.campaignTitle) || !Array.isArray(content.sessions) || !Array.isArray(content.entries)) throw new ShareRejected();
++    return { head, content };
++  } catch {
++    throw new ShareRejected();
++  }
++}
