@@ -141,7 +141,7 @@ export function NamesPage() {
                   {o}{o === rule ? ' · ' + t('schon einmal berichtigt') : o === nameOf(term.suggestedMemberId) ? ' · ' + t('Charakter') : o === entryNames[term.suggestedEntryId ?? ''] ? ' · ' + t('Bibel') : ''}
                 </button>
               ))}
-              <button type="button" className="btn small ghost" aria-pressed={chosen === ''} onClick={() => set(chosen === '' ? undefined : '')}>
+              <button type="button" className="btn small outline" aria-pressed={chosen === ''} onClick={() => set(chosen === '' ? undefined : '')}>
                 {t('So lassen')}
               </button>
             </div>

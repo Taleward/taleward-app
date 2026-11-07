@@ -147,6 +147,7 @@ async function requestOn<T>(conn: Connection, method: string, path: string, opts
     }
     throw new ApiRequestError(0, {
       code: 'network',
+      ...(method === 'GET' ? { details: { read: true } } : {}),
       message: method === 'GET'
         ? t('Server nicht erreichbar. Prüfe WLAN und die Serveradresse.')
         : t('„{name}“ ist gerade nicht erreichbar. Ändern geht erst wieder, wenn der Server erreichbar ist.', { name: conn.name })

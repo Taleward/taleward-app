@@ -597,6 +597,8 @@ textarea {
   color: var(--ink);
   font: 400 calc(16px * var(--ts))/1.5 var(--font-sans);
 }
+/* Lange Platzhalter bei großer Schrift mit … statt abgeschnitten */
+input[type='text'], input[type='search'] { text-overflow: ellipsis; }
 
 textarea {
   padding: 10px 12px;
@@ -1025,7 +1027,7 @@ details.card[open] { padding-bottom: var(--space-4); }
 
 /* Unsichere Namen (ab 0.4.6): Auswahl als Knöpfe */
 .term-choices { display: flex; flex-wrap: wrap; gap: 8px; }
-.term-choices .btn[aria-pressed='true'] { outline: 2px solid var(--salbei); outline-offset: 1px; }
+.term-choices .btn[aria-pressed='true'] { background: var(--tinte); border-color: var(--tinte); color: var(--on-tinte); }
 
 .thread {
   display: flex;

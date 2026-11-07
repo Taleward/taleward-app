@@ -9,6 +9,7 @@ import { Dialog } from '../components/Dialog';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
 import { IconBack, IconExpand } from '../components/Icons';
 import { ErrorBox, rememberCampaign } from '../components/Screen';
+import { OfflineNotice } from '../components/OfflineNotice';
 import { t, tk, tn } from '../i18n';
 import { BackgroundRecorder, hasNativeRecorder, type NativeStatus } from '../recorder/native';
 import { BiblePanel } from '../table/BiblePanel';
@@ -396,6 +397,7 @@ export function TablePage() {
           <button type="button" className="btn small outline" onClick={() => setEditing(true)}>{t('Schirm einrichten')}</button>
         )}
       </header>
+      <OfflineNotice connId={currentConnectionId()} />
       <ErrorBox error={error} />
       {!campaign && !error && <div className="empty">{t('Lade …')}</div>}
       {campaign && !gm && (

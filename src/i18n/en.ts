@@ -1858,4 +1858,8 @@ export const en: Record<string, string> = {
   "Spielleitung: {name} · Server „{server}“ ({host})": "Game master: {name} · server “{server}” ({host})",
   "Server „{server}“ ({host})": "Server “{server}” ({host})",
   "Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.": "This is where character lore from your players lands: places, people and relationships from their backstories. You can then add it to the bible.",
+  "Ohne Verbindung sieht die App nur deine eigene Zustimmung. Wer dabei ist, stimmt kurz hier am Gerät zu. Aufnehmen geht trotzdem, hochgeladen wird, sobald der Server wieder erreichbar ist.": "Without a connection the app only sees your own consent. Everyone taking part agrees here on this device. You can still record; it uploads once the server is reachable again.",
+  "Wer zugestimmt hat, siehst du wieder, sobald der Server erreichbar ist.": "You'll see who has consented once the server is reachable again.",
+  "Zustimmung ohne Verbindung unbekannt": "consent unknown without a connection",
+  "Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.": "You haven't opened this before going offline. It loads once the server is reachable again.",
 };

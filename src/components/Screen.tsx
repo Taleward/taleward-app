@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Unread } from '../api/types';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { OfflineNotice } from './OfflineNotice';
+import { OfflineNotice, useOfflineSince } from './OfflineNotice';
 import { IconBack, IconBook, IconMic, IconScroll, IconShield } from './Icons';
 import { CampaignCover, hasCover } from '../covers/CampaignCover';
 
@@ -207,7 +207,13 @@ export function Divider() {
 }
 
 export function ErrorBox({ error }: { error: unknown }) {
+  const offline = !!useOfflineSince(currentConnectionId());
   if (!error) return null;
+  // Ohne Verbindung steht oben schon der Hinweis „nicht erreichbar“: hier nur leise sagen, dass dieser Teil fehlt
+  const e = error as { code?: string; details?: { read?: boolean } };
+  if (offline && e.code === 'network' && e.details?.read) {
+    return <p className="muted small" style={{ margin: 0 }}>{t('Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.')}</p>;
+  }
   const msg = error instanceof Error ? error.message : t('Unbekannter Fehler.');
   return (
     <div className="error" role="alert">

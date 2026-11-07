@@ -4,7 +4,8 @@ import { levelText } from '../characters/levelField';
 import type { CounterKind } from '../api/types';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
-import { apiAtLeast, p } from '../api/connections';
+import { apiAtLeast, currentConnectionId, p } from '../api/connections';
+import { useOfflineSince } from '../components/OfflineNotice';
 import { isDeletedMember, type Campaign, type Entry, type Member, type Proposal } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { IconCheck } from '../components/Icons';
@@ -31,6 +32,8 @@ export function GroupPanel({ campaign, onEntry, compact }: {
   const closeDetail = useCallback(() => setDetail(null), []);
   // Zähler (ab 0.4.28): die SL sieht die Stände, ändert sie aber nicht
   const [counterKinds, setCounterKinds] = useState<CounterKind[]>([]);
+  // Ohne Verbindung kennt die Lesekopie nur die eigene Zustimmung: dann nichts Falsches anzeigen
+  const offline = !!useOfflineSince(currentConnectionId());
   useEffect(() => {
     if (apiAtLeast('0.4.28')) api.campaignSettings(campaign.id).then((x) => setCounterKinds(x.counterKinds ?? [])).catch(() => undefined);
   }, [campaign.id, campaign.settingsVersion]);
@@ -64,13 +67,13 @@ export function GroupPanel({ campaign, onEntry, compact }: {
         <div className="table-group-compact">
           {players.map((m) => (
             <button key={m.id} type="button" className="table-group-face" title={m.characterName ?? m.displayName} onClick={() => setDetail(m)}
-              aria-label={t('{name} ({player}), {consent}. Charakter ansehen.', { name: m.characterName ?? t('Noch ohne Charakter'), player: m.displayName, consent: m.recordingConsentAt ? t('Zugestimmt') : t('Ohne Zustimmung') })}>
+              aria-label={t('{name} ({player}), {consent}. Charakter ansehen.', { name: m.characterName ?? t('Noch ohne Charakter'), player: m.displayName, consent: offline ? t('Zustimmung ohne Verbindung unbekannt') : m.recordingConsentAt ? t('Zugestimmt') : t('Ohne Zustimmung') })}>
               <Avatar campaignId={campaign.id} member={m} size={44} />
-              <span className={m.recordingConsentAt ? 'table-consent yes' : 'table-consent'} aria-hidden>{m.recordingConsentAt ? <IconCheck size={12} /> : '!'}</span>
+              {!offline && <span className={m.recordingConsentAt ? 'table-consent yes' : 'table-consent'} aria-hidden>{m.recordingConsentAt ? <IconCheck size={12} /> : '!'}</span>}
             </button>
           ))}
         </div>
-        <span className="small muted">{t('{n} von {total} haben der Aufnahme zugestimmt.', { n: agreed, total: players.length })}</span>
+        <span className="small muted">{offline ? t('Wer zugestimmt hat, siehst du wieder, sobald der Server erreichbar ist.') : t('{n} von {total} haben der Aufnahme zugestimmt.', { n: agreed, total: players.length })}</span>
         {popup}
       </div>
     );
@@ -92,9 +95,9 @@ export function GroupPanel({ campaign, onEntry, compact }: {
                   <span className="muted small">{m.displayName}{levelText(m.characterClasses, m.characterLevel) ? ` · ${levelText(m.characterClasses, m.characterLevel)}` : ''}</span>
                 </span>
               </button>
-              {m.recordingConsentAt
+              {!offline && (m.recordingConsentAt
                 ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
-                : <span className="pill">{t('Ohne Zustimmung')}</span>}
+                : <span className="pill">{t('Ohne Zustimmung')}</span>)}
             </div>
             {counterKinds.length > 0 && <CountersLine kinds={counterKinds} values={m.counters} />}
             {m.characterSummary && <p className="small" style={{ margin: 0 }}>{m.characterSummary}</p>}
@@ -133,6 +136,7 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry, counter
   counterKinds: CounterKind[];
   onEntry: (entryId: string) => void;
 }) {
+  const offline = !!useOfflineSince(currentConnectionId());
   const pc = entries.find((e) => e.type === 'pc' && e.holderMemberId === m.id);
   const mine = brought.filter((b) => b.submittedByMemberId === m.id && b.decision === 'accepted' && b.targetEntryId)
     .map((b) => entries.find((e) => e.id === b.targetEntryId))
@@ -146,11 +150,13 @@ function CharacterInfo({ campaign, member: m, entries, brought, onEntry, counter
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
           <h3 style={{ margin: 0 }}>{m.characterName ?? t('Noch ohne Charakter')}{m.characterNickname ? ` „${m.characterNickname}“` : ''}</h3>
           <span className="muted small">{t('gespielt von {name}', { name: m.displayName })}{levelText(m.characterClasses, m.characterLevel) ? ` · ${levelText(m.characterClasses, m.characterLevel)}` : ''}{m.characterStatus && STATUS[m.characterStatus] ? ' · ' + t(STATUS[m.characterStatus]) : ''}</span>
-          <span>
-            {m.recordingConsentAt
-              ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
-              : <span className="pill">{t('Ohne Zustimmung')}</span>}
-          </span>
+          {!offline && (
+            <span>
+              {m.recordingConsentAt
+                ? <span className="pill moss"><IconCheck /> {t('Zugestimmt')}</span>
+                : <span className="pill">{t('Ohne Zustimmung')}</span>}
+            </span>
+          )}
         </div>
       </div>
       {counterKinds.length > 0 && <CountersLine kinds={counterKinds} values={m.counters} />}

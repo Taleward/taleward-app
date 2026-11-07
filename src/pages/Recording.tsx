@@ -21,6 +21,7 @@ import { CONSENT_ON_SITE, CONSENT_STANDING } from '../consent';
 import { useAuth } from '../auth/AuthContext';
 import { clearTableConsent, loadTableConsent, saveTableConsent } from '../recorder/tableConsent';
 import { MicDenied } from '../components/MicDenied';
+import { useOfflineSince } from '../components/OfflineNotice';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { useAsync } from '../components/useAsync';
 import { BackgroundRecorder, hasNativeRecorder, nativeUploadFiles, type NativeStatus } from '../recorder/native';
@@ -64,6 +65,7 @@ export function Recording() {
   // Vor Ort selbst bestätigte Zustimmungen (Mitglied ohne App-Zustimmung) und Gäste ohne Konto
   // Am selben Abend gemerkt: ein Seitenwechsel (z. B. zur Chronik) nimmt keine Zustimmung mehr weg
   const [onSite, setOnSite] = useState<Record<string, string>>(() => loadTableConsent(currentConnection().id, campaignId).onSite);
+  const offline = !!useOfflineSince(currentConnection().id);
   const [guests, setGuests] = useState<{ name: string; consentAt: string }[]>(() => loadTableConsent(currentConnection().id, campaignId).guests);
   useEffect(() => { saveTableConsent(currentConnection().id, campaignId, { onSite, guests }); }, [onSite, guests, campaignId]);
   const { user } = useAuth();
@@ -455,6 +457,11 @@ export function Recording() {
         </div>
       )}
 
+          {offline && missing.length > 0 && (
+            <div className="notice" role="note">
+              {t('Ohne Verbindung sieht die App nur deine eigene Zustimmung. Wer dabei ist, stimmt kurz hier am Gerät zu. Aufnehmen geht trotzdem, hochgeladen wird, sobald der Server wieder erreichbar ist.')}
+            </div>
+          )}
           <section className="card rec-table" style={{ gap: 0 }}>
             <div className="row between" style={{ marginBottom: 4 }}>
               <h2>{t('Am Tisch')}</h2>
