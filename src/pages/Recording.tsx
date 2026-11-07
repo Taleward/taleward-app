@@ -1,3 +1,4 @@
+import { applyHandover, type Handover } from '../recorder/handover';
 import { setRecordingActive } from '../recorder/activity';
 import { getLive, setLive } from '../recorder/live';
 import { cloudUse, useServerInfo } from '../components/CloudNotice';
@@ -72,7 +73,7 @@ export function Recording() {
   const [guestName, setGuestName] = useState('');
   const serverInfo = useServerInfo();
   const [addingGuest, setAddingGuest] = useState(false);
-  const [handover, setHandover] = useState<{ memberId?: string; name: string; self?: boolean } | null>(null);
+  const [handover, setHandover] = useState<Handover | null>(null);
   const [phase, setPhase] = useState<Phase>('prepare');
   const [showTip] = useState(() => { try { return localStorage.getItem(TIP_KEY) !== '1'; } catch { return true; } });
   // Zurück-Taste warnt, solange aufgenommen wird
@@ -200,11 +201,11 @@ export function Recording() {
 
   const confirmHandover = () => {
     if (!handover) return;
-    const at = new Date().toISOString();
-    if (handover.memberId) setOnSite({ ...onSite, [handover.memberId]: at });
+    const next = applyHandover({ onSite, guests }, handover, new Date().toISOString());
+    setOnSite(next.onSite);
+    setGuests(next.guests);
     // Die eigene Zustimmung gilt gleich für die ganze Kampagne (wie „Ich stimme zu“ auf der Übersicht)
-    if (handover.self) api.setRecordingConsent(campaignId, true).catch(() => undefined);
-    else setGuests([...guests, { name: handover.name, consentAt: at }]);
+    if (next.consentSelf) api.setRecordingConsent(campaignId, true).catch(() => undefined);
     setGuestName('');
     setAddingGuest(false);
     setHandover(null);
