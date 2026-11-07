@@ -21,7 +21,7 @@ import { CONSENT_ON_SITE, CONSENT_STANDING } from '../consent';
 import { useAuth } from '../auth/AuthContext';
 import { clearTableConsent, loadTableConsent, saveTableConsent } from '../recorder/tableConsent';
 import { MicDenied } from '../components/MicDenied';
-import { MicLevel, QuietNote } from '../recorder/MicNote';
+import { QuietNote } from '../recorder/MicNote';
 import { useOfflineSince } from '../components/OfflineNotice';
 import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { useAsync } from '../components/useAsync';
@@ -89,6 +89,20 @@ export function Recording() {
   const [elapsed, setElapsed] = useState(0);
   // Pegel und Stille (nativ ab App 0.36.0, im Browser über die Analyse); undefined = unbekannt
   const [mic, setMic] = useState<{ level?: number; quietMs?: number }>({});
+  // Pegel für die Aura um den Knopf: öfter als die Uhr, damit sie mit den Stimmen geht
+  const [level, setLevel] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (phase !== 'recording' || paused) { setLevel(undefined); return; }
+    const id = window.setInterval(() => {
+      if (!native) {
+        const r = recorder.current;
+        setLevel(r?.level && r.state === 'recording' ? r.level() : undefined);
+        return;
+      }
+      BackgroundRecorder.getStatus().then((st) => setLevel(st.state === 'recording' ? st.level : undefined)).catch(() => undefined);
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [phase, paused]);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [micDenied, setMicDenied] = useState(false);
@@ -467,7 +481,7 @@ export function Recording() {
 
           {offline && missing.length > 0 && (
             <div className="notice" role="note">
-              {t('Ohne Verbindung sieht die App nur deine eigene Zustimmung. Wer dabei ist, stimmt kurz hier am Gerät zu. Aufnehmen geht trotzdem, hochgeladen wird, sobald der Server wieder erreichbar ist.')}
+              {t('Ohne Netz sieht die App nur deine Zustimmung. Die anderen stimmen hier am Gerät zu.')}
             </div>
           )}
           <section className="card rec-table" style={{ gap: 0 }}>
@@ -614,7 +628,8 @@ export function Recording() {
         <>
           {/* Großer Knopf in der Mitte – aus der Entfernung am Tisch erkennbar */}
           <div style={{ flex: 1, minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-            <button type="button" className={paused ? 'rec-button big rec-morph' : 'rec-button big recording rec-morph'} onClick={togglePause}
+            <button type="button" className={paused ? 'rec-button big rec-morph' : `rec-button big recording rec-morph${level !== undefined ? ' live' : ''}`} onClick={togglePause}
+              style={level !== undefined ? ({ '--lvl': Math.min(1, level * 1.6).toFixed(3) } as React.CSSProperties) : undefined}
               aria-label={paused ? t('Aufnahme fortsetzen') : t('Aufnahme pausieren')}>
               {/* Läuft: Mikrofon und Taleward-Zeichen (einfarbig weiß) wechseln sich im Takt des Pulsierens ab */}
               <span className="rec-swap" aria-hidden>
@@ -644,7 +659,6 @@ export function Recording() {
               </span>
             </button>
             <div className="rec-time big">{formatTime(elapsed)}</div>
-            {!paused && <MicLevel level={mic.level} />}
             <div className="muted">{paused ? t('Pausiert – tippen zum Fortsetzen') : t('Tippen für eine Pause')}</div>
           </div>
           {!paused && <QuietNote quietMs={mic.quietMs} />}

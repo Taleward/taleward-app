@@ -73,7 +73,7 @@ export function GroupPanel({ campaign, onEntry, compact }: {
             </button>
           ))}
         </div>
-        <span className="small muted">{offline ? t('Wer zugestimmt hat, siehst du wieder, sobald der Server erreichbar ist.') : t('{n} von {total} haben der Aufnahme zugestimmt.', { n: agreed, total: players.length })}</span>
+        <span className="small muted">{offline ? t('Zustimmungen sind ohne Netz nicht zu sehen.') : t('{n} von {total} haben der Aufnahme zugestimmt.', { n: agreed, total: players.length })}</span>
         {popup}
       </div>
     );

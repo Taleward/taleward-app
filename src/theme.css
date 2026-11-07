@@ -2372,8 +2372,21 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
 .namefix-hit details { margin-left: 34px; }
 .namefix-hit summary { cursor: pointer; color: var(--ink-muted); min-height: 32px; display: inline-flex; align-items: center; }
 
-/* Pegel unter der Aufnahme-Uhr: nur „hört etwas“, keine Messwerte */
-.mic-level { width: min(160px, 60%); height: 4px; margin: 2px auto 0; border-radius: 999px; background: var(--paper-sunken); overflow: hidden; }
-.mic-level > span { display: block; height: 100%; background: var(--salbei); transition: width 200ms linear; }
-@media (prefers-reduced-motion: reduce) { .mic-level > span { transition: none; } }
+/* Aura um den Aufnahmeknopf: geht mit den Stimmen (--lvl 0–1), statt im festen Takt zu pulsieren */
+.rec-button.big.recording.live::after {
+  animation: none;
+  inset: 0;
+  border: 0;
+  /* weicher Schein statt Ring */
+  background: rgba(158, 42, 58, 0.30);
+  box-shadow: 0 0 26px 12px rgba(158, 42, 58, 0.36);
+  z-index: -1;
+  transform: scale(calc(1 + var(--lvl, 0) * 0.24));
+  opacity: calc(0.25 + var(--lvl, 0) * 0.75);
+  transition: transform 180ms ease-out, opacity 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Ohne Bewegung: nur heller und dunkler, keine Größenänderung */
+  .rec-button.big.recording.live::after { transform: none; }
+}
 .rec-quiet { color: var(--siegel-text); font-weight: 600; }

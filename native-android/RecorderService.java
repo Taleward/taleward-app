@@ -64,7 +64,7 @@ public class RecorderService extends Service {
     private long runningSince;
     private PowerManager.WakeLock wakeLock;
 
-    // Pegel: alle 0,5 s die lauteste Stelle seit der letzten Abfrage. Darunter gilt es als „nichts gehört“
+    // Pegel: alle 0,2 s die lauteste Stelle seit der letzten Abfrage. Darunter gilt es als „nichts gehört“
     // (Mikrofon belegt oder abgedeckt). Die App zeigt nach 90 s ohne Ton einen ruhigen Hinweis.
     private static final int QUIET_AMPLITUDE = 40;
     private final Handler levelHandler = new Handler(Looper.getMainLooper());
@@ -74,7 +74,7 @@ public class RecorderService extends Service {
         @Override
         public void run() {
             sampleLevel();
-            levelHandler.postDelayed(this, 500);
+            levelHandler.postDelayed(this, 200);
         }
     };
 

@@ -212,7 +212,7 @@ export function ErrorBox({ error }: { error: unknown }) {
   // Ohne Verbindung steht oben schon der Hinweis „nicht erreichbar“: hier nur leise sagen, dass dieser Teil fehlt
   const e = error as { code?: string; details?: { read?: boolean } };
   if (offline && e.code === 'network' && e.details?.read) {
-    return <p className="muted small" style={{ margin: 0 }}>{t('Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.')}</p>;
+    return <p className="muted small" style={{ margin: 0 }}>{t('Ohne Netz noch nicht geladen.')}</p>;
   }
   const msg = error instanceof Error ? error.message : t('Unbekannter Fehler.');
   return (
