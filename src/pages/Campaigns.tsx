@@ -113,7 +113,8 @@ export function Campaigns() {
         const tooOld = !!appInfo.minAppVersion && versionLess(APP_VERSION, appInfo.minAppVersion);
         updateConnection(conn.id, { apiVersion: info.apiVersion, name: info.name, operator: info.operator, appInfo, appOutdated: tooOld, serverId: info.serverId ?? conn.serverId ?? null,
           // Schlüssel für geteilte Kapitel nur über eine angemeldete Verbindung merken, nie aus einer Datei
-          ...(hasValidToken(conn) && info.shareKeys !== undefined ? { shareKeys: cleanShareKeys(info.shareKeys) } : {}) });
+          ...(hasValidToken(conn) && info.shareKeys !== undefined ? { shareKeys: cleanShareKeys(info.shareKeys) } : {}),
+          discordBot: info.discordBot === true });
         if (tooOld || versionLess(info.apiVersion, MIN_API_VERSION)) return { conn, list: [] as CampaignSummary[], ok: true };
         // Eigenes Profil nur, wenn es für das Anlegen zählt (SL-Freigabe ab 0.4.23, Nutzungsbedingungen ab 0.4.22)
         if (hasValidToken(conn) && (info.gmApproval === 'required' || info.termsVersion)) {

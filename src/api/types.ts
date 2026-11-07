@@ -374,7 +374,7 @@ export interface CreditWaitingJob {
 
 /** Ab 0.4.25: Einstellungen einer Kampagne an einem Ort */
 export type SettingField = 'allowCloudSummary' | 'allowExternalTranscription' | 'allowCharacterAnalysis';
-export type CampaignSettingsIn = Partial<Record<SettingField, boolean>> & { playerProposals?: boolean; counterKinds?: CounterKind[] };
+export type CampaignSettingsIn = Partial<Record<SettingField, boolean>> & { playerProposals?: boolean; counterKinds?: CounterKind[]; discordPauseOnUnconsented?: boolean };
 export interface CampaignSettings {
   version: number;
   allowCloudSummary: boolean;
@@ -384,6 +384,8 @@ export interface CampaignSettings {
   playerProposals?: boolean;
   /** Ab 0.4.28; leer = aus */
   counterKinds?: CounterKind[];
+  /** Ab 0.4.32; fehlt, wenn der Server keinen Discord-Bot anbietet */
+  discordPauseOnUnconsented?: boolean;
   characterSheetLimits?: { maxSheets: number; maxPages: number } | null;
   locks: { field: SettingField | (string & {}); value: boolean; reason: 'unavailable' | 'operator' | (string & {}) }[];
   updatedAt: string;
@@ -959,6 +961,27 @@ export interface ImportStatus {
 /** Gelöschtes Konto: nicht mehr als Person anbieten (Anwesende, Empfänger, Auswahl) */
 export function isDeletedMember(m: Member): boolean {
   return !!m.deletedAt || m.userId === '' || !!m.leftAt || !!m.openSeat;
+}
+
+// ---- Ab Schnittstelle 0.4.32: Discord-Bot ----
+
+export interface DiscordLinkPreview {
+  linked: boolean;
+  guildName?: string;
+  expiresAt?: string;
+  campaigns?: { campaignId: string; title: string; connectedGuildName?: string | null }[];
+}
+
+export interface DiscordConnection { guildName: string; connectedAt: string; connectedBy?: string | null }
+
+export interface ConsentLinkInfo {
+  campaignTitle: string;
+  gmName?: string;
+  language: string;
+  expiresAt: string;
+  memberAllowed: boolean;
+  guestAllowed: boolean;
+  suggestedGuestName?: string | null;
 }
 
 // ---- Ab Schnittstelle 0.4.31: Namen einmal berichtigen ----

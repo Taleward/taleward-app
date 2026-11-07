@@ -1,4 +1,5 @@
 import { NameFixesRow } from '../names/NameFixesRow';
+import { DiscordRow, serverHasDiscordBot } from '../discord/DiscordRow';
 import { VoiceProfileHint } from '../components/VoiceProfileHint';
 import { LiveBookmark } from '../components/Bookmarks';
 import { CounterKindsRow } from '../characters/Counters';
@@ -776,6 +777,10 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
               <span className="lr-text">{t('Unterlagen der SL')}<span className="lr-sub">{t('Abenteuer, Notizen, Karten')}</span></span>
             </Link>
             {apiAtLeast('0.4.31') && <NameFixesRow campaign={campaign} />}
+            {!muster && apiAtLeast('0.4.32') && serverHasDiscordBot() && (
+              <DiscordRow campaign={campaign} pause={settings.raw?.discordPauseOnUnconsented} busy={busy}
+                onPause={(value) => run(() => settings.patch({ discordPauseOnUnconsented: value }), () => undefined)} />
+            )}
             {!muster && campaign.billing && <PayerSection campaign={campaign} me={me} onChanged={onChanged} />}
             <UsageRow campaignId={campaign.id} />
           </div>

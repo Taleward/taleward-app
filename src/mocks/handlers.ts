@@ -5,6 +5,7 @@ import { cleanAliases, findMatch, secretWarnings } from './checks';
 import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
 import { memberCounters, playerExtras, playerHandlers, playerProposals } from './players';
 import { mockMemberKey, mockShareFile, mockShareServerKey } from './share';
+import { discordHandlers, discordPublicHandlers, mockDiscordBot } from './discord';
 import { cleanName, countWord, excerptsFor, nameFixProblem, replaceWholeWord } from '../names/nameFix';
 
 /** Alle Titelbild-IDs (Schnittstelle 0.4.3) – wie der Server: neue Kampagnen bekommen eines zufällig */
@@ -754,7 +755,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.31', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.32', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -764,8 +765,10 @@ export const handlers = [
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.31',
+      apiVersion: nachbar ? '0.3.9' : '0.4.32',
       serverId: nachbar ? undefined : 'testserver',
+      // 0.4.32: Discord-Bot (taleward.mock.discord)
+      discordBot: nachbar ? undefined : mockDiscordBot(),
       // 0.4.30: Kapitel teilen
       shareKeys: nachbar ? undefined : [await mockShareServerKey().then(({ id, spki }) => ({ id, spki }))],
       registration: nachbar ? 'invite_only' : registrationSetting(),
@@ -877,6 +880,9 @@ export const handlers = [
     if (!c) return err(404, 'invite_invalid', 'Dieser Einladungscode ist ungültig oder abgelaufen. Frag deine Spielleitung nach einem neuen.');
     return HttpResponse.json({ campaignTitle: c.title, seatCharacterName: null, expiresAt: new Date(Date.now() + 7 * 864e5).toISOString() });
   }),
+
+  // 0.4.32: Zustimmungslinks des Discord-Bots (auch für Gäste)
+  ...discordPublicHandlers(B, { myMember, authed }),
 
   // Ab hier alles nur mit Token
   http.all(`${B}/*`, ({ request }) => {
@@ -2536,6 +2542,7 @@ export const handlers = [
   }),
   // 0.4.25: Guthaben und Kampagnen-Einstellungen
   ...billingHandlers(B, { myMember, terms: () => !termsOutdated() }),
+  ...discordHandlers(B, { myMember, authed }),
   // 0.4.28: Vorschläge von Spielenden, Merken, Zähler
   ...playerHandlers(B, {
     myMember, canSee,

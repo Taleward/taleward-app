@@ -6,7 +6,7 @@ import { campaignOfPath, cleanForCopy, copyable } from './readCopyRules';
 import { hasCopy, keepOnlyCampaigns, markOffline, markOnline, offlineSince, readCopy, removeCopiesOf, removeCopiesOfCampaign, saveCopy } from './readCopy';
 import { getLang, t, tk } from '../i18n';
 import { APP_VERSION, currentConnection, getConnection, hasValidToken, serverKnowsAppVersion, updateConnection, type Connection } from './connections';
-import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview,
+import type { InvitePreview, CharacterAnalysis, NameFix, NameFixPreview, DiscordLinkPreview, DiscordConnection, ConsentLinkInfo,
   ApiError,
   Campaign,
   CampaignBilling,
@@ -534,6 +534,12 @@ function makeApi(conn: () => Connection) {
     const r = await request<Recap | ProcessingStatus>('POST', `/sessions/${sessionId}/corrections`, { body: { corrections, retranscribe } });
     return 'state' in r ? { status: r } : { recap: r };
   },
+  /** Discord-Bot (ab 0.4.32): Verbindungslink bzw. Drei-Wörter-Code ansehen und einlösen, Verbindung der Kampagne */
+  discordLinkPreview: (secret: { token?: string; code?: string }) => request<DiscordLinkPreview>('POST', '/discord-links/preview', { body: secret }),
+  discordLinkRedeem: (secret: { token?: string; code?: string }, campaignId: string) =>
+    request<DiscordConnection>('POST', '/discord-links/redeem', { body: { ...secret, campaignId } }),
+  campaignDiscord: (campaignId: string) => request<{ connection: DiscordConnection | null }>('GET', `/campaigns/${campaignId}/discord`),
+  unlinkDiscord: (campaignId: string) => request<void>('DELETE', `/campaigns/${campaignId}/discord`),
   /** Kapitel als verschlüsselte Datei teilen (nur SL, ab 0.4.30) */
   shareChapter: (campaignId: string, sessionId: string) =>
     request<{ file: string; fileName: string; missingKeys: string[] }>('POST', `/campaigns/${campaignId}/shares`, { body: { sessionId } }),
@@ -587,6 +593,16 @@ export async function fetchInvitePreview(baseUrl: string, code: string): Promise
     if (isApiError(e, 'invite_invalid')) throw e;
     return null;
   }
+}
+
+const probeConn = (baseUrl: string): Connection => ({ id: '_probe', baseUrl, name: '', operator: null, apiVersion: null, token: null, expiresAt: null, user: null });
+
+/** Zustimmungslink des Discord-Bots (ab 0.4.32): ohne Anmeldung ansehen; zustimmen als Gast ohne, als Mitglied mit Verbindung */
+export function fetchConsentLink(baseUrl: string, token: string): Promise<ConsentLinkInfo> {
+  return requestOn<ConsentLinkInfo>(probeConn(baseUrl), 'GET', `/consent-links/${token}`);
+}
+export function postConsentLink(conn: Connection | string, token: string, body: { consent: true; guestName?: string; characterName?: string }): Promise<Attendee> {
+  return requestOn<Attendee>(typeof conn === 'string' ? probeConn(conn) : conn, 'POST', `/consent-links/${token}`, { body });
 }
 
 /** Öffentliche Info eines Servers, ohne Verbindung (vor dem Anmelden) */

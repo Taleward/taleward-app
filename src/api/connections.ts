@@ -35,6 +35,8 @@ export interface Connection {
   serverId?: string | null;
   /** Signierschlüssel für geteilte Kapitel (ab 0.4.30), nur aus /info einer angemeldeten Verbindung */
   shareKeys?: { id: string; spki: string }[] | null;
+  /** Discord-Bot eingeschaltet (ab 0.4.32, aus /info) */
+  discordBot?: boolean;
 }
 
 /** Ist diese App für den Server zu alt? */

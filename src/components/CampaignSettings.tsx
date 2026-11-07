@@ -78,7 +78,10 @@ export function useCampaignSettings(campaign: Campaign, onChanged: () => void): 
 const FIELDS: Record<string, string> = {
   allowCloudSummary: tk('Zusammenfassung über die Cloud'),
   allowExternalTranscription: tk('Transkription über die Cloud'),
-  allowCharacterAnalysis: tk('Charakterbögen auswerten')
+  allowCharacterAnalysis: tk('Charakterbögen auswerten'),
+  playerProposals: tk('Vorschläge von Spielenden'),
+  counterKinds: tk('Zähler am Charakter'),
+  discordPauseOnUnconsented: tk('Discord: anhalten ohne Zustimmung')
 };
 
 /** Wer hat wann was geändert (nur SL, ab 0.4.25) */

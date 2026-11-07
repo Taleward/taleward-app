@@ -37,6 +37,8 @@ import { CharacterPage } from './pages/CharacterPage';
 import { DocumentsPage } from './pages/DocumentsPage';
 import { DocumentReview } from './pages/DocumentReview';
 import { TablePage } from './pages/TablePage';
+import { ConsentLinkPage } from './discord/ConsentLinkPage';
+import { DiscordConnectPage } from './discord/DiscordConnectPage';
 
 /** Seiten, die zu einem bestimmten Server gehören (unter /v/<server>/…) */
 const scoped = (el: JSX.Element) => <ConnectionScope>{el}</ConnectionScope>;
@@ -58,6 +60,8 @@ function Routed() {
         <Route path="/verbinden" element={<ConnectRoute />} />
       <Route path="/auth" element={<AuthReturn />} />
         <Route path="/auth" element={<AuthReturn />} />
+        <Route path="/zustimmen" element={<ConsentLinkPage />} />
+        <Route path="/link" element={null} />
         <Route path="*" element={<ConnectRoute />} />
       </Routes>
       </>
@@ -70,6 +74,9 @@ function Routed() {
       <Route path="/" element={<Campaigns />} />
       <Route path="/verbinden" element={<ConnectRoute />} />
       <Route path="/konto" element={<AccountPage />} />
+      <Route path="/zustimmen" element={<ConsentLinkPage />} />
+      <Route path="/link" element={null} />
+      <Route path="/v/:conn/discord-verbinden" element={scoped(<DiscordConnectPage />)} />
       <Route path="/konto/:connId" element={<ServerAccountPage />} />
       {/* Feste Adresse für Taleward Desktop: SL-Schirm der zuletzt geöffneten eigenen Kampagne */}
       <Route path="/schirm" element={<LastTableRedirect />} />

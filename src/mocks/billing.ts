@@ -12,6 +12,7 @@ import { HttpResponse, http } from 'msw';
 import type { CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
 import { campaigns } from './db';
 import type { MockCampaign } from './db';
+import { mockDiscordPause, setMockDiscordPause } from './discord';
 
 const setting = (key: string): string | null => { try { return localStorage.getItem(`taleward.mock.${key}`); } catch { return null; } };
 
@@ -103,6 +104,7 @@ export function settingsOf(c: MockCampaign, gm: boolean): CampaignSettings {
     allowCharacterAnalysis: !!c.allowCharacterAnalysis,
     playerProposals: c.playerProposals !== false,
     counterKinds: c.counterKinds ?? [],
+    ...(mockDiscordPause(c.id) !== undefined ? { discordPauseOnUnconsented: mockDiscordPause(c.id) } : {}),
     characterSheetLimits: { maxSheets: own.sheetsPerPlayer, maxPages: own.sheetMaxPages },
     locks: locked && FIELDS.includes(locked) ? [{ field: locked, value: !!c[locked], reason: 'operator' }] : [],
     updatedAt: r.updatedAt,
@@ -249,6 +251,11 @@ export function billingHandlers(B: string, deps: {
       if (typeof body.playerProposals === 'boolean' && body.playerProposals !== (g.c.playerProposals !== false)) {
         log('playerProposals', g.c.playerProposals !== false, body.playerProposals);
         g.c.playerProposals = body.playerProposals;
+      }
+      const dp = (body as { discordPauseOnUnconsented?: boolean }).discordPauseOnUnconsented;
+      if (typeof dp === 'boolean' && mockDiscordPause(g.c.id) !== undefined && dp !== mockDiscordPause(g.c.id)) {
+        log('discordPauseOnUnconsented', !dp, dp);
+        setMockDiscordPause(g.c.id, dp);
       }
       if (Array.isArray(body.counterKinds)) {
         const next = body.counterKinds.slice(0, 8).map((k) => ({ id: String(k.id).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24), label: String(k.label).trim().slice(0, 24), hint: k.hint ?? null }))

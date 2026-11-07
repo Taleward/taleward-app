@@ -1,6 +1,7 @@
 import { handleAuthUrl, isAuthReturnUrl } from '../auth/oidc';
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { apiBaseOf, botLinkFromAppUrl, parseBotLink, type BotLink } from '../discord/links';
 import { Capacitor } from '@capacitor/core';
 import { apiFor, fetchInvitePreview } from '../api/client';
 import { activeConnections, apiAtLeast, parseInvite, sameServerHost } from '../api/connections';
@@ -23,6 +24,31 @@ function hostOf(baseUrl: string): string {
  */
 export function DeepLinks() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Links des Discord-Bots: Token nur über den Router-Zustand weitergeben, nie in Adresse oder Verlauf
+  const openBotLink = (link: BotLink) => {
+    const baseUrl = apiBaseOf(link);
+    if (link.kind === 'zustimmen') {
+      navigate('/zustimmen', { replace: true, state: { baseUrl, token: link.token } });
+      return;
+    }
+    const conn = activeConnections().find((c) => sameServerHost(c.baseUrl, baseUrl));
+    if (!conn) {
+      navigate('/', { replace: true, state: { joinError: t('Melde dich zuerst auf {host} an und öffne den Link aus dem Discord dann noch einmal.', { host: hostOf(baseUrl) }) } });
+      return;
+    }
+    navigate(`/v/${conn.id}/discord-verbinden`, { replace: true, state: { token: link.token } });
+  };
+
+  // Web-App: …/#/link?url=<Link des Bots> – Adresse sofort leeren
+  useEffect(() => {
+    if (location.pathname !== '/link') return;
+    const raw = new URLSearchParams(location.search).get('url');
+    const link = raw ? parseBotLink(raw) : null;
+    if (link) openBotLink(link); else navigate('/', { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search]);
 
   // Testmodus: simulierte Rückkehr vom Anmeldedienst
   useEffect(() => {
@@ -45,6 +71,11 @@ export function DeepLinks() {
       // Rückkehr vom Anmeldedienst
       if (isAuthReturnUrl(url)) {
         navigate(await handleAuthUrl(url), { replace: true });
+        return;
+      }
+      const bot = botLinkFromAppUrl(url);
+      if (bot) {
+        openBotLink(bot);
         return;
       }
       const link = inviteFromAppUrl(url);
