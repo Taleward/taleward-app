@@ -1,0 +1,209 @@
+From d8bff7efc8c24e8451e31061201e7ef054829744 Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 14:57:05 +0100
+Subject: [PATCH] Aufnahme: Schein um den Knopf geht mit den Stimmen
+
+Statt Pegelstreifen ein weicher Schein um den Aufnahmeknopf, der mit dem
+Pegel waechst (alle 0,2 s; ohne Bewegung nur heller/dunkler). Ohne Pegel
+bleibt der bisherige Puls. Hinweistexte gekuerzt: Mikrofon, ohne Netz,
+Mitgebrachte Welt.
+---
+ native-android/RecorderService.java |  4 ++--
+ src/components/Screen.tsx           |  2 +-
+ src/i18n/en.ts                      | 11 +++++------
+ src/pages/BroughtPage.tsx           |  5 +----
+ src/pages/Recording.tsx             | 22 ++++++++++++++++++----
+ src/recorder/MicNote.tsx            | 19 ++++---------------
+ src/table/GroupPanel.tsx            |  2 +-
+ src/theme.css                       | 21 +++++++++++++++++----
+ 8 files changed, 49 insertions(+), 37 deletions(-)
+
+diff --git a/native-android/RecorderService.java b/native-android/RecorderService.java
+index d2f6661..cdb4b02 100644
+--- a/native-android/RecorderService.java
++++ b/native-android/RecorderService.java
+@@ -65,5 +65,5 @@ public class RecorderService extends Service {
+     private PowerManager.WakeLock wakeLock;
+ 
+-    // Pegel: alle 0,5 s die lauteste Stelle seit der letzten Abfrage. Darunter gilt es als „nichts gehört“
++    // Pegel: alle 0,2 s die lauteste Stelle seit der letzten Abfrage. Darunter gilt es als „nichts gehört“
+     // (Mikrofon belegt oder abgedeckt). Die App zeigt nach 90 s ohne Ton einen ruhigen Hinweis.
+     private static final int QUIET_AMPLITUDE = 40;
+@@ -75,5 +75,5 @@ public class RecorderService extends Service {
+         public void run() {
+             sampleLevel();
+-            levelHandler.postDelayed(this, 500);
++            levelHandler.postDelayed(this, 200);
+         }
+     };
+diff --git a/src/components/Screen.tsx b/src/components/Screen.tsx
+index e2c463a..52b5c43 100644
+--- a/src/components/Screen.tsx
++++ b/src/components/Screen.tsx
+@@ -213,5 +213,5 @@ export function ErrorBox({ error }: { error: unknown }) {
+   const e = error as { code?: string; details?: { read?: boolean } };
+   if (offline && e.code === 'network' && e.details?.read) {
+-    return <p className="muted small" style={{ margin: 0 }}>{t('Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.')}</p>;
++    return <p className="muted small" style={{ margin: 0 }}>{t('Ohne Netz noch nicht geladen.')}</p>;
+   }
+   const msg = error instanceof Error ? error.message : t('Unbekannter Fehler.');
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 39c5c3e..11ae1cd 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1858,12 +1858,11 @@ export const en: Record<string, string> = {
+   "Spielleitung: {name} · Server „{server}“ ({host})": "Game master: {name} · server “{server}” ({host})",
+   "Server „{server}“ ({host})": "Server “{server}” ({host})",
+-  "Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.": "This is where character lore from your players lands: places, people and relationships from their backstories. You can then add it to the bible.",
+-  "Ohne Verbindung sieht die App nur deine eigene Zustimmung. Wer dabei ist, stimmt kurz hier am Gerät zu. Aufnehmen geht trotzdem, hochgeladen wird, sobald der Server wieder erreichbar ist.": "Without a connection the app only sees your own consent. Everyone taking part agrees here on this device. You can still record; it uploads once the server is reachable again.",
+-  "Wer zugestimmt hat, siehst du wieder, sobald der Server erreichbar ist.": "You'll see who has consented once the server is reachable again.",
+   "Zustimmung ohne Verbindung unbekannt": "consent unknown without a connection",
+-  "Das hast du ohne Verbindung noch nicht gesehen. Es lädt, sobald der Server wieder erreichbar ist.": "You haven't opened this before going offline. It loads once the server is reachable again.",
+   "Von deinem Guthaben ({amount}) bekommst du zurück, was aus Zahlungen übrig ist. Bis dahin behält der Server nur den Betrag und deine bestätigte E-Mail-Adresse, höchstens 90 Tage.": "You get back whatever is left of your credit ({amount}) from payments. Until then the server keeps only the amount and your confirmed email address, for 90 days at most.",
+-  "Das Mikrofon hört seit einer Minute nichts. Liegt das Handy frei? Nutzt gerade eine andere App das Mikrofon, etwa ein Anruf?": "The microphone hasn't heard anything for a minute. Is the phone uncovered? Is another app using the microphone, such as a call?",
+-  "Das Mikrofon hört seit {n} Minuten nichts. Liegt das Handy frei? Nutzt gerade eine andere App das Mikrofon, etwa ein Anruf?": "The microphone hasn't heard anything for {n} minutes. Is the phone uncovered? Is another app using the microphone, such as a call?",
+   "Mikrofon hört nichts": "microphone hears nothing",
++  "Ohne Netz sieht die App nur deine Zustimmung. Die anderen stimmen hier am Gerät zu.": "Offline, the app only sees your consent. Everyone else agrees here on this device.",
++  "Zustimmungen sind ohne Netz nicht zu sehen.": "Consents aren't visible offline.",
++  "Ohne Netz noch nicht geladen.": "Not loaded yet – no connection.",
++  "Das Mikrofon hört seit einer Minute nichts.": "The microphone hasn't heard anything for a minute.",
++  "Das Mikrofon hört seit {n} Minuten nichts.": "The microphone hasn't heard anything for {n} minutes.",
+ };
+diff --git a/src/pages/BroughtPage.tsx b/src/pages/BroughtPage.tsx
+index c4f9007..def175f 100644
+--- a/src/pages/BroughtPage.tsx
++++ b/src/pages/BroughtPage.tsx
+@@ -57,8 +57,5 @@ export function BroughtPage() {
+       </p>}
+       {proposals && open.length === 0 && (
+-        <div className="empty">
+-          {t('Nichts Neues mitgebracht.')}
+-          <span className="muted small" style={{ display: 'block', marginTop: 6 }}>{t('Hier landet, was Spielende aus ihrem Charakter mitbringen: Orte, Personen und Beziehungen aus dem Hintergrund. Du übernimmst es dann in die Bibel.')}</span>
+-        </div>
++        <div className="empty">{t('Nichts Neues mitgebracht.')}</div>
+       )}
+ 
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index 4e2cdb3..4b1a487 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -22,5 +22,5 @@ import { useAuth } from '../auth/AuthContext';
+ import { clearTableConsent, loadTableConsent, saveTableConsent } from '../recorder/tableConsent';
+ import { MicDenied } from '../components/MicDenied';
+-import { MicLevel, QuietNote } from '../recorder/MicNote';
++import { QuietNote } from '../recorder/MicNote';
+ import { useOfflineSince } from '../components/OfflineNotice';
+ import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+@@ -90,4 +90,18 @@ export function Recording() {
+   // Pegel und Stille (nativ ab App 0.36.0, im Browser über die Analyse); undefined = unbekannt
+   const [mic, setMic] = useState<{ level?: number; quietMs?: number }>({});
++  // Pegel für die Aura um den Knopf: öfter als die Uhr, damit sie mit den Stimmen geht
++  const [level, setLevel] = useState<number | undefined>(undefined);
++  useEffect(() => {
++    if (phase !== 'recording' || paused) { setLevel(undefined); return; }
++    const id = window.setInterval(() => {
++      if (!native) {
++        const r = recorder.current;
++        setLevel(r?.level && r.state === 'recording' ? r.level() : undefined);
++        return;
++      }
++      BackgroundRecorder.getStatus().then((st) => setLevel(st.state === 'recording' ? st.level : undefined)).catch(() => undefined);
++    }, 200);
++    return () => window.clearInterval(id);
++  }, [phase, paused]);
+   const [progress, setProgress] = useState(0);
+   const [error, setError] = useState<unknown>(null);
+@@ -468,5 +482,5 @@ export function Recording() {
+           {offline && missing.length > 0 && (
+             <div className="notice" role="note">
+-              {t('Ohne Verbindung sieht die App nur deine eigene Zustimmung. Wer dabei ist, stimmt kurz hier am Gerät zu. Aufnehmen geht trotzdem, hochgeladen wird, sobald der Server wieder erreichbar ist.')}
++              {t('Ohne Netz sieht die App nur deine Zustimmung. Die anderen stimmen hier am Gerät zu.')}
+             </div>
+           )}
+@@ -615,5 +629,6 @@ export function Recording() {
+           {/* Großer Knopf in der Mitte – aus der Entfernung am Tisch erkennbar */}
+           <div style={{ flex: 1, minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+-            <button type="button" className={paused ? 'rec-button big rec-morph' : 'rec-button big recording rec-morph'} onClick={togglePause}
++            <button type="button" className={paused ? 'rec-button big rec-morph' : `rec-button big recording rec-morph${level !== undefined ? ' live' : ''}`} onClick={togglePause}
++              style={level !== undefined ? ({ '--lvl': Math.min(1, level * 1.6).toFixed(3) } as React.CSSProperties) : undefined}
+               aria-label={paused ? t('Aufnahme fortsetzen') : t('Aufnahme pausieren')}>
+               {/* Läuft: Mikrofon und Taleward-Zeichen (einfarbig weiß) wechseln sich im Takt des Pulsierens ab */}
+@@ -645,5 +660,4 @@ export function Recording() {
+             </button>
+             <div className="rec-time big">{formatTime(elapsed)}</div>
+-            {!paused && <MicLevel level={mic.level} />}
+             <div className="muted">{paused ? t('Pausiert – tippen zum Fortsetzen') : t('Tippen für eine Pause')}</div>
+           </div>
+diff --git a/src/recorder/MicNote.tsx b/src/recorder/MicNote.tsx
+index 79d6a3a..50746ac 100644
+--- a/src/recorder/MicNote.tsx
++++ b/src/recorder/MicNote.tsx
+@@ -2,23 +2,12 @@ import { tn } from '../i18n';
+ import { isTooQuiet } from './quiet';
+ 
+-/** Schmaler Pegelstreifen unter der Uhr: zeigt nur, dass das Mikrofon etwas hört (für Screenreader ohne Bedeutung) */
+-export function MicLevel({ level }: { level: number | undefined }) {
+-  if (level === undefined) return null;
+-  return (
+-    <div className="mic-level" aria-hidden>
+-      <span style={{ width: `${Math.round(Math.min(1, Math.max(0, level)) * 100)}%` }} />
+-    </div>
+-  );
+-}
+-
+-/** Ruhiger Hinweis, wenn 90 s nichts zu hören war – kein Ton, kein Fenster, verschwindet von selbst */
++/** Eine Zeile, wenn 90 s nichts zu hören war – kein Ton, kein Fenster, verschwindet von selbst. Die Aura steht dann still. */
+ export function QuietNote({ quietMs }: { quietMs: number | undefined }) {
+   if (!isTooQuiet(quietMs)) return null;
+   const min = Math.max(1, Math.floor((quietMs ?? 0) / 60_000));
+   return (
+-    <div className="notice warn" role="status">
+-      {tn(min, 'Das Mikrofon hört seit einer Minute nichts. Liegt das Handy frei? Nutzt gerade eine andere App das Mikrofon, etwa ein Anruf?',
+-        'Das Mikrofon hört seit {n} Minuten nichts. Liegt das Handy frei? Nutzt gerade eine andere App das Mikrofon, etwa ein Anruf?')}
+-    </div>
++    <p className="rec-quiet" role="status" style={{ margin: 0, textAlign: 'center' }}>
++      {tn(min, 'Das Mikrofon hört seit einer Minute nichts.', 'Das Mikrofon hört seit {n} Minuten nichts.')}
++    </p>
+   );
+ }
+diff --git a/src/table/GroupPanel.tsx b/src/table/GroupPanel.tsx
+index 710484f..aaeea1d 100644
+--- a/src/table/GroupPanel.tsx
++++ b/src/table/GroupPanel.tsx
+@@ -74,5 +74,5 @@ export function GroupPanel({ campaign, onEntry, compact }: {
+           ))}
+         </div>
+-        <span className="small muted">{offline ? t('Wer zugestimmt hat, siehst du wieder, sobald der Server erreichbar ist.') : t('{n} von {total} haben der Aufnahme zugestimmt.', { n: agreed, total: players.length })}</span>
++        <span className="small muted">{offline ? t('Zustimmungen sind ohne Netz nicht zu sehen.') : t('{n} von {total} haben der Aufnahme zugestimmt.', { n: agreed, total: players.length })}</span>
+         {popup}
+       </div>
+diff --git a/src/theme.css b/src/theme.css
+index de6f006..60bc863 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -2373,7 +2373,20 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ .namefix-hit summary { cursor: pointer; color: var(--ink-muted); min-height: 32px; display: inline-flex; align-items: center; }
+ 
+-/* Pegel unter der Aufnahme-Uhr: nur „hört etwas“, keine Messwerte */
+-.mic-level { width: min(160px, 60%); height: 4px; margin: 2px auto 0; border-radius: 999px; background: var(--paper-sunken); overflow: hidden; }
+-.mic-level > span { display: block; height: 100%; background: var(--salbei); transition: width 200ms linear; }
+-@media (prefers-reduced-motion: reduce) { .mic-level > span { transition: none; } }
++/* Aura um den Aufnahmeknopf: geht mit den Stimmen (--lvl 0–1), statt im festen Takt zu pulsieren */
++.rec-button.big.recording.live::after {
++  animation: none;
++  inset: 0;
++  border: 0;
++  /* weicher Schein statt Ring */
++  background: rgba(158, 42, 58, 0.30);
++  box-shadow: 0 0 26px 12px rgba(158, 42, 58, 0.36);
++  z-index: -1;
++  transform: scale(calc(1 + var(--lvl, 0) * 0.24));
++  opacity: calc(0.25 + var(--lvl, 0) * 0.75);
++  transition: transform 180ms ease-out, opacity 180ms ease-out;
++}
++@media (prefers-reduced-motion: reduce) {
++  /* Ohne Bewegung: nur heller und dunkler, keine Größenänderung */
++  .rec-button.big.recording.live::after { transform: none; }
++}
+ .rec-quiet { color: var(--siegel-text); font-weight: 600; }
