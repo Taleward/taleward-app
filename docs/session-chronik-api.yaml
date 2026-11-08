@@ -322,7 +322,8 @@ info:
     Änderungen in 0.4.35 (Stelle merken über den Bot): POST /bot/sessions/{sessionId}/bookmarks legt für ein Mitglied, das
     in der laufenden Bot-Runde mit Zustimmung aufgenommen wird, eine gemerkte Stelle an – wie „Merken“ in der App
     (`/taleward merken`). Die Stelle erscheint in der App über GET /sessions/{id}/bookmarks wie jede andere; offsetMs
-    rechnet der Server bei Bot-Runden aus dem Start und den Pausen. App-Oberfläche unverändert.
+    rechnet der Server bei Bot-Runden aus dem Start und den Pausen. Bookmark.source (app | discord, fehlt = app); die App
+    zeigt bei solchen Stellen „Über Discord gemerkt“. Ältere Apps übergehen das Feld.
 
 servers:
   - url: https://taleward.example.org/api/v1
@@ -3774,7 +3775,7 @@ paths:
         (429). `note` bereinigt der Server wie andere Texte vom Bot (Steuerzeichen, Länge). `at` liegt zwischen
         `recordingStartedAt` und jetzt + 5 Minuten (sonst 400). `offsetMs` rechnet der Server bei Bot-Runden aus
         `recordingStartedAt` und den `pause`/`resume`-Ereignissen (in einer Pause: null). Der Bot zeigt die Antwort nur der
-        Person selbst (ephemeral) und speichert weder Notiz noch Stelle.
+        Person selbst (ephemeral) und speichert weder Notiz noch Stelle. Die Stelle trägt `source: discord`.
       security: [{ botKey: [] }]
       requestBody:
         required: true
@@ -5522,6 +5523,13 @@ components:
           description: |
             Nach dem Veröffentlichen: Absatz des Kapitels (ab 0 in Recap.text), der diese Stelle erzählt – soweit der
             Server ihn über die Belege findet; sonst null. Nur ein Hinweis, das Kapitel ändert sich dadurch nicht.
+        source:
+          type: string
+          enum: [app, discord]
+          description: |
+            Ab 0.4.35: woher die Stelle kam – `app` (POST /sessions/{id}/bookmarks) oder `discord` (über den Bot,
+            `/taleward merken`). Fehlt das Feld, gilt `app`. Die App zeigt „Über Discord gemerkt“, damit die Person eine
+            nicht selbst in der App gesetzte Stelle erkennt und löschen kann.
         createdAt: { type: string, format: date-time }
 
     CounterKind:

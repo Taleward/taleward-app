@@ -105,7 +105,7 @@ export function MyBookmarks({ list, onJump, onDelete }: { list: Bookmark[]; onJu
       <div className="list-box">
         {list.map((b) => {
           const label = <span className="lr-text">{clock(b.at)}{b.note ? ` · ${b.note}` : ''}
-            <span className="lr-sub">{b.recapParagraph != null ? t('Zur Stelle im Kapitel') : t('Die Stelle ließ sich keinem Absatz zuordnen.')}</span></span>;
+            <span className="lr-sub">{b.source === 'discord' ? `${t('Über Discord gemerkt')} · ` : ''}{b.recapParagraph != null ? t('Zur Stelle im Kapitel') : t('Die Stelle ließ sich keinem Absatz zuordnen.')}</span></span>;
           return (
             <div key={b.id} className="file-row">
               {b.recapParagraph != null

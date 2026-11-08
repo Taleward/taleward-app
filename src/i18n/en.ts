@@ -1877,4 +1877,5 @@ export const en: Record<string, string> = {
   "Verlauf": "History",
   "Noch nichts passiert.": "Nothing yet.",
   "Eigene Spur im Discord": "Own track in Discord",
+  "Über Discord gemerkt": "Marked via Discord",
 };

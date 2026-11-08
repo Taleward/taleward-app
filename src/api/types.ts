@@ -173,6 +173,8 @@ export interface Bookmark {
   note?: string | null;
   offsetMs?: number | null;
   recapParagraph?: number | null;
+  /** Ab 0.4.35: woher die Stelle kam (fehlt = app) */
+  source?: 'app' | 'discord';
   createdAt: string;
 }
 
