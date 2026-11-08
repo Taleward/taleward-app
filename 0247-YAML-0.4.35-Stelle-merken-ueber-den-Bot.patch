@@ -1,0 +1,111 @@
+From 971f8e919bc52dfd35ff3addcc88a244a95fcafa Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sun, 8 Nov 2026 21:13:07 +0100
+Subject: [PATCH] YAML 0.4.35: Stelle merken ueber den Bot
+
+---
+ docs/session-chronik-api.yaml | 58 +++++++++++++++++++++++++++++++++--
+ src/mocks/handlers.ts         |  4 +--
+ 2 files changed, 58 insertions(+), 4 deletions(-)
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index b4e7f2f..a6773ad 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.34
++  version: 0.4.35
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -320,4 +320,8 @@ info:
+     (400 track_invalid). Uploads aus der App ändern sich nicht. App-Oberfläche unverändert; ältere Bots ohne trackKey
+     nehmen gegen einen 0.4.34-Server nicht auf.
++    Änderungen in 0.4.35 (Stelle merken über den Bot): POST /bot/sessions/{sessionId}/bookmarks legt für ein Mitglied, das
++    in der laufenden Bot-Runde mit Zustimmung aufgenommen wird, eine gemerkte Stelle an – wie „Merken“ in der App
++    (`/taleward merken`). Die Stelle erscheint in der App über GET /sessions/{id}/bookmarks wie jede andere; offsetMs
++    rechnet der Server bei Bot-Runden aus dem Start und den Pausen. App-Oberfläche unverändert.
+ 
+ servers:
+@@ -3754,4 +3758,52 @@ paths:
+         "409": { $ref: "#/components/responses/Conflict" }
+ 
++  /bot/sessions/{sessionId}/bookmarks:
++    parameters: [{ $ref: "#/components/parameters/sessionId" }]
++    post:
++      tags: [Discord]
++      summary: "Bot: Stelle für eine Person merken (`/taleward merken`; ab 0.4.35)"
++      description: |
++        Nur eigene Bot-Runden dieses Schlüssels im Zustand recording (sonst 404 bzw. 409 `session_not_recording`). Der
++        Server sucht über `discordUserId` das Mitglied unter den Anwesenden dieser Runde mit Spur und gültiger Zustimmung
++        (über die verknüpfte Discord-ID des Kontos). Nicht gefunden, Spur verworfen oder Zustimmung widerrufen → 404 (ohne
++        Angabe, warum). Gast ohne Konto → 409 `guest_no_bookmarks` (Gäste merken nichts, es gibt kein Konto, dem die
++        Stelle gehören könnte).
++        Die Stelle gehört danach dem Mitglied, genau wie über POST /sessions/{id}/bookmarks: nur es sieht sie, nie die
++        SL, auch nicht als Anzahl; nie an ein Sprachmodell, nie in Kapitel oder Vorschläge; gelöscht mit Runde, Konto oder
++        Austritt; nicht im Umzug; höchstens 200 je Mitglied und Runde (409 `bookmark_limit`), 60 je Minute und Mitglied
++        (429). `note` bereinigt der Server wie andere Texte vom Bot (Steuerzeichen, Länge). `at` liegt zwischen
++        `recordingStartedAt` und jetzt + 5 Minuten (sonst 400). `offsetMs` rechnet der Server bei Bot-Runden aus
++        `recordingStartedAt` und den `pause`/`resume`-Ereignissen (in einer Pause: null). Der Bot zeigt die Antwort nur der
++        Person selbst (ephemeral) und speichert weder Notiz noch Stelle.
++      security: [{ botKey: [] }]
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              type: object
++              required: [discordUserId, at]
++              properties:
++                discordUserId: { $ref: "#/components/schemas/DiscordSnowflake" }
++                at: { type: string, format: date-time, description: "Zeitpunkt des Befehls" }
++                note: { type: [string, "null"], maxLength: 280 }
++      responses:
++        "201":
++          description: Gemerkt. Bewusst ohne Kennung der Merkstelle – löschen kann nur das Mitglied selbst in der App.
++          content:
++            application/json:
++              schema:
++                type: object
++                required: [offsetMs]
++                properties:
++                  offsetMs:
++                    type: [integer, "null"]
++                    description: Zeit in der Aufnahme; null in einer Pause
++        "400": { $ref: "#/components/responses/BadRequest" }
++        "401": { $ref: "#/components/responses/Unauthorized" }
++        "404": { $ref: "#/components/responses/NotFound" }
++        "409": { $ref: "#/components/responses/Conflict" }
++        "429": { $ref: "#/components/responses/TooManyRequests" }
++
+   /bot/sessions/{sessionId}/tracks/{attendeeId}:
+     parameters:
+@@ -5463,5 +5515,7 @@ components:
+         offsetMs:
+           type: [integer, "null"]
+-          description: Zeit in der Aufnahme (aus Upload spans); null, solange unbekannt oder außerhalb der Aufnahme
++          description: |
++            Zeit in der Aufnahme (aus Upload spans; ab 0.4.35 bei Bot-Runden aus Start und Pausen); null, solange
++            unbekannt oder außerhalb der Aufnahme
+         recapParagraph:
+           type: [integer, "null"]
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index c51ef46..7d6902d 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -756,5 +756,5 @@ export const handlers = [
+     if (hostKey(request) === DEMO_HOST) {
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.34', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.35', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
+@@ -766,5 +766,5 @@ export const handlers = [
+       contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.34',
++      apiVersion: nachbar ? '0.3.9' : '0.4.35',
+       serverId: nachbar ? undefined : 'testserver',
+       // 0.4.32: Discord-Bot (taleward.mock.discord)
