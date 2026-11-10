@@ -26,7 +26,7 @@ import { Avatar } from '../components/Avatar';
 import { hasCover } from '../covers/CampaignCover';
 import { CoverPicker } from '../covers/CoverPicker';
 import { getLang, t, tn } from '../i18n';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
@@ -654,6 +654,15 @@ export { InviteBox };
  * zweite gibt). Schnittstelle 0.4.5.
  */
 function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campaign: Campaign; me: Member; info: ServerInfo | null; onChanged: () => void; onPickCover: () => void }) {
+  // Aus „Cloud freigeben“ in der Verarbeitung (0.4.36): aufgeklappt und im Blick
+  const openManage = !!(useLocation().state as { manage?: boolean } | null)?.manage;
+  const manageRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const el = manageRef.current;
+    if (!openManage || !el) return;
+    el.open = true;
+    el.scrollIntoView({ block: 'start' });
+  }, [openManage]);
   const navigate = useNavigate();
   const gm = me.role === 'gm';
   const otherGms = campaign.members.filter((m) => m.role === 'gm' && m.id !== me.id && !isDeletedMember(m)).length;
@@ -723,7 +732,7 @@ function CampaignManage({ campaign, me, info, onChanged, onPickCover }: { campai
   const withSettings = gm && (externalProvider || summaryProvider || (!muster && apiAtLeast('0.4.18')));
 
   return (
-    <details className="card manage" style={{ gap: 10 }}>
+    <details className="card manage" style={{ gap: 10 }} ref={manageRef}>
       <summary style={{ fontWeight: 700 }}>{t('Kampagne verwalten')}</summary>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
       <ErrorBox error={error} />

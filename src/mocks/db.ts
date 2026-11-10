@@ -141,7 +141,12 @@ export const sessions: MockSession[] = [
 
 // Testmodus (0.4.25): Mit „taleward.mock.creditWait“ wartet eine weitere Runde auf das Guthaben
 try {
-  if (localStorage.getItem('taleward.mock.creditWait')) {
+  // 0.4.36: „cloud_not_allowed“ – Grauwacht ohne Cloud, bis die SL sie freigibt
+  if (localStorage.getItem('taleward.mock.waitReason') === 'cloud_not_allowed') {
+    const grau = campaigns.find((c) => c.id === 'c-grau');
+    if (grau) grau.allowCloudSummary = false;
+  }
+  if (localStorage.getItem('taleward.mock.creditWait') || localStorage.getItem('taleward.mock.waitReason')) {
     sessions.push({ ...pastSession('c-grau', 14, 'Unterwegs nach Kaltenfurt', '2026-10-03T17:00:00Z'), state: 'queued', publishedAt: null, audioDeletedAt: null });
   }
 } catch { /* ohne Speicher: nichts */ }

@@ -1881,4 +1881,9 @@ export const en: Record<string, string> = {
   "Aufnahme im Discord": "Recording on Discord",
   "läuft seit {time}": "since {time}",
   "Zu dieser Runde ist keine Aufnahme angekommen.": "No recording arrived for this session.",
+  "Gerade ist kein Worker erreichbar. Es geht weiter, sobald einer da ist.": "No worker is available right now. It will continue as soon as one is.",
+  "Gerade ist kein Worker erreichbar, und die Cloud ist für diese Kampagne nicht freigegeben.": "No worker is available right now, and the cloud isn't allowed for this campaign.",
+  "Die Verarbeitung ist auf dem Server angehalten. Sie geht danach von selbst weiter.": "Processing is paused on the server. It will continue on its own afterwards.",
+  "Die Verarbeitung wartet. Die Spielleitung sieht, woran es liegt.": "Processing is waiting. The game master can see why.",
+  "Cloud freigeben": "Allow the cloud",
 };

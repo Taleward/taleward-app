@@ -454,7 +454,14 @@ export interface ProcessingStatus {
   estimatedSeconds?: number | null;
   /** Wartet wegen der Abrechnung (ab 0.4.25) */
   creditWait?: CreditWait | null;
+  /** Warum die Runde nicht weiterkommt (ab 0.4.36); Spielende nur „waiting“ */
+  waitReason?: WaitReason | string | null;
+  /** Was die SL tun kann (ab 0.4.36) */
+  waitActions?: WaitAction[];
 }
+
+export type WaitReason = 'no_worker' | 'cloud_not_allowed' | 'credit' | 'paused' | 'waiting';
+export type WaitAction = 'allow_cloud_summary' | 'allow_external_transcription';
 
 export interface Speaker {
   id: string;

@@ -1,4 +1,5 @@
 import { CreditWaitNote } from '../billing/CreditWaitNote';
+import { WaitReasonNote } from './WaitReasonNote';
 import { confirmDialog } from '../components/confirm';
 import { IconInfo } from '../components/Icons';
 import { formatDateTime } from '../components/format';
@@ -170,7 +171,9 @@ export function Processing() {
       {/* Hinweis des Servers während des Wartens, z. B. „Zurzeit ist kein Worker … verbunden“ */}
       {/* Wartet wegen des Guthabens (ab 0.4.25): eigener Satz statt des Server-Hinweises */}
       {status?.creditWait && !failed && <CreditWaitNote wait={status.creditWait} />}
-      {(status?.message || status?.estimatedSeconds) && !failed && !status.creditWait && (
+      {/* Wartegrund statt Sackgasse (ab 0.4.36) */}
+      {status?.waitReason && !failed && <WaitReasonNote status={status} campaignHref={session ? p(`/k/${session.campaignId}`) : null} />}
+      {(status?.message || status?.estimatedSeconds) && !failed && !status.creditWait && !status.waitReason && (
         <div className="notice">
           <span style={{ flexShrink: 0, color: 'var(--ink-muted)' }}><IconInfo /></span>
           <span>
