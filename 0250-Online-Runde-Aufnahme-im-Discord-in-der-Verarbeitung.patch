@@ -1,0 +1,189 @@
+From 2a5fe41f476533bc23f70926fa81175cfac29b0f Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 20:30:08 +0100
+Subject: [PATCH] Online-Runde: Aufnahme im Discord in der Verarbeitung,
+ Verlauf als aufklappbare Zeile
+
+---
+ src/api/types.ts           |  3 +++
+ src/discord/DiscordRow.tsx | 34 ++++++++++++++++++----------------
+ src/i18n/en.ts             |  3 +++
+ src/mocks/discord.ts       | 27 +++++++++++++++++++++++++--
+ src/mocks/players.ts       |  2 +-
+ src/pages/Processing.tsx   | 15 ++++++++++++---
+ 6 files changed, 62 insertions(+), 22 deletions(-)
+
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 521e4f6..ae3f55b 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -436,4 +436,7 @@ export interface Session extends SessionSummary {
+   transcriptionEngine?: 'local' | 'external' | null;
+   publishedAt: string | null;
++  /** Ab 0.4.32 (Discord-Bot): Startton der Aufnahme bzw. Hinweis „unterbrochen“ */
++  recordingStartedAt?: string | null;
++  interrupted?: boolean;
+ }
+ 
+diff --git a/src/discord/DiscordRow.tsx b/src/discord/DiscordRow.tsx
+index 8619b6b..7816756 100644
+--- a/src/discord/DiscordRow.tsx
++++ b/src/discord/DiscordRow.tsx
+@@ -90,20 +90,22 @@ function DiscordLog({ campaignId }: { campaignId: string }) {
+   const load = () => { if (entries === null) api.discordLog(campaignId).then((r) => setEntries(r.entries)).catch(setError); };
+   return (
+-    <details className="list-row" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
+-      <summary className="lr-text">{t('Verlauf')}</summary>
+-      <ErrorBox error={error} />
+-      {entries && entries.length === 0 && <p className="muted small" style={{ margin: '8px 0 0' }}>{t('Noch nichts passiert.')}</p>}
+-      {entries && entries.length > 0 && (
+-        <ul className="small" style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
+-          {entries.map((x, i) => (
+-            <li key={i}>
+-              <span className="muted">{formatDateTime(x.at)}</span>{' · '}
+-              {x.sessionId
+-                ? <Link to={p(`/s/${x.sessionId}`)}>{t(KIND[x.kind] ?? 'Discord')}</Link>
+-                : t(KIND[x.kind] ?? 'Discord')}
+-            </li>
+-          ))}
+-        </ul>
+-      )}
++    <details className="list-item" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}>
++      <summary className="list-row"><span className="lr-text">{t('Verlauf')}</span></summary>
++      <div className="list-body">
++        <ErrorBox error={error} />
++        {entries && entries.length === 0 && <span className="muted small">{t('Noch nichts passiert.')}</span>}
++        {entries && entries.length > 0 && (
++          <ul className="small" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 4 }}>
++            {entries.map((x, i) => (
++              <li key={i}>
++                <span className="muted">{formatDateTime(x.at)}</span>{' · '}
++                {x.sessionId
++                  ? <Link to={p(`/s/${x.sessionId}`)}>{t(KIND[x.kind] ?? 'Discord')}</Link>
++                  : t(KIND[x.kind] ?? 'Discord')}
++              </li>
++            ))}
++          </ul>
++        )}
++      </div>
+     </details>
+   );
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 796a03d..181c0a1 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1879,3 +1879,6 @@ export const en: Record<string, string> = {
+   "Eigene Spur im Discord": "Own track in Discord",
+   "Über Discord gemerkt": "Marked via Discord",
++  "Aufnahme im Discord": "Recording on Discord",
++  "läuft seit {time}": "since {time}",
++  "Zu dieser Runde ist keine Aufnahme angekommen.": "No recording arrived for this session.",
+ };
+diff --git a/src/mocks/discord.ts b/src/mocks/discord.ts
+index 3755fab..106dda5 100644
+--- a/src/mocks/discord.ts
++++ b/src/mocks/discord.ts
+@@ -6,6 +6,6 @@
+  */
+ import { HttpResponse, http } from 'msw';
+-import { account, campaigns } from './db';
+-import type { MockCampaign } from './db';
++import { account, campaigns, sessions } from './db';
++import type { MockCampaign, MockSession } from './db';
+ 
+ const setting = (): string | null => { try { return localStorage.getItem('taleward.mock.discord'); } catch { return null; } };
+@@ -20,4 +20,27 @@ const logOf = (id: string) => { if (!logs.has(id)) logs.set(id, []); return logs
+ const addLog = (id: string, kind: string, sessionId?: string) => logOf(id).unshift({ at: new Date().toISOString(), kind, ...(sessionId ? { sessionId } : {}) });
+ const pause = new Map<string, boolean>();
++
++// „linked“: Grauwacht ist schon verbunden, eine Online-Runde nimmt gerade auf (für Aufnahmen und Durchklicken)
++if (setting() === 'linked') {
++  const started = new Date(Date.now() - 72 * 60e3).toISOString();
++  connections.set('c-grau', { guildName: GUILD, connectedAt: '2026-11-03T18:40:00Z', connectedBy: 'm-robin' });
++  logs.set('c-grau', [
++    { at: new Date(Date.now() - 70 * 60e3).toISOString(), kind: 'consent_guest', sessionId: 's-c-grau-discord' },
++    { at: started, kind: 'recording_started', sessionId: 's-c-grau-discord' },
++    { at: '2026-11-03T18:45:00Z', kind: 'consent_member' },
++    { at: '2026-11-03T18:40:00Z', kind: 'connected' }
++  ]);
++  if (!sessions.some((x) => x.id === 's-c-grau-discord')) {
++    sessions.push({
++      id: 's-c-grau-discord', campaignId: 'c-grau', number: 14, title: null, playedAt: started, state: 'recording', source: 'discord',
++      recordingStartedAt: started, interrupted: false,
++      attendees: [
++        { memberId: 'm-robin', consent: true, consentSource: 'app' }, { memberId: 'm-jonas', consent: true, consentSource: 'link' },
++        { memberId: 'm-lea', consent: true, consentSource: 'app' }, { guestName: 'Wenzel', consent: true, consentSource: 'link' }
++      ],
++      durationSeconds: null, audioDeletedAt: null, publishedAt: null, phaseStartedAt: null
++    } as MockSession);
++  }
++}
+ export const mockDiscordPause = (campaignId: string): boolean | undefined => (mockDiscordBot() ? pause.get(campaignId) ?? false : undefined);
+ export const setMockDiscordPause = (campaignId: string, v: boolean) => { pause.set(campaignId, v); };
+diff --git a/src/mocks/players.ts b/src/mocks/players.ts
+index 32dc11a..13562da 100644
+--- a/src/mocks/players.ts
++++ b/src/mocks/players.ts
+@@ -42,5 +42,5 @@ export const playerProposals: PlayerProposal[] = [
+ const bookmarks: (Bookmark & { memberId: string })[] = [
+   { id: 'bm1', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T17:12:00Z', note: 'Die Stimme unter dem Eis', offsetMs: 4320000, recapParagraph: 0, createdAt: '2026-09-14T17:12:00Z' },
+-  { id: 'bm2', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T18:40:00Z', note: null, offsetMs: null, recapParagraph: null, source: 'discord', createdAt: '2026-09-14T18:40:00Z' }
++  { id: 'bm2', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T18:40:00Z', note: 'Kesh? Der Stab hat geleuchtet', offsetMs: null, recapParagraph: null, source: 'discord', createdAt: '2026-09-14T18:40:00Z' }
+ ];
+ 
+diff --git a/src/pages/Processing.tsx b/src/pages/Processing.tsx
+index 073c826..9c319e3 100644
+--- a/src/pages/Processing.tsx
++++ b/src/pages/Processing.tsx
+@@ -2,4 +2,5 @@ import { CreditWaitNote } from '../billing/CreditWaitNote';
+ import { confirmDialog } from '../components/confirm';
+ import { IconInfo } from '../components/Icons';
++import { formatDateTime } from '../components/format';
+ import { p } from '../api/connections';
+ import { t, tk, tn } from '../i18n';
+@@ -34,4 +35,6 @@ const STEPS: { state: ProcessingState[]; label: string }[] = [
+ const RUNNING: ProcessingState[] = ['uploading', 'queued', 'transcribing', 'summarizing'];
+ const POLL_MS = 3000;
++// Online-Runde (Discord-Bot, ab 0.4.32): erst die Aufnahme, dann wie gewohnt
++const DISCORD_STEPS = [{ state: ['recording'] as ProcessingState[], label: tk('Aufnahme im Discord') }, ...STEPS];
+ 
+ export function Processing() {
+@@ -69,5 +72,5 @@ export function Processing() {
+           setLastRunning(s.state);
+           timer = setTimeout(tick, POLL_MS);
+-        }
++        } else if (s.state === 'recording') timer = setTimeout(tick, POLL_MS * 10);
+       } catch (e) {
+         if (!alive) return;
+@@ -100,6 +103,7 @@ export function Processing() {
+ 
+   const failed = status?.state === 'failed';
++  const steps = session?.source === 'discord' || status?.state === 'recording' ? DISCORD_STEPS : STEPS;
+   // Bei "failed" den zuletzt erreichten Schritt als gescheitert markieren
+-  const current = STEPS.findIndex((s) => {
++  const current = steps.findIndex((s) => {
+     const st = failed ? lastRunning : status?.state;
+     return st ? s.state.includes(st) : false;
+@@ -134,5 +138,5 @@ export function Processing() {
+ 
+       <ol className="card" style={{ listStyle: 'none', margin: 0, gap: 14 }}>
+-        {STEPS.map((step, i) => {
++        {steps.map((step, i) => {
+           const done = current > i;
+           const active = current === i;
+@@ -153,4 +157,7 @@ export function Processing() {
+               </span>
+               {done && <span className="muted small">{t('erledigt')}</span>}
++              {active && status?.state === 'recording' && session?.recordingStartedAt && (
++                <span className="muted small">{t('läuft seit {time}', { time: formatDateTime(session.recordingStartedAt).split(' · ')[1] ?? '' })}</span>
++              )}
+               {broken && <span className="muted small" style={{ color: 'var(--seal)' }}>{t('fehlgeschlagen')}</span>}
+             </li>
+@@ -159,4 +166,6 @@ export function Processing() {
+       </ol>
+ 
++      {status?.state === 'no_recording' && <p className="muted" style={{ margin: 0 }}>{t('Zu dieser Runde ist keine Aufnahme angekommen.')}</p>}
++
+       {/* Hinweis des Servers während des Wartens, z. B. „Zurzeit ist kein Worker … verbunden“ */}
+       {/* Wartet wegen des Guthabens (ab 0.4.25): eigener Satz statt des Server-Hinweises */}
