@@ -1,6 +1,7 @@
 import { CreditWaitNote } from '../billing/CreditWaitNote';
 import { confirmDialog } from '../components/confirm';
 import { IconInfo } from '../components/Icons';
+import { formatDateTime } from '../components/format';
 import { p } from '../api/connections';
 import { t, tk, tn } from '../i18n';
 import { useEffect, useState } from 'react';
@@ -33,6 +34,8 @@ const STEPS: { state: ProcessingState[]; label: string }[] = [
 
 const RUNNING: ProcessingState[] = ['uploading', 'queued', 'transcribing', 'summarizing'];
 const POLL_MS = 3000;
+// Online-Runde (Discord-Bot, ab 0.4.32): erst die Aufnahme, dann wie gewohnt
+const DISCORD_STEPS = [{ state: ['recording'] as ProcessingState[], label: tk('Aufnahme im Discord') }, ...STEPS];
 
 export function Processing() {
   const { sessionId = '' } = useParams();
@@ -68,7 +71,7 @@ export function Processing() {
         if (RUNNING.includes(s.state)) {
           setLastRunning(s.state);
           timer = setTimeout(tick, POLL_MS);
-        }
+        } else if (s.state === 'recording') timer = setTimeout(tick, POLL_MS * 10);
       } catch (e) {
         if (!alive) return;
         setError(e);
@@ -99,8 +102,9 @@ export function Processing() {
   };
 
   const failed = status?.state === 'failed';
+  const steps = session?.source === 'discord' || status?.state === 'recording' ? DISCORD_STEPS : STEPS;
   // Bei "failed" den zuletzt erreichten Schritt als gescheitert markieren
-  const current = STEPS.findIndex((s) => {
+  const current = steps.findIndex((s) => {
     const st = failed ? lastRunning : status?.state;
     return st ? s.state.includes(st) : false;
   });
@@ -133,7 +137,7 @@ export function Processing() {
       )}
 
       <ol className="card" style={{ listStyle: 'none', margin: 0, gap: 14 }}>
-        {STEPS.map((step, i) => {
+        {steps.map((step, i) => {
           const done = current > i;
           const active = current === i;
           const broken = active && failed;
@@ -152,11 +156,16 @@ export function Processing() {
                 {t(step.label)}
               </span>
               {done && <span className="muted small">{t('erledigt')}</span>}
+              {active && status?.state === 'recording' && session?.recordingStartedAt && (
+                <span className="muted small">{t('läuft seit {time}', { time: formatDateTime(session.recordingStartedAt).split(' · ')[1] ?? '' })}</span>
+              )}
               {broken && <span className="muted small" style={{ color: 'var(--seal)' }}>{t('fehlgeschlagen')}</span>}
             </li>
           );
         })}
       </ol>
+
+      {status?.state === 'no_recording' && <p className="muted" style={{ margin: 0 }}>{t('Zu dieser Runde ist keine Aufnahme angekommen.')}</p>}
 
       {/* Hinweis des Servers während des Wartens, z. B. „Zurzeit ist kein Worker … verbunden“ */}
       {/* Wartet wegen des Guthabens (ab 0.4.25): eigener Satz statt des Server-Hinweises */}

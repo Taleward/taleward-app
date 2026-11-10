@@ -41,7 +41,7 @@ export const playerProposals: PlayerProposal[] = [
 
 const bookmarks: (Bookmark & { memberId: string })[] = [
   { id: 'bm1', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T17:12:00Z', note: 'Die Stimme unter dem Eis', offsetMs: 4320000, recapParagraph: 0, createdAt: '2026-09-14T17:12:00Z' },
-  { id: 'bm2', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T18:40:00Z', note: null, offsetMs: null, recapParagraph: null, source: 'discord', createdAt: '2026-09-14T18:40:00Z' }
+  { id: 'bm2', memberId: 'm-robin2', sessionId: 's-c-drache-7', at: '2026-09-14T18:40:00Z', note: 'Kesh? Der Stab hat geleuchtet', offsetMs: null, recapParagraph: null, source: 'discord', createdAt: '2026-09-14T18:40:00Z' }
 ];
 
 /** Für die Musterkampagne: Zählerstände und Merkstellen dazulegen */

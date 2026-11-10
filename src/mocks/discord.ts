@@ -5,8 +5,8 @@
  * Anfang = Discord-ID gehört zu einem Mitglied, mit „abgelaufen“ = 404, sonst Gast.
  */
 import { HttpResponse, http } from 'msw';
-import { account, campaigns } from './db';
-import type { MockCampaign } from './db';
+import { account, campaigns, sessions } from './db';
+import type { MockCampaign, MockSession } from './db';
 
 const setting = (): string | null => { try { return localStorage.getItem('taleward.mock.discord'); } catch { return null; } };
 export const mockDiscordBot = () => setting() === '1' || setting() === 'linked';
@@ -19,6 +19,29 @@ const logs = new Map<string, { at: string; kind: string; sessionId?: string }[]>
 const logOf = (id: string) => { if (!logs.has(id)) logs.set(id, []); return logs.get(id)!; };
 const addLog = (id: string, kind: string, sessionId?: string) => logOf(id).unshift({ at: new Date().toISOString(), kind, ...(sessionId ? { sessionId } : {}) });
 const pause = new Map<string, boolean>();
+
+// „linked“: Grauwacht ist schon verbunden, eine Online-Runde nimmt gerade auf (für Aufnahmen und Durchklicken)
+if (setting() === 'linked') {
+  const started = new Date(Date.now() - 72 * 60e3).toISOString();
+  connections.set('c-grau', { guildName: GUILD, connectedAt: '2026-11-03T18:40:00Z', connectedBy: 'm-robin' });
+  logs.set('c-grau', [
+    { at: new Date(Date.now() - 70 * 60e3).toISOString(), kind: 'consent_guest', sessionId: 's-c-grau-discord' },
+    { at: started, kind: 'recording_started', sessionId: 's-c-grau-discord' },
+    { at: '2026-11-03T18:45:00Z', kind: 'consent_member' },
+    { at: '2026-11-03T18:40:00Z', kind: 'connected' }
+  ]);
+  if (!sessions.some((x) => x.id === 's-c-grau-discord')) {
+    sessions.push({
+      id: 's-c-grau-discord', campaignId: 'c-grau', number: 14, title: null, playedAt: started, state: 'recording', source: 'discord',
+      recordingStartedAt: started, interrupted: false,
+      attendees: [
+        { memberId: 'm-robin', consent: true, consentSource: 'app' }, { memberId: 'm-jonas', consent: true, consentSource: 'link' },
+        { memberId: 'm-lea', consent: true, consentSource: 'app' }, { guestName: 'Wenzel', consent: true, consentSource: 'link' }
+      ],
+      durationSeconds: null, audioDeletedAt: null, publishedAt: null, phaseStartedAt: null
+    } as MockSession);
+  }
+}
 export const mockDiscordPause = (campaignId: string): boolean | undefined => (mockDiscordBot() ? pause.get(campaignId) ?? false : undefined);
 export const setMockDiscordPause = (campaignId: string, v: boolean) => { pause.set(campaignId, v); };
 

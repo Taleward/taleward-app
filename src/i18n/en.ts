@@ -1878,4 +1878,7 @@ export const en: Record<string, string> = {
   "Noch nichts passiert.": "Nothing yet.",
   "Eigene Spur im Discord": "Own track in Discord",
   "Über Discord gemerkt": "Marked via Discord",
+  "Aufnahme im Discord": "Recording on Discord",
+  "läuft seit {time}": "since {time}",
+  "Zu dieser Runde ist keine Aufnahme angekommen.": "No recording arrived for this session.",
 };

@@ -435,6 +435,9 @@ export interface Session extends SessionSummary {
   /** Womit transkribiert wurde (ab 0.3.4) */
   transcriptionEngine?: 'local' | 'external' | null;
   publishedAt: string | null;
+  /** Ab 0.4.32 (Discord-Bot): Startton der Aufnahme bzw. Hinweis „unterbrochen“ */
+  recordingStartedAt?: string | null;
+  interrupted?: boolean;
 }
 
 export interface ProcessingStatus {
