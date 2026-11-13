@@ -117,20 +117,22 @@ function SwitchCampaign({ current }: { current: string }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [list, setList] = useState<CampaignSummary[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  // Gleich beim Öffnen des Schirms laden: ohne zweite Kampagne gibt es nichts zu wechseln, dann kein Link
   useEffect(() => {
-    if (!open || list) return;
-    api.campaigns().then((all) => setList(all.filter((c) => c.myRole === 'gm' && !c.archivedAt && c.id !== current))).catch(setError);
-  }, [open, list, current]);
+    let alive = true;
+    setList(null);
+    api.campaigns()
+      .then((all) => { if (alive) setList(all.filter((c) => c.myRole === 'gm' && !c.archivedAt && c.id !== current)); })
+      .catch(() => { if (alive) setList([]); });
+    return () => { alive = false; };
+  }, [current]);
+  if (!list?.length) return null;
   return (
     <>
       <button type="button" className="linklike tap-link small" onClick={() => setOpen(true)}>{t('Kampagne wechseln')}</button>
       {open && (
         <Dialog title={t('Kampagne wechseln')} onClose={() => setOpen(false)}>
-          <ErrorBox error={error} />
-          {!list && !error && <span className="muted">{t('Lade …')}</span>}
-          {list?.length === 0 && <span className="muted">{t('Du leitest auf diesem Server keine weitere Kampagne.')}</span>}
-          {list?.map((c) => (
+          {list.map((c) => (
             <button key={c.id} type="button" className="btn outline" style={{ justifyContent: 'flex-start' }}
               onClick={() => { setOpen(false); navigate(p(`/k/${c.id}/tisch`)); }}>
               {c.title}

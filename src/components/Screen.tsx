@@ -25,6 +25,12 @@ interface Props {
   narrow?: boolean;
   /** Arbeitsplatz (z. B. Kapitel prüfen): ab 1200 px volle Breite, Spalten scrollen für sich */
   wide?: boolean;
+  /**
+   * Seiten einer Runde (/s/…) kennen die Kampagne erst nach dem Laden: hier übergeben, damit die Leiste unten in die
+   * richtige Kampagne führt. null = noch unbekannt (Leiste ausgeblendet). Fehlt das Feld, gilt die Adresse bzw. die
+   * zuletzt geöffnete Kampagne.
+   */
+  campaignId?: string | null;
   children: ReactNode;
 }
 
@@ -34,7 +40,7 @@ function titleSize(title: ReactNode): string | undefined {
   return n > 48 ? 'longer' : n > 28 ? 'long' : undefined;
 }
 
-export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, children }: Props) {
+export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, campaignId, children }: Props) {
   const navigate = useNavigate();
   // In der Musterkampagne steht das im Kopf jeder Seite, damit niemand sie für echt hält
   const connId = useLocation().pathname.match(/^\/v\/([^/]+)/)?.[1];
@@ -64,7 +70,7 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
           <LiveRecordingNotice />
           {children}
         </main>
-        {nav && <BottomNav />}
+        {nav && <BottomNav campaignId={campaignId} />}
       </div>
     );
   }
@@ -86,7 +92,7 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
       </header>
       <main className="screen-main"><OfflineNotice connId={connId} />
           <LiveRecordingNotice />{children}</main>
-      {nav && <BottomNav />}
+      {nav && <BottomNav campaignId={campaignId} />}
     </div>
   );
 }
@@ -109,21 +115,22 @@ export function useWorkspace(): boolean {
  * Untere Leiste – nur innerhalb einer Kampagne. Auf der Kampagnenliste und im Profil gibt es sie nicht,
  * damit man nicht ohne gewählte Kampagne auf Aufnahme, Chronik oder Bibel landet.
  */
-function BottomNav() {
+function BottomNav({ campaignId: given }: { campaignId?: string | null }) {
   const { campaignId } = useParams();
   const conn = currentConnectionId();
-  const current = campaignId ?? (conn ? sessionStorageGet('lastCampaign.' + conn) : null);
-  if (!current || !conn) return null;
-  const c = p(`/k/${current}`);
-  // Aufnahmen macht nur die SL; Rolle merkt sich die App beim Laden der Kampagne
-  const isPlayer = sessionStorageGet(`role.${conn}:${current}`) === 'player';
-  const [unread, setUnread] = useState(() => storedUnread(current));
+  const current = campaignId ?? (given !== undefined ? given : conn ? sessionStorageGet('lastCampaign.' + conn) : null);
+  const [unread, setUnread] = useState(() => (current ? storedUnread(current) : null));
   useEffect(() => {
+    if (!current) return;
     const update = () => setUnread(storedUnread(current));
     update();
     window.addEventListener('session-chronik:unread', update);
     return () => window.removeEventListener('session-chronik:unread', update);
   }, [current]);
+  if (!current || !conn || !unread) return null;
+  const c = p(`/k/${current}`);
+  // Aufnahmen macht nur die SL; Rolle merkt sich die App beim Laden der Kampagne
+  const isPlayer = sessionStorageGet(`role.${conn}:${current}`) === 'player';
   const dot = <NewDot style={{ position: 'absolute', top: -2, right: -4 }} />;
   const cls = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : undefined);
   return (

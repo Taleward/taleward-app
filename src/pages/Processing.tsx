@@ -10,7 +10,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { api, isApiError } from '../api/client';
 import type { ProcessingState, ProcessingStatus, Role, Session } from '../api/types';
-import { ErrorBox, Screen } from '../components/Screen';
+import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 
 /** Schlüssel des Servers für die Schritte der Zusammenfassung (ab Schnittstelle 0.4.6); andere Texte unverändert */
 function statusText(message: string): string {
@@ -55,7 +55,9 @@ export function Processing() {
       .session(sessionId)
       .then(async (s) => {
         setSession(s);
-        setRole((await api.campaign(s.campaignId)).myRole);
+        const c = await api.campaign(s.campaignId);
+        rememberCampaign(c);
+        setRole(c.myRole);
       })
       .catch(setError);
   }, [sessionId]);
@@ -111,7 +113,7 @@ export function Processing() {
   });
 
   return (
-    <Screen narrow back overline={session ? t('Kapitel {n}', { n: session.number }) : ' '} title={t('Verarbeitung')}>
+    <Screen campaignId={session?.campaignId ?? null} narrow back overline={session ? t('Kapitel {n}', { n: session.number }) : ' '} title={t('Verarbeitung')}>
       <ErrorBox error={error} />
 
       {failed && (

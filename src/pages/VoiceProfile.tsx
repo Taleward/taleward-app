@@ -1,4 +1,5 @@
 import { confirmDialog } from '../components/confirm';
+import { micError } from '../recorder/micError';
 import { pickReadingText, readingTextsFor } from '../voice/readingTexts';
 import { formatDateFull } from '../components/format';
 import { getLang, t, tn } from '../i18n';
@@ -86,7 +87,7 @@ export function VoiceProfile() {
       setPhase('recording');
     } catch (e) {
       if (e instanceof Error && e.name === 'NotAllowedError') setMicDenied(true);
-      else setError(e);
+      else setError(micError(e));
     }
   };
 

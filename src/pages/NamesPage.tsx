@@ -96,7 +96,7 @@ export function NamesPage() {
   };
 
   return (
-    <Screen
+    <Screen campaignId={session?.campaignId ?? null}
       back
       overline={<span className="row" style={{ gap: 6 }}><IconLock size={14} /> {session ? t('Kapitel {n}', { n: session.number }) + ' · ' + t('nur für dich') : t('Nur für dich')}</span>}
       title={t('Namen prüfen')}

@@ -7,7 +7,7 @@ import { api, isApiError } from '../api/client';
 import type { Campaign, Session, Speaker } from '../api/types';
 import { confirmDialog } from '../components/confirm';
 import { IconPlay } from '../components/Icons';
-import { ErrorBox, Screen } from '../components/Screen';
+import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
 import { swapAssignment } from '../voice/swap';
 
 const IGNORE = '__ignore';
@@ -44,6 +44,7 @@ export function Speakers() {
       try {
         const session = await api.session(sessionId);
         const [c, sp] = await Promise.all([api.campaign(session.campaignId), api.speakers(sessionId)]);
+        rememberCampaign(c);
         setCampaign(c);
         setSpeakers(sp);
         const named = serverHasCharacters(currentConnection())
@@ -126,7 +127,7 @@ export function Speakers() {
   };
 
   return (
-    <Screen narrow back title={review ? t('Stimmen prüfen') : t('Stimmen zuordnen')}
+    <Screen campaignId={session?.campaignId ?? null} narrow back title={review ? t('Stimmen prüfen') : t('Stimmen zuordnen')}
       overline={review && session ? t('Kapitel {n}', { n: session.number }) : t('Abschrift fertig')}>
       <ErrorBox error={error} />
       {review && (

@@ -1886,4 +1886,6 @@ export const en: Record<string, string> = {
   "Die Verarbeitung ist auf dem Server angehalten. Sie geht danach von selbst weiter.": "Processing is paused on the server. It will continue on its own afterwards.",
   "Die Verarbeitung wartet. Die Spielleitung sieht, woran es liegt.": "Processing is waiting. The game master can see why.",
   "Cloud freigeben": "Allow the cloud",
+  "Kein Mikrofon gefunden. Schließ eins an oder nimm ein anderes Gerät.": "No microphone found. Plug one in or use another device.",
+  "Das Mikrofon ist gerade belegt. Beende andere Programme, die es nutzen, und versuch es noch einmal.": "The microphone is busy. Close other programs using it and try again.",
 };

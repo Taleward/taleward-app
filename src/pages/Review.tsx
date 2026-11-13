@@ -9,7 +9,7 @@ import { api, isApiError } from '../api/client';
 import type { Entry, Member, Proposal, Recap, Session } from '../api/types';
 import { ProposalCard } from '../components/ProposalCard';
 import { IconLock } from '../components/Icons';
-import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
+import { ErrorBox, Screen, useWorkspace, rememberCampaign } from '../components/Screen';
 import { fromEditText, toEditText } from '../review/parts';
 import { RecapReviewView, jumpToFirstFlagged, jumpToParagraph, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
 import { SecretWarnings, secretByParagraph, secretNames } from '../review/SecretWarnings';
@@ -45,6 +45,7 @@ export function Review() {
       .then(([s, r, p, n]) => {
         setSession(s);
         api.campaign(s.campaignId).then((c) => {
+          rememberCampaign(c);
           setMembers(c.members);
           setPlayers(c.members.filter((m) => m.role === 'player' && !isDeletedMember(m)));
         }).catch(() => undefined);
@@ -166,7 +167,7 @@ export function Review() {
   ].filter(Boolean);
 
   return (
-    <Screen
+    <Screen campaignId={session?.campaignId ?? null}
       back
       wide
       overline={<span className="row" style={{ gap: 6 }}><IconLock size={14} /> {session ? t('Kapitel {n}', { n: session.number }) + ' · ' + t('nur für dich') : t('Nur für dich')}</span>}
@@ -384,7 +385,7 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
         <span style={{ flex: 1 }}>
           <strong>{t('Entwurf:')}</strong> {recap.title}
           {recap.review?.state === 'done' && (alwaysOpen && reviewNeedsAttention(recap)
-            ? <button type="button" className="linklike muted small tap-link" onClick={() => jumpToFirstFlagged(recap)}>{reportSentence(recap)}</button>
+            ? <button type="button" className="linklike muted small tap-link" style={{ display: 'block' }} onClick={() => jumpToFirstFlagged(recap)}>{reportSentence(recap)}</button>
             : <span className="muted small" style={{ display: 'block' }}>{reportSentence(recap)}</span>)}
         </span>
   );

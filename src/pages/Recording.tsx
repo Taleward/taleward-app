@@ -1,4 +1,5 @@
 import { applyHandover, type Handover } from '../recorder/handover';
+import { micError } from '../recorder/micError';
 import { setRecordingActive } from '../recorder/activity';
 import { getLive, setLive } from '../recorder/live';
 import { cloudUse, useServerInfo } from '../components/CloudNotice';
@@ -355,7 +356,7 @@ export function Recording() {
     } catch (e) {
       if (!hadSession) await dropEmptySession(sessionId.current);
       if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
-      else setError(e);
+      else setError(micError(e));
     } finally {
       setStarting(false);
     }

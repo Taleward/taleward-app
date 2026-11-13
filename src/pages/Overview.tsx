@@ -326,9 +326,9 @@ export function RecordingConsent({ campaign, onChanged, quiet, row }: { campaign
   if (granted && !open) {
     return (
       <button type="button" className="row between" onClick={() => setOpen(true)}
-        style={{ minHeight: 44, background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--ink-soft)', cursor: 'pointer', textAlign: 'left' }}>
+        style={{ minHeight: 48, background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--ink-soft)', cursor: 'pointer', textAlign: 'left' }}>
         <span className="small">{t('Du hast Aufnahmen zugestimmt (seit {date}).', { date: formatDateFull(me.recordingConsentAt!) })}</span>
-        <span className="small" style={{ color: 'var(--seal)', fontWeight: 700 }}>{t('Ändern')}</span>
+        <span className="small" style={{ color: 'var(--ink)', textDecoration: 'underline' }}>{t('Ändern')}</span>
       </button>
     );
   }
