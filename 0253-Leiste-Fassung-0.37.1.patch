@@ -1,0 +1,368 @@
+From fdb126b19141347b51e88a27e9e1a0ad1aa7a94e Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 23:44:32 +0100
+Subject: [PATCH] Leiste unten folgt der Kampagne der Runde, Mikrofon-Fehler
+ auf Deutsch, Aufnahmeknopf flach, Fokus in Tinte; Fassung 0.37.1
+
+---
+ package-lock.json          |  4 ++--
+ package.json               |  2 +-
+ src/components/Screen.tsx  | 27 +++++++++++++++++----------
+ src/i18n/en.ts             |  2 ++
+ src/pages/NamesPage.tsx    |  2 +-
+ src/pages/Overview.tsx     |  4 ++--
+ src/pages/Processing.tsx   |  8 +++++---
+ src/pages/RecapPage.tsx    |  2 +-
+ src/pages/Recording.tsx    |  3 ++-
+ src/pages/Review.tsx       |  7 ++++---
+ src/pages/Speakers.tsx     |  5 +++--
+ src/pages/TablePage.tsx    | 18 ++++++++++--------
+ src/pages/VoiceProfile.tsx |  3 ++-
+ src/recorder/micError.ts   | 16 ++++++++++++++++
+ src/theme.css              | 10 +++++-----
+ 15 files changed, 73 insertions(+), 40 deletions(-)
+ create mode 100644 src/recorder/micError.ts
+
+diff --git a/package-lock.json b/package-lock.json
+index 2668ed2..666e385 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,5 +1,5 @@
+ {
+   "name": "taleward-app",
+-  "version": "0.37.0",
++  "version": "0.37.1",
+   "lockfileVersion": 3,
+   "requires": true,
+@@ -7,5 +7,5 @@
+     "": {
+       "name": "taleward-app",
+-      "version": "0.37.0",
++      "version": "0.37.1",
+       "license": "AGPL-3.0-only",
+       "dependencies": {
+diff --git a/package.json b/package.json
+index 6a852ec..8b6c74c 100644
+--- a/package.json
++++ b/package.json
+@@ -2,5 +2,5 @@
+   "name": "taleward-app",
+   "private": true,
+-  "version": "0.37.0",
++  "version": "0.37.1",
+   "type": "module",
+   "scripts": {
+diff --git a/src/components/Screen.tsx b/src/components/Screen.tsx
+index 52b5c43..fa9401f 100644
+--- a/src/components/Screen.tsx
++++ b/src/components/Screen.tsx
+@@ -26,4 +26,10 @@ interface Props {
+   /** Arbeitsplatz (z. B. Kapitel prüfen): ab 1200 px volle Breite, Spalten scrollen für sich */
+   wide?: boolean;
++  /**
++   * Seiten einer Runde (/s/…) kennen die Kampagne erst nach dem Laden: hier übergeben, damit die Leiste unten in die
++   * richtige Kampagne führt. null = noch unbekannt (Leiste ausgeblendet). Fehlt das Feld, gilt die Adresse bzw. die
++   * zuletzt geöffnete Kampagne.
++   */
++  campaignId?: string | null;
+   children: ReactNode;
+ }
+@@ -35,5 +41,5 @@ function titleSize(title: ReactNode): string | undefined {
+ }
+ 
+-export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, children }: Props) {
++export function Screen({ overline: givenOverline, title, back, backTo, nav = true, hero, narrow, wide, campaignId, children }: Props) {
+   const navigate = useNavigate();
+   // In der Musterkampagne steht das im Kopf jeder Seite, damit niemand sie für echt hält
+@@ -65,5 +71,5 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
+           {children}
+         </main>
+-        {nav && <BottomNav />}
++        {nav && <BottomNav campaignId={campaignId} />}
+       </div>
+     );
+@@ -87,5 +93,5 @@ export function Screen({ overline: givenOverline, title, back, backTo, nav = tru
+       <main className="screen-main"><OfflineNotice connId={connId} />
+           <LiveRecordingNotice />{children}</main>
+-      {nav && <BottomNav />}
++      {nav && <BottomNav campaignId={campaignId} />}
+     </div>
+   );
+@@ -110,14 +116,11 @@ export function useWorkspace(): boolean {
+  * damit man nicht ohne gewählte Kampagne auf Aufnahme, Chronik oder Bibel landet.
+  */
+-function BottomNav() {
++function BottomNav({ campaignId: given }: { campaignId?: string | null }) {
+   const { campaignId } = useParams();
+   const conn = currentConnectionId();
+-  const current = campaignId ?? (conn ? sessionStorageGet('lastCampaign.' + conn) : null);
+-  if (!current || !conn) return null;
+-  const c = p(`/k/${current}`);
+-  // Aufnahmen macht nur die SL; Rolle merkt sich die App beim Laden der Kampagne
+-  const isPlayer = sessionStorageGet(`role.${conn}:${current}`) === 'player';
+-  const [unread, setUnread] = useState(() => storedUnread(current));
++  const current = campaignId ?? (given !== undefined ? given : conn ? sessionStorageGet('lastCampaign.' + conn) : null);
++  const [unread, setUnread] = useState(() => (current ? storedUnread(current) : null));
+   useEffect(() => {
++    if (!current) return;
+     const update = () => setUnread(storedUnread(current));
+     update();
+@@ -125,4 +128,8 @@ function BottomNav() {
+     return () => window.removeEventListener('session-chronik:unread', update);
+   }, [current]);
++  if (!current || !conn || !unread) return null;
++  const c = p(`/k/${current}`);
++  // Aufnahmen macht nur die SL; Rolle merkt sich die App beim Laden der Kampagne
++  const isPlayer = sessionStorageGet(`role.${conn}:${current}`) === 'player';
+   const dot = <NewDot style={{ position: 'absolute', top: -2, right: -4 }} />;
+   const cls = ({ isActive }: { isActive: boolean }) => (isActive ? 'active' : undefined);
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index 6a0f7bb..b2e1b62 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1887,3 +1887,5 @@ export const en: Record<string, string> = {
+   "Die Verarbeitung wartet. Die Spielleitung sieht, woran es liegt.": "Processing is waiting. The game master can see why.",
+   "Cloud freigeben": "Allow the cloud",
++  "Kein Mikrofon gefunden. Schließ eins an oder nimm ein anderes Gerät.": "No microphone found. Plug one in or use another device.",
++  "Das Mikrofon ist gerade belegt. Beende andere Programme, die es nutzen, und versuch es noch einmal.": "The microphone is busy. Close other programs using it and try again.",
+ };
+diff --git a/src/pages/NamesPage.tsx b/src/pages/NamesPage.tsx
+index dc5a98d..7996492 100644
+--- a/src/pages/NamesPage.tsx
++++ b/src/pages/NamesPage.tsx
+@@ -97,5 +97,5 @@ export function NamesPage() {
+ 
+   return (
+-    <Screen
++    <Screen campaignId={session?.campaignId ?? null}
+       back
+       overline={<span className="row" style={{ gap: 6 }}><IconLock size={14} /> {session ? t('Kapitel {n}', { n: session.number }) + ' · ' + t('nur für dich') : t('Nur für dich')}</span>}
+diff --git a/src/pages/Overview.tsx b/src/pages/Overview.tsx
+index 4ced16e..82c890b 100644
+--- a/src/pages/Overview.tsx
++++ b/src/pages/Overview.tsx
+@@ -327,7 +327,7 @@ export function RecordingConsent({ campaign, onChanged, quiet, row }: { campaign
+     return (
+       <button type="button" className="row between" onClick={() => setOpen(true)}
+-        style={{ minHeight: 44, background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--ink-soft)', cursor: 'pointer', textAlign: 'left' }}>
++        style={{ minHeight: 48, background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--ink-soft)', cursor: 'pointer', textAlign: 'left' }}>
+         <span className="small">{t('Du hast Aufnahmen zugestimmt (seit {date}).', { date: formatDateFull(me.recordingConsentAt!) })}</span>
+-        <span className="small" style={{ color: 'var(--seal)', fontWeight: 700 }}>{t('Ändern')}</span>
++        <span className="small" style={{ color: 'var(--ink)', textDecoration: 'underline' }}>{t('Ändern')}</span>
+       </button>
+     );
+diff --git a/src/pages/Processing.tsx b/src/pages/Processing.tsx
+index d0f1166..fc75dd4 100644
+--- a/src/pages/Processing.tsx
++++ b/src/pages/Processing.tsx
+@@ -11,5 +11,5 @@ import { useNavigate } from 'react-router-dom';
+ import { api, isApiError } from '../api/client';
+ import type { ProcessingState, ProcessingStatus, Role, Session } from '../api/types';
+-import { ErrorBox, Screen } from '../components/Screen';
++import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+ 
+ /** Schlüssel des Servers für die Schritte der Zusammenfassung (ab Schnittstelle 0.4.6); andere Texte unverändert */
+@@ -56,5 +56,7 @@ export function Processing() {
+       .then(async (s) => {
+         setSession(s);
+-        setRole((await api.campaign(s.campaignId)).myRole);
++        const c = await api.campaign(s.campaignId);
++        rememberCampaign(c);
++        setRole(c.myRole);
+       })
+       .catch(setError);
+@@ -112,5 +114,5 @@ export function Processing() {
+ 
+   return (
+-    <Screen narrow back overline={session ? t('Kapitel {n}', { n: session.number }) : ' '} title={t('Verarbeitung')}>
++    <Screen campaignId={session?.campaignId ?? null} narrow back overline={session ? t('Kapitel {n}', { n: session.number }) : ' '} title={t('Verarbeitung')}>
+       <ErrorBox error={error} />
+ 
+diff --git a/src/pages/RecapPage.tsx b/src/pages/RecapPage.tsx
+index f70f294..57321e5 100644
+--- a/src/pages/RecapPage.tsx
++++ b/src/pages/RecapPage.tsx
+@@ -51,5 +51,5 @@ export function RecapPage() {
+ 
+   return (
+-    <Screen narrow back overline={campaign?.title ?? t('Chronik')} title={recap ? t('Kapitel {n}', { n: recap.number }) : ' '}>
++    <Screen campaignId={campaign?.id ?? null} narrow back overline={campaign?.title ?? t('Chronik')} title={recap ? t('Kapitel {n}', { n: recap.number }) : ' '}>
+       <ErrorBox error={error} />
+       {recap && (
+diff --git a/src/pages/Recording.tsx b/src/pages/Recording.tsx
+index 4b1a487..14fe9b5 100644
+--- a/src/pages/Recording.tsx
++++ b/src/pages/Recording.tsx
+@@ -1,3 +1,4 @@
+ import { applyHandover, type Handover } from '../recorder/handover';
++import { micError } from '../recorder/micError';
+ import { setRecordingActive } from '../recorder/activity';
+ import { getLive, setLive } from '../recorder/live';
+@@ -356,5 +357,5 @@ export function Recording() {
+       if (!hadSession) await dropEmptySession(sessionId.current);
+       if (e instanceof Error && (e.name === 'NotAllowedError' || (e as { code?: string }).code === 'NotAllowedError')) setMicDenied(true);
+-      else setError(e);
++      else setError(micError(e));
+     } finally {
+       setStarting(false);
+diff --git a/src/pages/Review.tsx b/src/pages/Review.tsx
+index 13d0dd3..895ff4a 100644
+--- a/src/pages/Review.tsx
++++ b/src/pages/Review.tsx
+@@ -10,5 +10,5 @@ import type { Entry, Member, Proposal, Recap, Session } from '../api/types';
+ import { ProposalCard } from '../components/ProposalCard';
+ import { IconLock } from '../components/Icons';
+-import { ErrorBox, Screen, useWorkspace } from '../components/Screen';
++import { ErrorBox, Screen, useWorkspace, rememberCampaign } from '../components/Screen';
+ import { fromEditText, toEditText } from '../review/parts';
+ import { RecapReviewView, jumpToFirstFlagged, jumpToParagraph, reportSentence, reviewNeedsAttention } from '../components/RecapReviewView';
+@@ -46,4 +46,5 @@ export function Review() {
+         setSession(s);
+         api.campaign(s.campaignId).then((c) => {
++          rememberCampaign(c);
+           setMembers(c.members);
+           setPlayers(c.members.filter((m) => m.role === 'player' && !isDeletedMember(m)));
+@@ -167,5 +168,5 @@ export function Review() {
+ 
+   return (
+-    <Screen
++    <Screen campaignId={session?.campaignId ?? null}
+       back
+       wide
+@@ -385,5 +386,5 @@ function RecapEditor({ sessionId, recap, members, onSaved, onError, alwaysOpen =
+           <strong>{t('Entwurf:')}</strong> {recap.title}
+           {recap.review?.state === 'done' && (alwaysOpen && reviewNeedsAttention(recap)
+-            ? <button type="button" className="linklike muted small tap-link" onClick={() => jumpToFirstFlagged(recap)}>{reportSentence(recap)}</button>
++            ? <button type="button" className="linklike muted small tap-link" style={{ display: 'block' }} onClick={() => jumpToFirstFlagged(recap)}>{reportSentence(recap)}</button>
+             : <span className="muted small" style={{ display: 'block' }}>{reportSentence(recap)}</span>)}
+         </span>
+diff --git a/src/pages/Speakers.tsx b/src/pages/Speakers.tsx
+index eec56d1..356eebc 100644
+--- a/src/pages/Speakers.tsx
++++ b/src/pages/Speakers.tsx
+@@ -8,5 +8,5 @@ import type { Campaign, Session, Speaker } from '../api/types';
+ import { confirmDialog } from '../components/confirm';
+ import { IconPlay } from '../components/Icons';
+-import { ErrorBox, Screen } from '../components/Screen';
++import { ErrorBox, Screen, rememberCampaign } from '../components/Screen';
+ import { swapAssignment } from '../voice/swap';
+ 
+@@ -45,4 +45,5 @@ export function Speakers() {
+         const session = await api.session(sessionId);
+         const [c, sp] = await Promise.all([api.campaign(session.campaignId), api.speakers(sessionId)]);
++        rememberCampaign(c);
+         setCampaign(c);
+         setSpeakers(sp);
+@@ -127,5 +128,5 @@ export function Speakers() {
+ 
+   return (
+-    <Screen narrow back title={review ? t('Stimmen prüfen') : t('Stimmen zuordnen')}
++    <Screen campaignId={session?.campaignId ?? null} narrow back title={review ? t('Stimmen prüfen') : t('Stimmen zuordnen')}
+       overline={review && session ? t('Kapitel {n}', { n: session.number }) : t('Abschrift fertig')}>
+       <ErrorBox error={error} />
+diff --git a/src/pages/TablePage.tsx b/src/pages/TablePage.tsx
+index 06673c9..2821eb4 100644
+--- a/src/pages/TablePage.tsx
++++ b/src/pages/TablePage.tsx
+@@ -118,9 +118,14 @@ function SwitchCampaign({ current }: { current: string }) {
+   const [open, setOpen] = useState(false);
+   const [list, setList] = useState<CampaignSummary[] | null>(null);
+-  const [error, setError] = useState<unknown>(null);
++  // Gleich beim Öffnen des Schirms laden: ohne zweite Kampagne gibt es nichts zu wechseln, dann kein Link
+   useEffect(() => {
+-    if (!open || list) return;
+-    api.campaigns().then((all) => setList(all.filter((c) => c.myRole === 'gm' && !c.archivedAt && c.id !== current))).catch(setError);
+-  }, [open, list, current]);
++    let alive = true;
++    setList(null);
++    api.campaigns()
++      .then((all) => { if (alive) setList(all.filter((c) => c.myRole === 'gm' && !c.archivedAt && c.id !== current)); })
++      .catch(() => { if (alive) setList([]); });
++    return () => { alive = false; };
++  }, [current]);
++  if (!list?.length) return null;
+   return (
+     <>
+@@ -128,8 +133,5 @@ function SwitchCampaign({ current }: { current: string }) {
+       {open && (
+         <Dialog title={t('Kampagne wechseln')} onClose={() => setOpen(false)}>
+-          <ErrorBox error={error} />
+-          {!list && !error && <span className="muted">{t('Lade …')}</span>}
+-          {list?.length === 0 && <span className="muted">{t('Du leitest auf diesem Server keine weitere Kampagne.')}</span>}
+-          {list?.map((c) => (
++          {list.map((c) => (
+             <button key={c.id} type="button" className="btn outline" style={{ justifyContent: 'flex-start' }}
+               onClick={() => { setOpen(false); navigate(p(`/k/${c.id}/tisch`)); }}>
+diff --git a/src/pages/VoiceProfile.tsx b/src/pages/VoiceProfile.tsx
+index 737303b..65c9420 100644
+--- a/src/pages/VoiceProfile.tsx
++++ b/src/pages/VoiceProfile.tsx
+@@ -1,3 +1,4 @@
+ import { confirmDialog } from '../components/confirm';
++import { micError } from '../recorder/micError';
+ import { pickReadingText, readingTextsFor } from '../voice/readingTexts';
+ import { formatDateFull } from '../components/format';
+@@ -87,5 +88,5 @@ export function VoiceProfile() {
+     } catch (e) {
+       if (e instanceof Error && e.name === 'NotAllowedError') setMicDenied(true);
+-      else setError(e);
++      else setError(micError(e));
+     }
+   };
+diff --git a/src/recorder/micError.ts b/src/recorder/micError.ts
+new file mode 100644
+index 0000000..3935bd6
+--- /dev/null
++++ b/src/recorder/micError.ts
+@@ -0,0 +1,16 @@
++import { t } from '../i18n';
++
++/**
++ * Fehler beim Öffnen des Mikrofons in eigene Worte fassen – der Browser liefert sonst englische Sätze wie
++ * „Requested device not found“. Unbekannte Fehler bleiben, wie sie sind.
++ */
++export function micError(e: unknown): unknown {
++  const name = (e as { name?: string })?.name ?? (e as { code?: string })?.code;
++  if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
++    return new Error(t('Kein Mikrofon gefunden. Schließ eins an oder nimm ein anderes Gerät.'));
++  }
++  if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
++    return new Error(t('Das Mikrofon ist gerade belegt. Beende andere Programme, die es nutzen, und versuch es noch einmal.'));
++  }
++  return e;
++}
+diff --git a/src/theme.css b/src/theme.css
+index 60bc863..d7c054d 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -27,5 +27,5 @@
+   --salbei: #3d6a48;
+   --on-salbei: #ffffff;
+-  --focus-ring: var(--siegel);
++  --focus-ring: var(--ink);
+   /* Flach (Benjamin 20.10.): ruhende Karten und Knöpfe ohne Schatten, Flächen trennen sich über Farbstufe und Rand.
+      Schatten nur noch für Schwebendes (Rückfragen, Fenster über der Seite). Leer als 0 0 #0000, damit zusammengesetzte
+@@ -58,5 +58,5 @@
+   --salbei: #8cc096;
+   --on-salbei: #0c1518;
+-  --focus-ring: var(--siegel);
++  --focus-ring: var(--ink);
+   --shadow-float: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+     --grain: none;
+@@ -84,5 +84,5 @@
+     --salbei: #8cc096;
+     --on-salbei: #0c1518;
+-    --focus-ring: var(--siegel);
++    --focus-ring: var(--ink);
+     --shadow-float: 0 1px 0 rgba(0, 0, 0, 0.45), 0 8px 20px -10px rgba(0, 0, 0, 0.7);
+     --grain: none;
+@@ -745,6 +745,6 @@ textarea {
+ .rec-button.big.recording {
+   position: relative;
+-  background: radial-gradient(circle at 50% 38%, #b33a4b 0%, var(--siegel) 55%, #85202f 100%);
+-  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.18);
++  /* flach wie die übrige Marke: eine Fläche, kein Verlauf, kein Schatten */
++  background: var(--siegel);
+ }
+ 
