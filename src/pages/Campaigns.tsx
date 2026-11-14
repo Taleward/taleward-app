@@ -1,4 +1,5 @@
 import { OpenShareRow, canOpenShares } from '../share/OpenShareRow';
+import { StarterEmail } from '../billing/StarterEmail';
 import { cleanShareKeys } from '../share/keys';
 import { listCharacters } from '../characters/store';
 import { TermsReminder, askTerms, onTermsAccepted } from '../components/Terms';
@@ -62,6 +63,8 @@ export function Campaigns() {
   const [system, setSystem] = useState<GameSystem | null>(null);
   const [systemName, setSystemName] = useState('');
   const [startSettings, setStartSettings] = useState<CampaignSettingsIn>({});
+  // Freiwillige E-Mail beim ersten Anlegen auf einem Server mit Guthaben (StarterEmail)
+  const [newEmail, setNewEmail] = useState('');
   const [actionError, setActionError] = useState<unknown>(null);
   const [tried, setTried] = useState(false);
   const [access, setAccess] = useState<Record<string, Access>>({});
@@ -200,6 +203,9 @@ export function Campaigns() {
     try {
       const chosen = apiAtLeast('0.4.25', conn) && Object.keys(startSettings).length ? startSettings : undefined;
       const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null, chosen);
+      // Erst nach dem Anlegen eintragen; scheitert es, bleibt die Kampagne – die Adresse geht später unter Konto
+      if (newEmail.trim()) await apiFor(conn).setEmail(newEmail.trim()).catch(() => undefined);
+      setNewEmail('');
       navigate(`/v/${conn.id}/k/${c.id}`);
     } catch (e) {
       if (isApiError(e, 'gm_permission_required')) {
@@ -370,6 +376,10 @@ export function Campaigns() {
             </div>
           )}
           {mode === 'new' && newTarget() && <StartSettings conn={newTarget()!} value={startSettings} onChange={setStartSettings} />}
+          {mode === 'new' && newTarget() && (
+            <StarterEmail conn={newTarget()!} value={newEmail} onChange={setNewEmail}
+              first={!entries?.some(({ conn: k, c }) => k.id === newTarget()!.id && c.myRole === 'gm')} />
+          )}
           <ErrorBox error={actionError} />
           <Missing text={missing} shown={tried} />
           <div className="row">

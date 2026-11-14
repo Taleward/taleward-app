@@ -2,7 +2,7 @@ import { http, HttpResponse, delay } from 'msw';
 import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
 import { textToPdf } from './minipdf';
 import { cleanAliases, findMatch, secretWarnings } from './checks';
-import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
+import { billingHandlers, billingInfo, campaignExtras, maybeGrantStarter, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
 import { memberCounters, playerExtras, playerHandlers, playerProposals } from './players';
 import { mockMemberKey, mockShareFile, mockShareServerKey } from './share';
 import { discordHandlers, discordPublicHandlers, mockDiscordBot } from './discord';
@@ -755,7 +755,7 @@ export const handlers = [
     const nachbar = new URL(request.url).hostname === NACHBAR_HOST;
     if (hostKey(request) === DEMO_HOST) {
       return HttpResponse.json({
-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.36', registration: 'invite_only', serverId: 'musterserver',
+        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.37', registration: 'invite_only', serverId: 'musterserver',
         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
       });
@@ -763,9 +763,9 @@ export const handlers = [
     return HttpResponse.json({
       name: nachbar ? 'Chronik des Nachbarvereins' : 'Testserver',
       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
-      contact: nachbar ? 'vorstand@nachbarverein.test' : null,
+      contact: nachbar ? 'vorstand@nachbarverein.test' : 'kontakt@euer-verein.test',
       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
-      apiVersion: nachbar ? '0.3.9' : '0.4.36',
+      apiVersion: nachbar ? '0.3.9' : '0.4.37',
       serverId: nachbar ? undefined : 'testserver',
       // 0.4.32: Discord-Bot (taleward.mock.discord)
       discordBot: nachbar ? undefined : mockDiscordBot(),
@@ -901,7 +901,10 @@ export const handlers = [
 
   http.get(`${B}/me`, () => {
     // Testmodus: der Bestätigungslink gilt nach ein paar Sekunden als angeklickt, eine offene Anfrage wird entschieden
-    if (account.emailPending && Date.now() - emailPendingSince > 5000) Object.assign(account, { email: account.emailPending, emailPending: null });
+    if (account.emailPending && Date.now() - emailPendingSince > 5000) {
+      Object.assign(account, { email: account.emailPending, emailPending: null });
+      maybeGrantStarter();
+    }
     const decision = mockSetting('gmDecision');
     if (account.gmPermission === 'pending' && (decision === 'granted' || decision === 'rejected')) {
       Object.assign(account, { gmPermission: decision, gmDecidedAt: new Date().toISOString() });
@@ -1060,6 +1063,7 @@ export const handlers = [
       allowCharacterAnalysis: body.settings?.allowCharacterAnalysis === true
     };
     campaigns.push(c);
+    if (hostKey(request) === 'local') maybeGrantStarter();
     return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) }, { status: 201 });
   }),
 

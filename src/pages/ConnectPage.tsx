@@ -27,6 +27,12 @@ const DEFAULT_SERVER: string = import.meta.env.VITE_API_BASE ?? '';
 const MOCK = import.meta.env.VITE_API_MODE === 'mock';
 // Web-App unter /app/ eines Servers (z. B. im Programmfenster auf dem PC): dieser Server ist vorgegeben
 const OWN_SERVER = MOCK ? null : ownServerBase(window.location);
+/**
+ * Community-Server von Taleward.org: fest in der App (nur https, keine Liste aus dem Netz, Änderung nur per Update).
+ * Wird nur angeboten, nie vorgewählt – verbunden wird erst nach Tippen. Im Testmodus der eingebaute Testserver.
+ */
+const COMMUNITY = 'https://taleward.taleward.org';
+const COMMUNITY_BASE = MOCK ? '/api/v1' : normalizeBaseUrl(COMMUNITY);
 
 /**
  * Mit einem Server verbinden: Adresse oder Einladungslink eingeben, Server prüfen,
@@ -36,7 +42,8 @@ export function ConnectPage() {
   const navigate = useNavigate();
   const { active } = useAuth();
   const params = new URLSearchParams(useLocation().search);
-  const [address, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : OWN_SERVER ?? DEFAULT_SERVER));
+  const [addressField, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : OWN_SERVER ?? DEFAULT_SERVER));
+  const address = addressField;
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
   const [info, setInfo] = useState<ServerInfo | null>(null);
   // Wohin die Einladung führt (ab Schnittstelle 0.4.10)
@@ -65,9 +72,10 @@ export function ConnectPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const checkServer = async (e?: FormEvent) => {
+  const checkServer = async (e?: FormEvent, fixed?: string) => {
     e?.preventDefault();
     setError(null);
+    const address = fixed ?? addressField;
     if (!address.trim()) {
       setTried(true);
       document.getElementById('address')?.focus();
@@ -213,6 +221,20 @@ export function ConnectPage() {
             {active.length > 0 && <button type="button" className="btn ghost small" onClick={() => navigate('/')}>{t('Abbrechen')}</button>}
           </form>
         )}
+        {!info && !params.get('invite') && !OWN_SERVER && !active.some((c) => c.baseUrl === COMMUNITY_BASE && !MOCK) && (
+          <section className="card" aria-labelledby="choice-title">
+            <h2 id="choice-title">{t('Ohne Einladung')}</h2>
+            <div className="choice-pair">
+              <button type="button" className="btn outline" disabled={busy} onClick={() => checkServer(undefined, COMMUNITY_BASE)}>{t('Taleward-Community-Server')}</button>
+              <button type="button" className="btn outline" onClick={() => { const el = document.getElementById('address') as HTMLInputElement | null; el?.focus(); el?.select(); }}>{t('Eigenen Server eingeben')}</button>
+            </div>
+            <span className="muted small">
+              {t('Community-Server: betrieben von Taleward.org')}
+              {' · '}<a href={`${COMMUNITY}/datenschutz`} target="_blank" rel="noopener noreferrer">{t('Datenschutz')}</a>
+              {' · '}<a href={`${COMMUNITY}/impressum`} target="_blank" rel="noopener noreferrer">{t('Impressum')}</a>
+            </span>
+          </section>
+        )}
         {!info && !params.get('invite') && (
           <>
             <Divider />
@@ -221,7 +243,7 @@ export function ConnectPage() {
               <section className="card" aria-labelledby="lead-title">
                 <h2 id="lead-title">{t('Ich will selbst leiten')}</h2>
                 <p className="muted small" style={{ margin: 0 }}>
-                  {t('Jeder Verein und jede Gruppe hat einen eigenen Server. Frag in deinem Verein nach, oder richtet selbst einen ein. Wer ihn betreibt, schickt dir einen Link, danach legst du hier deine Kampagne an.')}
+                  {t('Leg dir ein Konto auf dem Community-Server an, frag in deinem Verein nach einem Server, oder richtet selbst einen ein.')}
                 </p>
                 <a className="btn outline" href={getLang() === 'en' ? 'https://taleward.org/en/self-hosting/' : 'https://taleward.org/selbst-betreiben/'} target="_blank" rel="noopener noreferrer">{t('So richtet ihr einen Server ein')}</a>
               </section>

@@ -3,9 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, isApiError } from '../api/client';
 import { currentConnection } from '../api/connections';
-import type { Credit, CreditBooking, CreditWaitingJob, ServerInfo } from '../api/types';
+import type { Credit, CreditBooking, CreditWaitingJob, ServerInfo, User } from '../api/types';
 import { eur } from '../billing/CreditWaitNote';
-import { billingOn, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../billing/rules';
+import { billingOn, operatorContact, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../billing/rules';
 import { confirmDialog } from '../components/confirm';
 import { formatDate } from '../components/format';
 import { ErrorBox, Screen } from '../components/Screen';
@@ -21,10 +21,12 @@ export function CreditPage() {
   const conn = currentConnection();
   const [info, setInfo] = useState<ServerInfo | null>(null);
   const [credits, setCredits] = useState<Credit[] | null>(null);
+  const [me, setMe] = useState<User | null>(null);
   const [error, setError] = useState<unknown>(null);
 
   const load = useCallback(() => {
     api.info().then(setInfo).catch(() => undefined);
+    api.me().then(setMe).catch(() => undefined);
     api.credits().then(setCredits).catch((e) => { setError(e); setCredits([]); });
   }, []);
   useEffect(load, [load]);
@@ -41,7 +43,7 @@ export function CreditPage() {
           </p>
           {!credits && !error && <p className="muted">{t('Wird geladen …')}</p>}
           {!off && <ErrorBox error={error} />}
-          {credits?.map((c) => <CreditCard key={c.id} credit={c} info={info} baseUrl={conn.baseUrl} onChanged={load} />)}
+          {credits?.map((c) => <CreditCard key={c.id} credit={c} info={info} me={me} connId={conn.id} baseUrl={conn.baseUrl} onChanged={load} />)}
         </>
       )}
     </Screen>
@@ -63,7 +65,7 @@ const STATUS: Record<string, string> = {
   negative: tk('Im Minus. Neue Verarbeitungen warten, bis das Guthaben wieder über null ist.')
 };
 
-function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info: ServerInfo | null; baseUrl: string; onChanged: () => void }) {
+function CreditCard({ credit, info, me, connId, baseUrl, onChanged }: { credit: Credit; info: ServerInfo | null; me: User | null; connId: string; baseUrl: string; onChanged: () => void }) {
   const [waiting, setWaiting] = useState<CreditWaitingJob[] | null>(null);
   const [bookings, setBookings] = useState<CreditBooking[] | null>(null);
   const [more, setMore] = useState(true);
@@ -71,6 +73,9 @@ function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info
   const [error, setError] = useState<unknown>(null);
   const url = credit.canManage ? topUpUrl(info, baseUrl, DIST) : null;
   const pot = credit.kind === 'organization';
+  const store = DIST === 'store';
+  const starter = credit.kind === 'account' ? credit.starterCredit : null;
+  const contact = store ? operatorContact(info?.contact, info) : null;
 
   const loadLists = useCallback(() => {
     api.creditWaiting(credit.id).then(setWaiting).catch(() => setWaiting([]));
@@ -116,11 +121,32 @@ function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info
           <span className="muted small">{t('Öffnet die Seite des Servers im Browser. Bezahlt wird dort, nicht in der App.')}</span>
         </div>
       )}
-      {!url && credit.canManage && DIST === 'store' && credit.status !== 'good' && (
-        <span className="muted small">{t('Aufladen kannst du auf der Seite deines Servers.')}</span>
+      {starter?.status === 'granted' && starter.amountCents != null && (
+        <span className="small">{t('Für den Anfang hat dir der Server {amount} zum Ausprobieren gutgeschrieben.', { amount: eur(starter.amountCents) })}</span>
+      )}
+      {/* Store: kein Hinweis auf einen Bezahlweg, nur wer Fragen beantwortet (nie die Aufladeseite) */}
+      {!url && credit.canManage && store && credit.status !== 'good' && (
+        <span className="muted small">
+          {t('Fragen zum Guthaben beantworten die Betreiber deines Servers.')}
+          {contact && <> <a href={contact.href} target="_blank" rel="noopener noreferrer">{contact.label}</a></>}
+        </span>
       )}
       {!credit.canManage && (
-        <span className="muted small">{t('Aufladen, Freigeben und Einstellungen gehen beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.')}</span>
+        <span className="muted small">
+          {store
+            ? t('Freigeben und Einstellungen verwaltet die Organisation auf ihrem Server.')
+            : t('Aufladen, Freigeben und Einstellungen gehen beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.')}
+        </span>
+      )}
+      {credit.kind === 'account' && me && !me.email && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+          <span className="muted small">
+            {starter?.status === 'needs_verified_email' && starter.amountCents
+              ? t('Mit bestätigter E-Mail-Adresse sagt dir der Server Bescheid, wenn Guthaben fehlt, und du bekommst {amount} zum Ausprobieren.', { amount: eur(starter.amountCents) })
+              : t('Mit bestätigter E-Mail-Adresse sagt dir der Server Bescheid, wenn Guthaben fehlt.')}
+          </span>
+          <Link className="btn small outline" to={`/konto/${encodeURIComponent(connId)}?email=1`}>{me.emailPending ? t('E-Mail-Adresse ansehen') : t('E-Mail eintragen')}</Link>
+        </div>
       )}
       <ErrorBox error={error} />
 

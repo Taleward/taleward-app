@@ -346,6 +346,15 @@ export interface Credit {
   waitingCount?: number;
   /** false = Ändern, „Verarbeiten“ und Gutscheine nur auf der Seite des Servers */
   canManage: boolean;
+  /** Ab 0.4.37, nur beim eigenen Guthaben */
+  starterCredit?: StarterCredit | null;
+}
+
+/** Ab 0.4.37: Startguthaben für neue Spielleitungen, nur für die Person selbst */
+export interface StarterCredit {
+  status: 'available' | 'needs_verified_email' | 'granted' | 'none' | (string & {});
+  amountCents?: number | null;
+  grantedAt?: string | null;
 }
 
 export type JobKind = 'transcribe' | 'summarize' | 'revise' | 'document';

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { billingOn, canApprove, euro, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../../src/billing/rules.ts';
+import { billingOn, canApprove, euro, operatorContact, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../../src/billing/rules.ts';
 
 const on = { billing: { mode: 'credit', currency: 'EUR', topUpUrl: 'https://verein.test/guthaben' } };
 
@@ -49,4 +49,19 @@ test('Beträge', () => {
   assert.equal(parseEuro(' 2.50 € '), 250);
   assert.equal(parseEuro('abc'), null);
   assert.equal(parseEuro('-1'), null);
+});
+
+test('Kontakt des Betreibers: Mail oder https, nie die Aufladeseite', () => {
+  assert.deepEqual(operatorContact('info@verein.test'), { href: 'mailto:info@verein.test', label: 'info@verein.test' });
+  assert.deepEqual(operatorContact('mailto:info@verein.test'), { href: 'mailto:info@verein.test', label: 'info@verein.test' });
+  assert.equal(operatorContact('https://verein.test/kontakt')?.href, 'https://verein.test/kontakt');
+  assert.equal(operatorContact('verein.test/kontakt')?.href, 'https://verein.test/kontakt');
+  assert.equal(operatorContact('http://verein.test/kontakt'), null);
+  assert.equal(operatorContact('https://verein.test/guthaben'), null);
+  assert.equal(operatorContact('https://verein.test/Guthaben/aufladen'), null);
+  assert.equal(operatorContact('https://verein.test/zahlen', { billing: { mode: 'credit', topUpUrl: 'https://verein.test/zahlen' } }), null);
+  assert.equal(operatorContact('https://nutzer:pw@verein.test/'), null);
+  assert.equal(operatorContact('javascript:alert(1)'), null);
+  assert.equal(operatorContact(''), null);
+  assert.equal(operatorContact(null), null);
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { currentConnection } from '../api/connections';
@@ -22,6 +22,7 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const starter = useStarterOnce(!!wait?.creditId);
   if (!wait || done) return null;
   const reason = waitReason(wait.reason);
   const mine = !!wait.creditId;
@@ -38,13 +39,13 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
       break;
     case 'empty':
       text = mine
-        ? (store ? t('Kein Guthaben, die Verarbeitung wartet. Du kannst es auf der Seite deines Servers aufladen.') : t('Kein Guthaben, die Verarbeitung wartet. Danach startet sie von selbst.'))
+        ? (store ? t('Kein Guthaben, die Verarbeitung wartet.') : t('Kein Guthaben, die Verarbeitung wartet. Danach startet sie von selbst.'))
         : t('Das Guthaben der Spielleitung, die für die Kampagne zahlt, ist aufgebraucht. Die Verarbeitung wartet.');
       break;
     case 'too_low':
       text = mine
         ? (store
-          ? t('Das Guthaben reicht voraussichtlich nicht ({amount}). Du kannst es auf der Seite deines Servers aufladen.', { amount: amount ?? '?' })
+          ? t('Das Guthaben reicht voraussichtlich nicht ({amount}).', { amount: amount ?? '?' })
           : t('Das Guthaben reicht voraussichtlich nicht ({amount}). Danach startet die Verarbeitung von selbst.', { amount: amount ?? '?' }))
         : t('Das Guthaben der Spielleitung, die für die Kampagne zahlt, reicht voraussichtlich nicht. Die Verarbeitung wartet.');
       break;
@@ -83,6 +84,7 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
         <span style={{ flexShrink: 0, color: 'var(--ink-muted)' }}><IconInfo /></span>
         <span>{text}</span>
       </div>
+      {starter && <span className="small">{t('Für den Anfang hat dir der Server {amount} zum Ausprobieren gutgeschrieben.', { amount: starter })}</span>}
       <ErrorBox error={error} />
       {(canApprove(wait) || (creditPage && reason !== 'approval')) && (
         <div className="row wrap" style={{ gap: 8 }}>
@@ -92,4 +94,26 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
       )}
     </div>
   );
+}
+
+/**
+ * Startguthaben (ab 0.4.37) einmal je Verbindung im ersten Wartehinweis nennen, wenn es gebucht ist. Nur beim eigenen
+ * Guthaben (der Hinweis kennt dann die Kennungen); danach nie wieder.
+ */
+function useStarterOnce(mine: boolean): string | null {
+  const [amount, setAmount] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mine) return;
+    const key = `taleward.starterShown.${currentConnection().id}`;
+    try { if (localStorage.getItem(key)) return; } catch { return; }
+    let alive = true;
+    api.credits().then((list) => {
+      const s = list.find((c) => c.kind === 'account')?.starterCredit;
+      if (!alive || s?.status !== 'granted' || s.amountCents == null) return;
+      setAmount(eur(s.amountCents));
+      try { localStorage.setItem(key, '1'); } catch { /* egal */ }
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [mine]);
+  return amount;
 }

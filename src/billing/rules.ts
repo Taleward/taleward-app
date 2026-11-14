@@ -40,6 +40,32 @@ export function topUpUrl(info: BillingInfo | null | undefined, connBaseUrl: stri
   return url;
 }
 
+/**
+ * Kontaktangabe des Betreibers (`/info` → contact) als Link für die Guthaben-Seite der Store-Fassung: E-Mail als
+ * mailto, sonst nur https ohne Zugangsdaten. Nie die Aufladeseite: Pfade, die mit /guthaben beginnen, und die
+ * Adresse aus billing.topUpUrl ergeben null (dann zeigt die App keinen Kontakt).
+ */
+export function operatorContact(contact: string | null | undefined, info?: BillingInfo | null): { href: string; label: string } | null {
+  const c = (contact ?? '').trim();
+  if (!c) return null;
+  if (/^(mailto:)?[^\s@/:]+@[^\s@/]+\.[^\s@/]+$/i.test(c)) {
+    const mail = c.replace(/^mailto:/i, '');
+    return { href: 'mailto:' + mail, label: mail };
+  }
+  let u: URL;
+  try { u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(c) ? c : 'https://' + c); } catch { return null; }
+  if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.')) return null;
+  if (u.pathname.toLowerCase().startsWith('/guthaben')) return null;
+  const top = info?.billing?.topUpUrl;
+  if (top) {
+    try {
+      const t = new URL(top);
+      if (t.origin === u.origin && t.pathname.replace(/\/$/, '') === u.pathname.replace(/\/$/, '')) return null;
+    } catch { /* egal */ }
+  }
+  return { href: u.toString(), label: u.hostname + (u.pathname === '/' ? '' : u.pathname) };
+}
+
 /** Gutschein einlösen: vorerst nicht in der Store-Fassung */
 export const vouchersAllowed = (dist: Dist): boolean => dist !== 'store';
 

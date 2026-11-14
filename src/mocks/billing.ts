@@ -6,11 +6,13 @@
  * - „taleward.mock.creditWait“ = approval | empty | too_low | no_payer | pot – wartende Runden und Unterlagen
  *   zeigen diesen Grund (die Verarbeitung im Testmodus läuft trotzdem weiter)
  * - „taleward.mock.settingsLock“ = allowCloudSummary (o. ä.): vom Betreiber festgelegt
+ * - „taleward.mock.starter“ = 1 | granted (0.4.37): Startguthaben 2 € – bei 1 erst mit bestätigter E-Mail und beim
+ *   Anlegen einer Kampagne (bzw. beim Bestätigen, wenn man schon leitet); granted = schon gebucht
  * Gutschein zum Ausprobieren: TAVERNE-GUTSCHEIN (5 €, einmal).
  */
 import { HttpResponse, http } from 'msw';
-import type { CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
-import { campaigns } from './db';
+import type { StarterCredit, CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
+import { account, campaigns, ME } from './db';
 import type { MockCampaign } from './db';
 import { mockDiscordPause, setMockDiscordPause } from './discord';
 
@@ -63,11 +65,33 @@ const waiting: Record<string, CreditWaitingJob[]> = {
 };
 let voucherUsed = false;
 
+// ---------------- Startguthaben (0.4.37)
+const STARTER = 200;
+let starterAt: string | null = setting('starter') === 'granted' ? daysAgo(1) : null;
+if (starterAt) bookings['cr-robin'].unshift({ id: 'bk-start', kind: 'credit', amountCents: STARTER, createdAt: starterAt, reason: null });
+
+function starterOf(): StarterCredit | null {
+  const s = setting('starter');
+  if (!s || billingMode() !== 'credit') return null;
+  if (starterAt) return { status: 'granted', amountCents: STARTER, grantedAt: starterAt };
+  return { status: account.email ? 'available' : 'needs_verified_email', amountCents: STARTER, grantedAt: null };
+}
+
+/** Beim Anlegen einer Kampagne bzw. beim Bestätigen der E-Mail (wenn man schon leitet) einmal buchen */
+export function maybeGrantStarter(): void {
+  if (starterAt || setting('starter') !== '1' || billingMode() !== 'credit' || !account.email) return;
+  const leads = campaigns.some((c) => c.members.some((m) => m.userId === ME.id && m.role === 'gm' && !m.leftAt));
+  if (!leads) return;
+  starterAt = new Date().toISOString();
+  bookings['cr-robin'].unshift({ id: 'bk-start', kind: 'credit', amountCents: STARTER, createdAt: starterAt, reason: null });
+}
+
 function visibleCredits(): Credit[] {
   const list = [own, ...(billingMode() === 'pot' ? [pot] : [])];
   return list.map((c) => {
     const b = balance(c.id);
-    return { ...c, balanceCents: b, status: status(b), waitingCount: waiting[c.id]?.length ?? 0 };
+    const extra = c.kind === 'account' && starterOf() ? { starterCredit: starterOf() } : {};
+    return { ...c, balanceCents: b, status: status(b), waitingCount: waiting[c.id]?.length ?? 0, ...extra };
   });
 }
 

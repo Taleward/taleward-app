@@ -581,6 +581,7 @@ h2 {
 }
 
 input[type='text'],
+input[type='email'],
 input[type='password'],
 input[type='search'],
 input[type='number'],
@@ -2390,3 +2391,7 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
   .rec-button.big.recording.live::after { transform: none; }
 }
 .rec-quiet { color: var(--siegel-text); font-weight: 600; }
+
+/* Zwei gleichwertige Wege nebeneinander (Verbinden: Community-Server / eigener Server) */
+.choice-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.choice-pair .btn { width: 100%; }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Taleward API
-  version: 0.4.36
+  version: 0.4.37
   description: |
     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
 
@@ -329,6 +329,11 @@ info:
     (no_worker, cloud_not_allowed, credit, paused); Spielende bekommen nur waiting, ohne Grund. waitActions nur für die
     SL (allow_cloud_summary, allow_external_transcription). Die App zeigt einen Satz und für die SL einen Knopf zu
     „Kampagne verwalten“. Ältere Apps übergehen die Felder.
+    Änderungen in 0.4.37 (Startguthaben): Credit.starterCredit beim eigenen Guthaben (kind account), nur für die Person
+    selbst. Der Server bucht das Startguthaben einmal je Konto als Gutschrift (kind credit, nicht erstattbar), beim ersten
+    Anlegen einer Kampagne als SL bzw. sofort, wenn die E-Mail-Adresse danach bestätigt wird – nur mit bestätigter
+    Adresse. Die App fragt beim ersten Anlegen freiwillig nach der E-Mail-Adresse und zeigt den Betrag. Ältere Apps
+    übergehen das Feld.
 
 servers:
   - url: https://taleward.example.org/api/v1
@@ -4822,6 +4827,37 @@ components:
           description: |
             false = Ändern, „Verarbeiten“ und Gutscheine gehen nur auf der Seite des Servers (Topf der Organisation, zweiter
             Faktor). Die App zeigt dann nur den Stand.
+        starterCredit:
+          description: |
+            Ab 0.4.37, nur beim eigenen Guthaben (kind account), sonst fehlt das Feld. Fehlt oder null = wie status none.
+          oneOf:
+            - $ref: "#/components/schemas/StarterCredit"
+            - type: "null"
+
+    StarterCredit:
+      type: object
+      description: |
+        Ab 0.4.37. Startguthaben für neue Spielleitungen, nur für die Person selbst. Der Betreiber stellt Betrag und eine
+        Obergrenze je Monat für den ganzen Server ein; der Server bucht es einmal je Konto (und je E-Mail-Adresse über alle
+        Konten) als Gutschrift (CreditBooking kind credit), beim ersten Anlegen einer Kampagne als SL bzw. sofort, wenn die
+        E-Mail-Adresse danach bestätigt wird. Nur mit bestätigter Adresse, nur im Modus „Guthaben je Spielleitung“, nie für
+        Töpfe. Nie im Feld: Monatsstand oder Obergrenze des Servers, andere Konten, ob eine Adresse schon genutzt wurde.
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [available, needs_verified_email, granted, none]
+          description: |
+            available = steht bereit, wird beim ersten Anlegen einer Kampagne gebucht (kann dann trotzdem entfallen, z. B.
+            wenn die Obergrenze des Monats erreicht ist – die App verspricht deshalb nichts Festes);
+            needs_verified_email = gäbe es mit bestätigter E-Mail-Adresse (keine oder unbestätigte Adresse);
+            granted = schon gebucht; none = gibt es nicht (aus, schon verbraucht, Adresse schon genutzt, Grenze – ohne
+            Unterscheidung). Unbekannte Werte wie none.
+        amountCents:
+          type: [integer, "null"]
+          minimum: 0
+          description: Betrag; bei available/needs_verified_email der aktuelle Betrag des Servers, bei granted der gebuchte; bei none null.
+        grantedAt: { type: [string, "null"], format: date-time, description: "Nur bei granted" }
 
     CreditBooking:
       type: object
