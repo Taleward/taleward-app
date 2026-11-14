@@ -1,0 +1,585 @@
+From 89a5e8830b1404ef614400978914b79d9a2424da Mon Sep 17 00:00:00 2001
+From: "Tinkerworks (Benjamin)"
+ <121437138+Tinkerworkss@users.noreply.github.com>
+Date: Sat, 14 Nov 2026 19:12:06 +0100
+Subject: [PATCH] Community-Server zur Auswahl beim Verbinden, Startguthaben
+ (YAML 0.4.37), Guthaben-Texte der Store-Fassung
+
+---
+ docs/session-chronik-api.yaml  | 38 +++++++++++++++++++++++++++-
+ scripts/tests/billing.test.mjs | 17 ++++++++++++-
+ src/api/types.ts               |  9 +++++++
+ src/billing/CreditWaitNote.tsx | 30 +++++++++++++++++++---
+ src/billing/StarterEmail.tsx   | 46 ++++++++++++++++++++++++++++++++++
+ src/billing/rules.ts           | 26 +++++++++++++++++++
+ src/i18n/en.ts                 | 17 +++++++++++++
+ src/mocks/billing.ts           | 30 +++++++++++++++++++---
+ src/mocks/handlers.ts          | 14 +++++++----
+ src/pages/Campaigns.tsx        | 10 ++++++++
+ src/pages/ConnectPage.tsx      | 28 ++++++++++++++++++---
+ src/pages/CreditPage.tsx       | 40 +++++++++++++++++++++++------
+ src/theme.css                  |  5 ++++
+ 13 files changed, 287 insertions(+), 23 deletions(-)
+ create mode 100644 src/billing/StarterEmail.tsx
+
+diff --git a/docs/session-chronik-api.yaml b/docs/session-chronik-api.yaml
+index fb7e204..67d1118 100644
+--- a/docs/session-chronik-api.yaml
++++ b/docs/session-chronik-api.yaml
+@@ -2,5 +2,5 @@ openapi: 3.1.0
+ info:
+   title: Taleward API
+-  version: 0.4.36
++  version: 0.4.37
+   description: |
+     Schnittstelle zwischen der Taleward-App (Android, Web) und dem Taleward-Server.
+@@ -330,4 +330,9 @@ info:
+     SL (allow_cloud_summary, allow_external_transcription). Die App zeigt einen Satz und für die SL einen Knopf zu
+     „Kampagne verwalten“. Ältere Apps übergehen die Felder.
++    Änderungen in 0.4.37 (Startguthaben): Credit.starterCredit beim eigenen Guthaben (kind account), nur für die Person
++    selbst. Der Server bucht das Startguthaben einmal je Konto als Gutschrift (kind credit, nicht erstattbar), beim ersten
++    Anlegen einer Kampagne als SL bzw. sofort, wenn die E-Mail-Adresse danach bestätigt wird – nur mit bestätigter
++    Adresse. Die App fragt beim ersten Anlegen freiwillig nach der E-Mail-Adresse und zeigt den Betrag. Ältere Apps
++    übergehen das Feld.
+ 
+ servers:
+@@ -4823,4 +4828,35 @@ components:
+             false = Ändern, „Verarbeiten“ und Gutscheine gehen nur auf der Seite des Servers (Topf der Organisation, zweiter
+             Faktor). Die App zeigt dann nur den Stand.
++        starterCredit:
++          description: |
++            Ab 0.4.37, nur beim eigenen Guthaben (kind account), sonst fehlt das Feld. Fehlt oder null = wie status none.
++          oneOf:
++            - $ref: "#/components/schemas/StarterCredit"
++            - type: "null"
++
++    StarterCredit:
++      type: object
++      description: |
++        Ab 0.4.37. Startguthaben für neue Spielleitungen, nur für die Person selbst. Der Betreiber stellt Betrag und eine
++        Obergrenze je Monat für den ganzen Server ein; der Server bucht es einmal je Konto (und je E-Mail-Adresse über alle
++        Konten) als Gutschrift (CreditBooking kind credit), beim ersten Anlegen einer Kampagne als SL bzw. sofort, wenn die
++        E-Mail-Adresse danach bestätigt wird. Nur mit bestätigter Adresse, nur im Modus „Guthaben je Spielleitung“, nie für
++        Töpfe. Nie im Feld: Monatsstand oder Obergrenze des Servers, andere Konten, ob eine Adresse schon genutzt wurde.
++      required: [status]
++      properties:
++        status:
++          type: string
++          enum: [available, needs_verified_email, granted, none]
++          description: |
++            available = steht bereit, wird beim ersten Anlegen einer Kampagne gebucht (kann dann trotzdem entfallen, z. B.
++            wenn die Obergrenze des Monats erreicht ist – die App verspricht deshalb nichts Festes);
++            needs_verified_email = gäbe es mit bestätigter E-Mail-Adresse (keine oder unbestätigte Adresse);
++            granted = schon gebucht; none = gibt es nicht (aus, schon verbraucht, Adresse schon genutzt, Grenze – ohne
++            Unterscheidung). Unbekannte Werte wie none.
++        amountCents:
++          type: [integer, "null"]
++          minimum: 0
++          description: Betrag; bei available/needs_verified_email der aktuelle Betrag des Servers, bei granted der gebuchte; bei none null.
++        grantedAt: { type: [string, "null"], format: date-time, description: "Nur bei granted" }
+ 
+     CreditBooking:
+diff --git a/scripts/tests/billing.test.mjs b/scripts/tests/billing.test.mjs
+index f6af9c1..68ea046 100644
+--- a/scripts/tests/billing.test.mjs
++++ b/scripts/tests/billing.test.mjs
+@@ -1,5 +1,5 @@
+ import { test } from 'node:test';
+ import assert from 'node:assert/strict';
+-import { billingOn, canApprove, euro, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../../src/billing/rules.ts';
++import { billingOn, canApprove, euro, operatorContact, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../../src/billing/rules.ts';
+ 
+ const on = { billing: { mode: 'credit', currency: 'EUR', topUpUrl: 'https://verein.test/guthaben' } };
+@@ -51,2 +51,17 @@ test('Beträge', () => {
+   assert.equal(parseEuro('-1'), null);
+ });
++
++test('Kontakt des Betreibers: Mail oder https, nie die Aufladeseite', () => {
++  assert.deepEqual(operatorContact('info@verein.test'), { href: 'mailto:info@verein.test', label: 'info@verein.test' });
++  assert.deepEqual(operatorContact('mailto:info@verein.test'), { href: 'mailto:info@verein.test', label: 'info@verein.test' });
++  assert.equal(operatorContact('https://verein.test/kontakt')?.href, 'https://verein.test/kontakt');
++  assert.equal(operatorContact('verein.test/kontakt')?.href, 'https://verein.test/kontakt');
++  assert.equal(operatorContact('http://verein.test/kontakt'), null);
++  assert.equal(operatorContact('https://verein.test/guthaben'), null);
++  assert.equal(operatorContact('https://verein.test/Guthaben/aufladen'), null);
++  assert.equal(operatorContact('https://verein.test/zahlen', { billing: { mode: 'credit', topUpUrl: 'https://verein.test/zahlen' } }), null);
++  assert.equal(operatorContact('https://nutzer:pw@verein.test/'), null);
++  assert.equal(operatorContact('javascript:alert(1)'), null);
++  assert.equal(operatorContact(''), null);
++  assert.equal(operatorContact(null), null);
++});
+diff --git a/src/api/types.ts b/src/api/types.ts
+index 17c9b26..aee7495 100644
+--- a/src/api/types.ts
++++ b/src/api/types.ts
+@@ -347,4 +347,13 @@ export interface Credit {
+   /** false = Ändern, „Verarbeiten“ und Gutscheine nur auf der Seite des Servers */
+   canManage: boolean;
++  /** Ab 0.4.37, nur beim eigenen Guthaben */
++  starterCredit?: StarterCredit | null;
++}
++
++/** Ab 0.4.37: Startguthaben für neue Spielleitungen, nur für die Person selbst */
++export interface StarterCredit {
++  status: 'available' | 'needs_verified_email' | 'granted' | 'none' | (string & {});
++  amountCents?: number | null;
++  grantedAt?: string | null;
+ }
+ 
+diff --git a/src/billing/CreditWaitNote.tsx b/src/billing/CreditWaitNote.tsx
+index 2d63f58..6697c91 100644
+--- a/src/billing/CreditWaitNote.tsx
++++ b/src/billing/CreditWaitNote.tsx
+@@ -1,3 +1,3 @@
+-import { useState } from 'react';
++import { useEffect, useState } from 'react';
+ import { Link } from 'react-router-dom';
+ import { api } from '../api/client';
+@@ -23,4 +23,5 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
+   const [done, setDone] = useState(false);
+   const [error, setError] = useState<unknown>(null);
++  const starter = useStarterOnce(!!wait?.creditId);
+   if (!wait || done) return null;
+   const reason = waitReason(wait.reason);
+@@ -39,5 +40,5 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
+     case 'empty':
+       text = mine
+-        ? (store ? t('Kein Guthaben, die Verarbeitung wartet. Du kannst es auf der Seite deines Servers aufladen.') : t('Kein Guthaben, die Verarbeitung wartet. Danach startet sie von selbst.'))
++        ? (store ? t('Kein Guthaben, die Verarbeitung wartet.') : t('Kein Guthaben, die Verarbeitung wartet. Danach startet sie von selbst.'))
+         : t('Das Guthaben der Spielleitung, die für die Kampagne zahlt, ist aufgebraucht. Die Verarbeitung wartet.');
+       break;
+@@ -45,5 +46,5 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
+       text = mine
+         ? (store
+-          ? t('Das Guthaben reicht voraussichtlich nicht ({amount}). Du kannst es auf der Seite deines Servers aufladen.', { amount: amount ?? '?' })
++          ? t('Das Guthaben reicht voraussichtlich nicht ({amount}).', { amount: amount ?? '?' })
+           : t('Das Guthaben reicht voraussichtlich nicht ({amount}). Danach startet die Verarbeitung von selbst.', { amount: amount ?? '?' }))
+         : t('Das Guthaben der Spielleitung, die für die Kampagne zahlt, reicht voraussichtlich nicht. Die Verarbeitung wartet.');
+@@ -84,4 +85,5 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
+         <span>{text}</span>
+       </div>
++      {starter && <span className="small">{t('Für den Anfang hat dir der Server {amount} zum Ausprobieren gutgeschrieben.', { amount: starter })}</span>}
+       <ErrorBox error={error} />
+       {(canApprove(wait) || (creditPage && reason !== 'approval')) && (
+@@ -94,2 +96,24 @@ export function CreditWaitNote({ wait, onApproved }: { wait: CreditWait | null |
+   );
+ }
++
++/**
++ * Startguthaben (ab 0.4.37) einmal je Verbindung im ersten Wartehinweis nennen, wenn es gebucht ist. Nur beim eigenen
++ * Guthaben (der Hinweis kennt dann die Kennungen); danach nie wieder.
++ */
++function useStarterOnce(mine: boolean): string | null {
++  const [amount, setAmount] = useState<string | null>(null);
++  useEffect(() => {
++    if (!mine) return;
++    const key = `taleward.starterShown.${currentConnection().id}`;
++    try { if (localStorage.getItem(key)) return; } catch { return; }
++    let alive = true;
++    api.credits().then((list) => {
++      const s = list.find((c) => c.kind === 'account')?.starterCredit;
++      if (!alive || s?.status !== 'granted' || s.amountCents == null) return;
++      setAmount(eur(s.amountCents));
++      try { localStorage.setItem(key, '1'); } catch { /* egal */ }
++    }).catch(() => undefined);
++    return () => { alive = false; };
++  }, [mine]);
++  return amount;
++}
+diff --git a/src/billing/StarterEmail.tsx b/src/billing/StarterEmail.tsx
+new file mode 100644
+index 0000000..5e4b5ef
+--- /dev/null
++++ b/src/billing/StarterEmail.tsx
+@@ -0,0 +1,46 @@
++import { useEffect, useState } from 'react';
++import { apiFor, fetchServerInfo } from '../api/client';
++import type { Connection } from '../api/connections';
++import type { StarterCredit, User } from '../api/types';
++import { t } from '../i18n';
++import { eur } from './CreditWaitNote';
++import { billingOn } from './rules';
++
++/**
++ * Beim ersten Anlegen einer Kampagne auf einem Server mit Guthaben: freiwillig nach der E-Mail-Adresse fragen
++ * (ab 0.4.37 mit Startguthaben). Kein Pflichtfeld; leer lassen geht immer. Eingetragen wird erst nach dem Anlegen.
++ */
++export function StarterEmail({ conn, first, value, onChange }: { conn: Connection; first: boolean; value: string; onChange: (v: string) => void }) {
++  const [state, setState] = useState<{ user: User; starter: StarterCredit | null } | null>(null);
++  useEffect(() => {
++    let alive = true;
++    setState(null);
++    (async () => {
++      const info = await fetchServerInfo(conn.baseUrl).catch(() => null);
++      if (!billingOn(info)) return;
++      const api = apiFor(conn);
++      const user = await api.me().catch(() => null);
++      if (!user || user.email) return;
++      const credits = await api.credits().catch(() => []);
++      const starter = credits.find((c) => c.kind === 'account')?.starterCredit ?? null;
++      if (alive) setState({ user, starter });
++    })();
++    return () => { alive = false; };
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [conn.id, conn.baseUrl]);
++  if (!state) return null;
++  const needs = state.starter?.status === 'needs_verified_email' && !!state.starter.amountCents;
++  if (!first && !needs) return null;
++  const hint = t('Damit dir der Server Bescheid sagen kann, wenn Guthaben fehlt.')
++    + (needs ? ' ' + t('Mit bestätigter Adresse bekommst du {amount} zum Ausprobieren.', { amount: eur(state.starter!.amountCents!) }) : '');
++  if (state.user.emailPending) {
++    return <span className="muted small">{t('Der Bestätigungslink ist an {email} unterwegs.', { email: state.user.emailPending })} {needs ? t('Mit bestätigter Adresse bekommst du {amount} zum Ausprobieren.', { amount: eur(state.starter!.amountCents!) }) : ''}</span>;
++  }
++  return (
++    <div className="field">
++      <label htmlFor="cmail">{t('E-Mail-Adresse (freiwillig)')}</label>
++      <input id="cmail" type="email" autoComplete="email" spellCheck={false} value={value} aria-describedby="cmail-hint" onChange={(e) => onChange(e.target.value)} />
++      <span id="cmail-hint" className="muted small">{hint}</span>
++    </div>
++  );
++}
+diff --git a/src/billing/rules.ts b/src/billing/rules.ts
+index 3afaf16..ececcfa 100644
+--- a/src/billing/rules.ts
++++ b/src/billing/rules.ts
+@@ -41,4 +41,30 @@ export function topUpUrl(info: BillingInfo | null | undefined, connBaseUrl: stri
+ }
+ 
++/**
++ * Kontaktangabe des Betreibers (`/info` → contact) als Link für die Guthaben-Seite der Store-Fassung: E-Mail als
++ * mailto, sonst nur https ohne Zugangsdaten. Nie die Aufladeseite: Pfade, die mit /guthaben beginnen, und die
++ * Adresse aus billing.topUpUrl ergeben null (dann zeigt die App keinen Kontakt).
++ */
++export function operatorContact(contact: string | null | undefined, info?: BillingInfo | null): { href: string; label: string } | null {
++  const c = (contact ?? '').trim();
++  if (!c) return null;
++  if (/^(mailto:)?[^\s@/:]+@[^\s@/]+\.[^\s@/]+$/i.test(c)) {
++    const mail = c.replace(/^mailto:/i, '');
++    return { href: 'mailto:' + mail, label: mail };
++  }
++  let u: URL;
++  try { u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(c) ? c : 'https://' + c); } catch { return null; }
++  if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.')) return null;
++  if (u.pathname.toLowerCase().startsWith('/guthaben')) return null;
++  const top = info?.billing?.topUpUrl;
++  if (top) {
++    try {
++      const t = new URL(top);
++      if (t.origin === u.origin && t.pathname.replace(/\/$/, '') === u.pathname.replace(/\/$/, '')) return null;
++    } catch { /* egal */ }
++  }
++  return { href: u.toString(), label: u.hostname + (u.pathname === '/' ? '' : u.pathname) };
++}
++
+ /** Gutschein einlösen: vorerst nicht in der Store-Fassung */
+ export const vouchersAllowed = (dist: Dist): boolean => dist !== 'store';
+diff --git a/src/i18n/en.ts b/src/i18n/en.ts
+index b2e1b62..f5af1a2 100644
+--- a/src/i18n/en.ts
++++ b/src/i18n/en.ts
+@@ -1889,3 +1889,20 @@ export const en: Record<string, string> = {
+   "Kein Mikrofon gefunden. Schließ eins an oder nimm ein anderes Gerät.": "No microphone found. Plug one in or use another device.",
+   "Das Mikrofon ist gerade belegt. Beende andere Programme, die es nutzen, und versuch es noch einmal.": "The microphone is busy. Close other programs using it and try again.",
++  "Kein Guthaben, die Verarbeitung wartet.": "No credit, processing is waiting.",
++  "Das Guthaben reicht voraussichtlich nicht ({amount}).": "The credit probably won't cover it ({amount}).",
++  "Für den Anfang hat dir der Server {amount} zum Ausprobieren gutgeschrieben.": "To get you started, the server credited you {amount} to try things out.",
++  "Fragen zum Guthaben beantworten die Betreiber deines Servers.": "Questions about credit are answered by the people running your server.",
++  "Freigeben und Einstellungen verwaltet die Organisation auf ihrem Server.": "The organisation manages approvals and settings on its server.",
++  "Mit bestätigter E-Mail-Adresse sagt dir der Server Bescheid, wenn Guthaben fehlt, und du bekommst {amount} zum Ausprobieren.": "With a confirmed email address the server lets you know when credit runs short, and you get {amount} to try things out.",
++  "Mit bestätigter E-Mail-Adresse sagt dir der Server Bescheid, wenn Guthaben fehlt.": "With a confirmed email address the server lets you know when credit runs short.",
++  "E-Mail-Adresse ansehen": "View email address",
++  "Damit dir der Server Bescheid sagen kann, wenn Guthaben fehlt.": "So the server can let you know when credit runs short.",
++  "Mit bestätigter Adresse bekommst du {amount} zum Ausprobieren.": "With a confirmed address you get {amount} to try things out.",
++  "Der Bestätigungslink ist an {email} unterwegs.": "The confirmation link is on its way to {email}.",
++  "E-Mail-Adresse (freiwillig)": "Email address (optional)",
++  "Ohne Einladung": "Without an invitation",
++  "Taleward-Community-Server": "Taleward community server",
++  "Eigenen Server eingeben": "Enter your own server",
++  "Community-Server: betrieben von Taleward.org": "Community server: run by Taleward.org",
++  "Leg dir ein Konto auf dem Community-Server an, frag in deinem Verein nach einem Server, oder richtet selbst einen ein.": "Create an account on the community server, ask your club for a server, or set one up yourselves.",
+ };
+diff --git a/src/mocks/billing.ts b/src/mocks/billing.ts
+index 3e72bb0..8c80bcc 100644
+--- a/src/mocks/billing.ts
++++ b/src/mocks/billing.ts
+@@ -7,9 +7,11 @@
+  *   zeigen diesen Grund (die Verarbeitung im Testmodus läuft trotzdem weiter)
+  * - „taleward.mock.settingsLock“ = allowCloudSummary (o. ä.): vom Betreiber festgelegt
++ * - „taleward.mock.starter“ = 1 | granted (0.4.37): Startguthaben 2 € – bei 1 erst mit bestätigter E-Mail und beim
++ *   Anlegen einer Kampagne (bzw. beim Bestätigen, wenn man schon leitet); granted = schon gebucht
+  * Gutschein zum Ausprobieren: TAVERNE-GUTSCHEIN (5 €, einmal).
+  */
+ import { HttpResponse, http } from 'msw';
+-import type { CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
+-import { campaigns } from './db';
++import type { StarterCredit, CounterKind, Campaign, CampaignBilling, CampaignSettings, CampaignSettingsLogEntry, Credit, CreditBooking, CreditWait, CreditWaitingJob, Member, SettingField } from '../api/types';
++import { account, campaigns, ME } from './db';
+ import type { MockCampaign } from './db';
+ import { mockDiscordPause, setMockDiscordPause } from './discord';
+@@ -64,9 +66,31 @@ const waiting: Record<string, CreditWaitingJob[]> = {
+ let voucherUsed = false;
+ 
++// ---------------- Startguthaben (0.4.37)
++const STARTER = 200;
++let starterAt: string | null = setting('starter') === 'granted' ? daysAgo(1) : null;
++if (starterAt) bookings['cr-robin'].unshift({ id: 'bk-start', kind: 'credit', amountCents: STARTER, createdAt: starterAt, reason: null });
++
++function starterOf(): StarterCredit | null {
++  const s = setting('starter');
++  if (!s || billingMode() !== 'credit') return null;
++  if (starterAt) return { status: 'granted', amountCents: STARTER, grantedAt: starterAt };
++  return { status: account.email ? 'available' : 'needs_verified_email', amountCents: STARTER, grantedAt: null };
++}
++
++/** Beim Anlegen einer Kampagne bzw. beim Bestätigen der E-Mail (wenn man schon leitet) einmal buchen */
++export function maybeGrantStarter(): void {
++  if (starterAt || setting('starter') !== '1' || billingMode() !== 'credit' || !account.email) return;
++  const leads = campaigns.some((c) => c.members.some((m) => m.userId === ME.id && m.role === 'gm' && !m.leftAt));
++  if (!leads) return;
++  starterAt = new Date().toISOString();
++  bookings['cr-robin'].unshift({ id: 'bk-start', kind: 'credit', amountCents: STARTER, createdAt: starterAt, reason: null });
++}
++
+ function visibleCredits(): Credit[] {
+   const list = [own, ...(billingMode() === 'pot' ? [pot] : [])];
+   return list.map((c) => {
+     const b = balance(c.id);
+-    return { ...c, balanceCents: b, status: status(b), waitingCount: waiting[c.id]?.length ?? 0 };
++    const extra = c.kind === 'account' && starterOf() ? { starterCredit: starterOf() } : {};
++    return { ...c, balanceCents: b, status: status(b), waitingCount: waiting[c.id]?.length ?? 0, ...extra };
+   });
+ }
+diff --git a/src/mocks/handlers.ts b/src/mocks/handlers.ts
+index 8fb4614..8bf860f 100644
+--- a/src/mocks/handlers.ts
++++ b/src/mocks/handlers.ts
+@@ -3,5 +3,5 @@ import { DEMO_HOST, DEMO_USERS, musterProbe } from './muster/seed';
+ import { textToPdf } from './minipdf';
+ import { cleanAliases, findMatch, secretWarnings } from './checks';
+-import { billingHandlers, billingInfo, campaignExtras, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
++import { billingHandlers, billingInfo, campaignExtras, maybeGrantStarter, mockAnalysisCost, mockCreditWait, recordChange, snapshot } from './billing';
+ import { memberCounters, playerExtras, playerHandlers, playerProposals } from './players';
+ import { mockMemberKey, mockShareFile, mockShareServerKey } from './share';
+@@ -756,5 +756,5 @@ export const handlers = [
+     if (hostKey(request) === DEMO_HOST) {
+       return HttpResponse.json({
+-        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.36', registration: 'invite_only', serverId: 'musterserver',
++        name: 'Taleward', operator: 'Euer Verein e. V.', contact: null, apiVersion: '0.4.37', registration: 'invite_only', serverId: 'musterserver',
+         authMethods: ['password'], privacyPolicyUrl: null, minAge: 16, externalTranscription: null,
+         minAppVersion: null, latestAppVersion: null, appDownloadUrl: null, releaseNotes: null
+@@ -764,7 +764,7 @@ export const handlers = [
+       name: nachbar ? 'Chronik des Nachbarvereins' : 'Testserver',
+       operator: nachbar ? 'Spielgemeinschaft Nachbarort e. V.' : 'Rollenspielverein (Testmodus)',
+-      contact: nachbar ? 'vorstand@nachbarverein.test' : null,
++      contact: nachbar ? 'vorstand@nachbarverein.test' : 'kontakt@euer-verein.test',
+       // Eingebauter Testserver kann alles bis zur aktuellen Schnittstelle; der Nachbarverein bleibt alt (zeigt das Ausblenden neuer Funktionen)
+-      apiVersion: nachbar ? '0.3.9' : '0.4.36',
++      apiVersion: nachbar ? '0.3.9' : '0.4.37',
+       serverId: nachbar ? undefined : 'testserver',
+       // 0.4.32: Discord-Bot (taleward.mock.discord)
+@@ -902,5 +902,8 @@ export const handlers = [
+   http.get(`${B}/me`, () => {
+     // Testmodus: der Bestätigungslink gilt nach ein paar Sekunden als angeklickt, eine offene Anfrage wird entschieden
+-    if (account.emailPending && Date.now() - emailPendingSince > 5000) Object.assign(account, { email: account.emailPending, emailPending: null });
++    if (account.emailPending && Date.now() - emailPendingSince > 5000) {
++      Object.assign(account, { email: account.emailPending, emailPending: null });
++      maybeGrantStarter();
++    }
+     const decision = mockSetting('gmDecision');
+     if (account.gmPermission === 'pending' && (decision === 'granted' || decision === 'rejected')) {
+@@ -1061,4 +1064,5 @@ export const handlers = [
+     };
+     campaigns.push(c);
++    if (hostKey(request) === 'local') maybeGrantStarter();
+     return HttpResponse.json({ ...summary(c), links: visibleLinks(c.links, isGm(c.id)), description: c.description, worldInfo: c.worldInfo, language: c.language, system: c.system ?? null, systemName: c.systemName ?? null, allowExternalTranscription: !!c.allowExternalTranscription, allowCloudSummary: !!c.allowCloudSummary, allowCharacterAnalysis: !!c.allowCharacterAnalysis, characterSheetLimits: { maxSheets: 3, maxPages: 20 }, ...campaignExtras(c, myMember(c)), members: membersFor(c) }, { status: 201 });
+   }),
+diff --git a/src/pages/Campaigns.tsx b/src/pages/Campaigns.tsx
+index de1ca09..57f7553 100644
+--- a/src/pages/Campaigns.tsx
++++ b/src/pages/Campaigns.tsx
+@@ -1,3 +1,4 @@
+ import { OpenShareRow, canOpenShares } from '../share/OpenShareRow';
++import { StarterEmail } from '../billing/StarterEmail';
+ import { cleanShareKeys } from '../share/keys';
+ import { listCharacters } from '../characters/store';
+@@ -63,4 +64,6 @@ export function Campaigns() {
+   const [systemName, setSystemName] = useState('');
+   const [startSettings, setStartSettings] = useState<CampaignSettingsIn>({});
++  // Freiwillige E-Mail beim ersten Anlegen auf einem Server mit Guthaben (StarterEmail)
++  const [newEmail, setNewEmail] = useState('');
+   const [actionError, setActionError] = useState<unknown>(null);
+   const [tried, setTried] = useState(false);
+@@ -201,4 +204,7 @@ export function Campaigns() {
+       const chosen = apiAtLeast('0.4.25', conn) && Object.keys(startSettings).length ? startSettings : undefined;
+       const c = await apiFor(conn).createCampaign(value.trim(), '', language, system, system === 'other' ? systemName.trim() || null : null, chosen);
++      // Erst nach dem Anlegen eintragen; scheitert es, bleibt die Kampagne – die Adresse geht später unter Konto
++      if (newEmail.trim()) await apiFor(conn).setEmail(newEmail.trim()).catch(() => undefined);
++      setNewEmail('');
+       navigate(`/v/${conn.id}/k/${c.id}`);
+     } catch (e) {
+@@ -371,4 +377,8 @@ export function Campaigns() {
+           )}
+           {mode === 'new' && newTarget() && <StartSettings conn={newTarget()!} value={startSettings} onChange={setStartSettings} />}
++          {mode === 'new' && newTarget() && (
++            <StarterEmail conn={newTarget()!} value={newEmail} onChange={setNewEmail}
++              first={!entries?.some(({ conn: k, c }) => k.id === newTarget()!.id && c.myRole === 'gm')} />
++          )}
+           <ErrorBox error={actionError} />
+           <Missing text={missing} shown={tried} />
+diff --git a/src/pages/ConnectPage.tsx b/src/pages/ConnectPage.tsx
+index 21a63f5..cb8d090 100644
+--- a/src/pages/ConnectPage.tsx
++++ b/src/pages/ConnectPage.tsx
+@@ -28,4 +28,10 @@ const MOCK = import.meta.env.VITE_API_MODE === 'mock';
+ // Web-App unter /app/ eines Servers (z. B. im Programmfenster auf dem PC): dieser Server ist vorgegeben
+ const OWN_SERVER = MOCK ? null : ownServerBase(window.location);
++/**
++ * Community-Server von Taleward.org: fest in der App (nur https, keine Liste aus dem Netz, Änderung nur per Update).
++ * Wird nur angeboten, nie vorgewählt – verbunden wird erst nach Tippen. Im Testmodus der eingebaute Testserver.
++ */
++const COMMUNITY = 'https://taleward.taleward.org';
++const COMMUNITY_BASE = MOCK ? '/api/v1' : normalizeBaseUrl(COMMUNITY);
+ 
+ /**
+@@ -37,5 +43,6 @@ export function ConnectPage() {
+   const { active } = useAuth();
+   const params = new URLSearchParams(useLocation().search);
+-  const [address, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : OWN_SERVER ?? DEFAULT_SERVER));
++  const [addressField, setAddress] = useState(params.get('invite') ?? params.get('server') ?? (MOCK ? '/api/v1' : OWN_SERVER ?? DEFAULT_SERVER));
++  const address = addressField;
+   const [baseUrl, setBaseUrl] = useState<string | null>(null);
+   const [info, setInfo] = useState<ServerInfo | null>(null);
+@@ -66,7 +73,8 @@ export function ConnectPage() {
+   }, []);
+ 
+-  const checkServer = async (e?: FormEvent) => {
++  const checkServer = async (e?: FormEvent, fixed?: string) => {
+     e?.preventDefault();
+     setError(null);
++    const address = fixed ?? addressField;
+     if (!address.trim()) {
+       setTried(true);
+@@ -214,4 +222,18 @@ export function ConnectPage() {
+           </form>
+         )}
++        {!info && !params.get('invite') && !OWN_SERVER && !active.some((c) => c.baseUrl === COMMUNITY_BASE && !MOCK) && (
++          <section className="card" aria-labelledby="choice-title">
++            <h2 id="choice-title">{t('Ohne Einladung')}</h2>
++            <div className="choice-pair">
++              <button type="button" className="btn outline" disabled={busy} onClick={() => checkServer(undefined, COMMUNITY_BASE)}>{t('Taleward-Community-Server')}</button>
++              <button type="button" className="btn outline" onClick={() => { const el = document.getElementById('address') as HTMLInputElement | null; el?.focus(); el?.select(); }}>{t('Eigenen Server eingeben')}</button>
++            </div>
++            <span className="muted small">
++              {t('Community-Server: betrieben von Taleward.org')}
++              {' · '}<a href={`${COMMUNITY}/datenschutz`} target="_blank" rel="noopener noreferrer">{t('Datenschutz')}</a>
++              {' · '}<a href={`${COMMUNITY}/impressum`} target="_blank" rel="noopener noreferrer">{t('Impressum')}</a>
++            </span>
++          </section>
++        )}
+         {!info && !params.get('invite') && (
+           <>
+@@ -222,5 +244,5 @@ export function ConnectPage() {
+                 <h2 id="lead-title">{t('Ich will selbst leiten')}</h2>
+                 <p className="muted small" style={{ margin: 0 }}>
+-                  {t('Jeder Verein und jede Gruppe hat einen eigenen Server. Frag in deinem Verein nach, oder richtet selbst einen ein. Wer ihn betreibt, schickt dir einen Link, danach legst du hier deine Kampagne an.')}
++                  {t('Leg dir ein Konto auf dem Community-Server an, frag in deinem Verein nach einem Server, oder richtet selbst einen ein.')}
+                 </p>
+                 <a className="btn outline" href={getLang() === 'en' ? 'https://taleward.org/en/self-hosting/' : 'https://taleward.org/selbst-betreiben/'} target="_blank" rel="noopener noreferrer">{t('So richtet ihr einen Server ein')}</a>
+diff --git a/src/pages/CreditPage.tsx b/src/pages/CreditPage.tsx
+index 8dfeb03..958ed04 100644
+--- a/src/pages/CreditPage.tsx
++++ b/src/pages/CreditPage.tsx
+@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
+ import { api, isApiError } from '../api/client';
+ import { currentConnection } from '../api/connections';
+-import type { Credit, CreditBooking, CreditWaitingJob, ServerInfo } from '../api/types';
++import type { Credit, CreditBooking, CreditWaitingJob, ServerInfo, User } from '../api/types';
+ import { eur } from '../billing/CreditWaitNote';
+-import { billingOn, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../billing/rules';
++import { billingOn, operatorContact, parseEuro, topUpUrl, vouchersAllowed, waitReason } from '../billing/rules';
+ import { confirmDialog } from '../components/confirm';
+ import { formatDate } from '../components/format';
+@@ -22,8 +22,10 @@ export function CreditPage() {
+   const [info, setInfo] = useState<ServerInfo | null>(null);
+   const [credits, setCredits] = useState<Credit[] | null>(null);
++  const [me, setMe] = useState<User | null>(null);
+   const [error, setError] = useState<unknown>(null);
+ 
+   const load = useCallback(() => {
+     api.info().then(setInfo).catch(() => undefined);
++    api.me().then(setMe).catch(() => undefined);
+     api.credits().then(setCredits).catch((e) => { setError(e); setCredits([]); });
+   }, []);
+@@ -42,5 +44,5 @@ export function CreditPage() {
+           {!credits && !error && <p className="muted">{t('Wird geladen …')}</p>}
+           {!off && <ErrorBox error={error} />}
+-          {credits?.map((c) => <CreditCard key={c.id} credit={c} info={info} baseUrl={conn.baseUrl} onChanged={load} />)}
++          {credits?.map((c) => <CreditCard key={c.id} credit={c} info={info} me={me} connId={conn.id} baseUrl={conn.baseUrl} onChanged={load} />)}
+         </>
+       )}
+@@ -64,5 +66,5 @@ const STATUS: Record<string, string> = {
+ };
+ 
+-function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info: ServerInfo | null; baseUrl: string; onChanged: () => void }) {
++function CreditCard({ credit, info, me, connId, baseUrl, onChanged }: { credit: Credit; info: ServerInfo | null; me: User | null; connId: string; baseUrl: string; onChanged: () => void }) {
+   const [waiting, setWaiting] = useState<CreditWaitingJob[] | null>(null);
+   const [bookings, setBookings] = useState<CreditBooking[] | null>(null);
+@@ -72,4 +74,7 @@ function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info
+   const url = credit.canManage ? topUpUrl(info, baseUrl, DIST) : null;
+   const pot = credit.kind === 'organization';
++  const store = DIST === 'store';
++  const starter = credit.kind === 'account' ? credit.starterCredit : null;
++  const contact = store ? operatorContact(info?.contact, info) : null;
+ 
+   const loadLists = useCallback(() => {
+@@ -117,9 +122,30 @@ function CreditCard({ credit, info, baseUrl, onChanged }: { credit: Credit; info
+         </div>
+       )}
+-      {!url && credit.canManage && DIST === 'store' && credit.status !== 'good' && (
+-        <span className="muted small">{t('Aufladen kannst du auf der Seite deines Servers.')}</span>
++      {starter?.status === 'granted' && starter.amountCents != null && (
++        <span className="small">{t('Für den Anfang hat dir der Server {amount} zum Ausprobieren gutgeschrieben.', { amount: eur(starter.amountCents) })}</span>
++      )}
++      {/* Store: kein Hinweis auf einen Bezahlweg, nur wer Fragen beantwortet (nie die Aufladeseite) */}
++      {!url && credit.canManage && store && credit.status !== 'good' && (
++        <span className="muted small">
++          {t('Fragen zum Guthaben beantworten die Betreiber deines Servers.')}
++          {contact && <> <a href={contact.href} target="_blank" rel="noopener noreferrer">{contact.label}</a></>}
++        </span>
+       )}
+       {!credit.canManage && (
+-        <span className="muted small">{t('Aufladen, Freigeben und Einstellungen gehen beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.')}</span>
++        <span className="muted small">
++          {store
++            ? t('Freigeben und Einstellungen verwaltet die Organisation auf ihrem Server.')
++            : t('Aufladen, Freigeben und Einstellungen gehen beim Guthaben der Organisation nur auf der Seite des Servers, mit zweitem Faktor.')}
++        </span>
++      )}
++      {credit.kind === 'account' && me && !me.email && (
++        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
++          <span className="muted small">
++            {starter?.status === 'needs_verified_email' && starter.amountCents
++              ? t('Mit bestätigter E-Mail-Adresse sagt dir der Server Bescheid, wenn Guthaben fehlt, und du bekommst {amount} zum Ausprobieren.', { amount: eur(starter.amountCents) })
++              : t('Mit bestätigter E-Mail-Adresse sagt dir der Server Bescheid, wenn Guthaben fehlt.')}
++          </span>
++          <Link className="btn small outline" to={`/konto/${encodeURIComponent(connId)}?email=1`}>{me.emailPending ? t('E-Mail-Adresse ansehen') : t('E-Mail eintragen')}</Link>
++        </div>
+       )}
+       <ErrorBox error={error} />
+diff --git a/src/theme.css b/src/theme.css
+index d7c054d..dbf95eb 100644
+--- a/src/theme.css
++++ b/src/theme.css
+@@ -582,4 +582,5 @@ h2 {
+ 
+ input[type='text'],
++input[type='email'],
+ input[type='password'],
+ input[type='search'],
+@@ -2391,2 +2392,6 @@ mark { background: var(--paper-sunken); color: var(--ink); padding: 0; border-ra
+ }
+ .rec-quiet { color: var(--siegel-text); font-weight: 600; }
++
++/* Zwei gleichwertige Wege nebeneinander (Verbinden: Community-Server / eigener Server) */
++.choice-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
++.choice-pair .btn { width: 100%; }
