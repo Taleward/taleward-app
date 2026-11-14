@@ -59,6 +59,8 @@ test('Kontakt des Betreibers: Mail oder https, nie die Aufladeseite', () => {
   assert.equal(operatorContact('http://verein.test/kontakt'), null);
   assert.equal(operatorContact('https://verein.test/guthaben'), null);
   assert.equal(operatorContact('https://verein.test/Guthaben/aufladen'), null);
+  assert.equal(operatorContact('https://verein.test/%67uthaben'), null);
+  assert.equal(operatorContact('https://verein.test/%2567uthaben'), null);
   assert.equal(operatorContact('https://verein.test/zahlen', { billing: { mode: 'credit', topUpUrl: 'https://verein.test/zahlen' } }), null);
   assert.equal(operatorContact('https://nutzer:pw@verein.test/'), null);
   assert.equal(operatorContact('javascript:alert(1)'), null);

@@ -55,7 +55,10 @@ export function operatorContact(contact: string | null | undefined, info?: Billi
   let u: URL;
   try { u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(c) ? c : 'https://' + c); } catch { return null; }
   if (u.protocol !== 'https:' || u.username || u.password || !u.hostname.includes('.')) return null;
-  if (u.pathname.toLowerCase().startsWith('/guthaben')) return null;
+  // Pfad entschlüsselt vergleichen (auch doppelt kodiert, z. B. /%2567uthaben)
+  let path = u.pathname;
+  for (let i = 0; i < 2; i++) { try { path = decodeURIComponent(path); } catch { return null; } }
+  if (path.toLowerCase().startsWith('/guthaben')) return null;
   const top = info?.billing?.topUpUrl;
   if (top) {
     try {
