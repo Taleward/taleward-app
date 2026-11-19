@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { appTooOld, serverTooOld, getConnection, hasValidToken, setCurrentConnection } from '../api/connections';
-import { UpdateAction } from './UpdateNotices';
+import { UpdateAction, OfficialDownload } from './UpdateNotices';
+import { usableOffer } from '../update/offer';
 import { t } from '../i18n';
 import { allSafeIds } from '../api/pathGuard';
 
@@ -49,6 +50,7 @@ export function ConnectionScope({ children }: { children: ReactNode }) {
           <strong>{t('Taleward ist für „{name}“ zu alt', { name: c.name })}</strong>
           <span className="small">{t('Bitte installiere die neue Version, dann geht es hier weiter.')}</span>
           <UpdateAction className="btn" offer={{ url: c.appInfo?.appDownloadUrl ?? null, sha256: c.appInfo?.appDownloadSha256, size: c.appInfo?.appDownloadSizeBytes }} />
+          {usableOffer({ url: c.appInfo?.appDownloadUrl, sha256: c.appInfo?.appDownloadSha256 }) && <OfficialDownload className="btn outline" />}
         </div>
         <Link className="btn outline" to="/">{t('Zu deinen Kampagnen')}</Link>
       </main></div>

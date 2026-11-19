@@ -1,3 +1,5 @@
+import { isHomeNetworkHost } from './addresses.ts';
+
 /**
  * Adressen, die ein Server mitschickt (Datenschutzerklärung, App-Download), nur als Link verwenden, wenn sie mit
  * https:// beginnen – im Heimnetz auch http://. Alles andere (javascript:, data: …) wird verworfen.
@@ -6,7 +8,7 @@ export function safeLink(url: string | null | undefined): string | null {
   if (!url) return null;
   try {
     const u = new URL(url);
-    return u.protocol === 'https:' || u.protocol === 'http:' ? url : null;
+    return u.protocol === 'https:' || (u.protocol === 'http:' && isHomeNetworkHost(u.hostname)) ? url : null;
   } catch {
     return null;
   }

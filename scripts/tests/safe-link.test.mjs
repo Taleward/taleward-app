@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { safeLink, withSafeLinks } from '../../src/api/safeUrl.ts';
 
-test('nur https und http werden zu Links', () => {
+test('nur https und http im Heimnetz werden zu Links', () => {
+  assert.equal(safeLink('http://verein.de/taleward.apk'), null);
   assert.equal(safeLink('https://verein.de/datenschutz'), 'https://verein.de/datenschutz');
   assert.equal(safeLink('http://192.168.1.5:8000/app.apk'), 'http://192.168.1.5:8000/app.apk');
 });

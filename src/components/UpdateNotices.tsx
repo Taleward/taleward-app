@@ -1,7 +1,8 @@
 import { safeLink } from '../api/safeUrl';
 import { useState } from 'react';
 import { APP_VERSION, appTooOld, serverTooOld, versionLess, type Connection } from '../api/connections';
-import { t } from '../i18n';
+import { getLang, t } from '../i18n';
+import { officialDownloadUrl, usableOffer } from '../update/offer';
 import { DIST, PLAY_STORE_URL, canSelfUpdate, downloadAndInstall, installDownloaded, openInstallSettings } from '../update/updater';
 
 const DISMISS_KEY = 'taleward.updateDismissed';
@@ -38,6 +39,23 @@ export function plainNotes(notes: string): string {
     .trim();
 }
 
+/** Fehler des nativen Teils in eigenen Worten (DE/EN); unbekannte mit der Meldung des Geräts */
+function updateError(e: unknown): string {
+  const code = (e as { code?: string })?.code;
+  if (code === 'wrong_package' || code === 'wrong_signature' || code === 'not_an_app') {
+    return t('Diese Datei ist keine Taleward-Fassung mit unserer Signatur. Sie wurde gelöscht und nicht installiert.');
+  }
+  if (code === 'checksum_mismatch') return t('Die heruntergeladene Datei ist beschädigt (Prüfsumme stimmt nicht).');
+  if (code === 'no_checksum' || code === 'insecure_url') return t('Dieser Server bietet die neue Fassung nicht sicher an. Lade sie von taleward.org.');
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Offizielle Bezugsquelle (Website) – immer ein zweiter Weg neben dem Angebot eines Servers */
+export function OfficialDownload({ className = 'btn small outline' }: { className?: string }) {
+  if (DIST === 'store') return null;
+  return <a className={className} href={officialDownloadUrl(getLang())} target="_blank" rel="noopener noreferrer">{t('Von taleward.org laden')}</a>;
+}
+
 /** Download-Knopf als echter Link – öffnet im Browser des Handys */
 export function DownloadButton({ url, className = 'btn small' }: { url: string; className?: string }) {
   const href = safeLink(url);
@@ -57,18 +75,19 @@ export function UpdateAction({ offer, className = 'btn small' }: { offer: { url:
   if (DIST === 'store') {
     return <a className={className} href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">{t('Update im Play Store')}</a>;
   }
-  const url = safeLink(offer.url);
-  if (!url) return null;
-  if (!canSelfUpdate()) return <DownloadButton url={url} className={className} />;
+  // A26: nur Angebote mit https (http im Heimnetz) und Prüfsumme; sonst die offizielle Quelle
+  const usable = usableOffer(offer);
+  if (!usable) return <OfficialDownload className={className} />;
+  if (!canSelfUpdate()) return <DownloadButton url={usable.url} className={className} />;
 
   const start = async () => {
     setState('loading');
     setError(null);
     try {
-      const r = await downloadAndInstall({ url, sha256: offer.sha256, sizeBytes: offer.size }, setProgress);
+      const r = await downloadAndInstall({ url: usable.url, sha256: usable.sha256, sizeBytes: offer.size }, setProgress);
       setState(r === 'needs_permission' ? 'permission' : 'installing');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(updateError(e));
       setState('error');
     }
   };
@@ -131,7 +150,10 @@ export function UpdateNotices({ connections }: { connections: Connection[] }) {
               min: c.appInfo?.minAppVersion ?? '?', v: APP_VERSION
             })}
           </span>
-          <UpdateAction offer={{ url: c.appInfo?.appDownloadUrl ?? null, sha256: c.appInfo?.appDownloadSha256, size: c.appInfo?.appDownloadSizeBytes }} />
+          <div className="row wrap" style={{ gap: 8, alignItems: 'flex-start' }}>
+            <UpdateAction offer={{ url: c.appInfo?.appDownloadUrl ?? null, sha256: c.appInfo?.appDownloadSha256, size: c.appInfo?.appDownloadSizeBytes }} />
+            {usableOffer({ url: c.appInfo?.appDownloadUrl, sha256: c.appInfo?.appDownloadSha256 }) && <OfficialDownload />}
+          </div>
         </div>
       ))}
       {outdatedServers.map((c) => (

@@ -2,7 +2,8 @@ import { ProviderButton } from '../components/ProviderButton';
 import { inDesktopShell } from '../display/desktopShell';
 import { clearPendingRegister, readPendingRegister, startProviderLogin, type PendingRegister } from '../auth/oidc';
 import { LinkInput } from '../components/LinkInput';
-import { DownloadButton } from '../components/UpdateNotices';
+import { OfficialDownload, UpdateAction } from '../components/UpdateNotices';
+import { usableOffer } from '../update/offer';
 import { Wordmark } from '../components/Wordmark';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -269,7 +270,10 @@ export function ConnectPage() {
               {info.minAppVersion && versionLess(APP_VERSION, info.minAppVersion) && (
                 <div className="notice" style={{ flexDirection: 'column', gap: 8 }}>
                   <span>{t('Dieser Server verlangt mindestens Taleward {min}, du hast {v}. Bitte erst aktualisieren.', { min: info.minAppVersion, v: APP_VERSION })}</span>
-                  {info.appDownloadUrl && <DownloadButton url={info.appDownloadUrl} />}
+                  <div className="row wrap" style={{ gap: 8 }}>
+                    <UpdateAction offer={{ url: info.appDownloadUrl ?? null, sha256: info.appDownloadSha256, size: info.appDownloadSizeBytes }} />
+                    {usableOffer({ url: info.appDownloadUrl, sha256: info.appDownloadSha256 }) && <OfficialDownload />}
+                  </div>
                 </div>
               )}
               {isOutdated(info.apiVersion) && (

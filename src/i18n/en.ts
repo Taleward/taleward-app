@@ -1905,4 +1905,8 @@ export const en: Record<string, string> = {
   "Eigenen Server eingeben": "Enter your own server",
   "Community-Server: betrieben von Taleward.org": "Community server: run by Taleward.org",
   "Leg dir ein Konto auf dem Community-Server an, frag in deinem Verein nach einem Server, oder richtet selbst einen ein.": "Create an account on the community server, ask your club for a server, or set one up yourselves.",
+  "Von taleward.org laden": "Get it from taleward.org",
+  "Diese Datei ist keine Taleward-Fassung mit unserer Signatur. Sie wurde gelöscht und nicht installiert.": "This file is not a Taleward version with our signature. It was deleted and not installed.",
+  "Die heruntergeladene Datei ist beschädigt (Prüfsumme stimmt nicht).": "The downloaded file is damaged (checksum does not match).",
+  "Dieser Server bietet die neue Fassung nicht sicher an. Lade sie von taleward.org.": "This server doesn't offer the new version safely. Get it from taleward.org.",
 };
